@@ -199,6 +199,25 @@ export async function disposeSessionByKey(key) {
   await terminateSession(session);
 }
 
+export async function disposeSessionsForRepository(org, repo) {
+  if (!org || !repo) {
+    return;
+  }
+  const tasks = [];
+  terminalSessions.forEach((session) => {
+    if (!session || session.closed) {
+      return;
+    }
+    if (session.org === org && session.repo === repo) {
+      tasks.push(terminateSession(session).catch(() => {}));
+    }
+  });
+  if (tasks.length === 0) {
+    return;
+  }
+  await Promise.allSettled(tasks);
+}
+
 export async function disposeSessionById(sessionId) {
   const session = terminalSessionsById.get(sessionId);
   if (!session) {

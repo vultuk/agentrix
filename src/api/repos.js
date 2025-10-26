@@ -1,4 +1,5 @@
 import { cloneRepository, discoverRepositories } from '../core/git.js';
+import { removeRepository } from '../core/repositories.js';
 import { sendJson } from '../utils/http.js';
 
 export function createRepoHandlers(workdir) {
@@ -48,5 +49,31 @@ export function createRepoHandlers(workdir) {
     }
   }
 
-  return { list, create };
+  async function destroy(context) {
+    let payload;
+    try {
+      payload = await context.readJsonBody();
+    } catch (error) {
+      sendJson(context.res, 400, { error: error.message });
+      return;
+    }
+
+    const org = typeof payload?.org === 'string' ? payload.org.trim() : '';
+    const repo = typeof payload?.repo === 'string' ? payload.repo.trim() : '';
+
+    if (!org || !repo) {
+      sendJson(context.res, 400, { error: 'org and repo are required' });
+      return;
+    }
+
+    try {
+      await removeRepository(workdir, org, repo);
+      const data = await discoverRepositories(workdir);
+      sendJson(context.res, 200, { data });
+    } catch (error) {
+      sendJson(context.res, 500, { error: error.message });
+    }
+  }
+
+  return { list, create, destroy };
 }

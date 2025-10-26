@@ -42,7 +42,12 @@ export function createRouter({ authManager, workdir }) {
       '/api/repos',
       {
         requiresAuth: true,
-        handlers: { GET: repoHandlers.list, HEAD: repoHandlers.list, POST: repoHandlers.create },
+        handlers: {
+          GET: repoHandlers.list,
+          HEAD: repoHandlers.list,
+          POST: repoHandlers.create,
+          DELETE: repoHandlers.destroy,
+        },
       },
     ],
     [

@@ -126,3 +126,30 @@ export async function tmuxKillSession(sessionName) {
     throw error;
   }
 }
+
+export async function tmuxKillSessionsForRepository(org, repo, branches) {
+  if (!org || !repo || !Array.isArray(branches) || branches.length === 0) {
+    return;
+  }
+  await detectTmux();
+  if (!isTmuxAvailable()) {
+    return;
+  }
+  const tasks = branches
+    .filter((branch) => typeof branch === 'string' && branch.length > 0)
+    .map(async (branch) => {
+      const tmuxSessionName = makeTmuxSessionName(org, repo, branch);
+      try {
+        await tmuxKillSession(tmuxSessionName);
+      } catch (error) {
+        console.warn(
+          `[terminal-worktree] Failed to kill tmux session ${tmuxSessionName}:`,
+          error?.message || error,
+        );
+      }
+    });
+  if (tasks.length === 0) {
+    return;
+  }
+  await Promise.allSettled(tasks);
+}

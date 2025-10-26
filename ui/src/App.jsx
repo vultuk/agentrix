@@ -181,6 +181,7 @@ function LoginScreen({ onAuthenticated }) {
         const [branchName, setBranchName] = useState('');
         const [activeWorktree, setActiveWorktree] = useState(null);
         const [confirmDelete, setConfirmDelete] = useState(null);
+        const [confirmDeleteRepo, setConfirmDeleteRepo] = useState(null);
         const [terminalStatus, setTerminalStatus] = useState('disconnected');
         const [sessionId, setSessionId] = useState(null);
         const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -188,6 +189,7 @@ function LoginScreen({ onAuthenticated }) {
         const [isAddingRepo, setIsAddingRepo] = useState(false);
         const [isCreatingWorktree, setIsCreatingWorktree] = useState(false);
         const [isDeletingWorktree, setIsDeletingWorktree] = useState(false);
+        const [isDeletingRepo, setIsDeletingRepo] = useState(false);
         const [pendingActionLoading, setPendingActionLoading] = useState(null);
 
         const notifyAuthExpired = useCallback(() => {
@@ -709,6 +711,69 @@ function LoginScreen({ onAuthenticated }) {
           }
         };
 
+        const handleConfirmDeleteRepo = async () => {
+          if (isDeletingRepo || !confirmDeleteRepo) {
+            return;
+          }
+          const { org, repo } = confirmDeleteRepo;
+          setIsDeletingRepo(true);
+          try {
+            const response = await fetch('/api/repos', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ org, repo })
+            });
+            if (response.status === 401) {
+              notifyAuthExpired();
+              return;
+            }
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+            const body = await response.json();
+            const payload = body && typeof body === 'object' && body.data ? body.data : {};
+            applyDataUpdate(payload);
+            sessionMapRef.current.forEach((session, key) => {
+              const [orgKey, repoKey] = key.split('::');
+              if (orgKey === org && repoKey === repo) {
+                sessionMapRef.current.delete(key);
+                sessionKeyByIdRef.current.delete(session);
+                knownSessionsRef.current.delete(key);
+              }
+            });
+            setActiveWorktree(current => {
+              if (current && current.org === org && current.repo === repo) {
+                return null;
+              }
+              return current;
+            });
+            if (
+              pendingWorktreeAction &&
+              pendingWorktreeAction.org === org &&
+              pendingWorktreeAction.repo === repo
+            ) {
+              setPendingWorktreeAction(null);
+            }
+            if (
+              activeWorktree &&
+              activeWorktree.org === org &&
+              activeWorktree.repo === repo
+            ) {
+              disposeSocket();
+              disposeTerminal();
+              setSessionId(null);
+              setTerminalStatus('disconnected');
+            }
+            setConfirmDeleteRepo(null);
+          } catch (error) {
+            console.error('Failed to delete repository', error);
+            window.alert('Failed to delete repository. Check server logs for details.');
+          } finally {
+            setIsDeletingRepo(false);
+          }
+        };
+
         const handleCreateWorktree = async () => {
           if (isCreatingWorktree) {
             return;
@@ -903,7 +968,7 @@ function LoginScreen({ onAuthenticated }) {
                     },
                     h(
                       'div',
-                      { className: 'flex items-center justify-between' },
+                      { className: 'flex items-center justify-between gap-2' },
                       h(
                         'div',
                         {
@@ -923,16 +988,32 @@ function LoginScreen({ onAuthenticated }) {
                         )
                       ),
                       h(
-                        'button',
-                        {
-                          onClick: () => {
-                            setSelectedRepo([org, repo]);
-                            setShowWorktreeModal(true);
+                        'div',
+                        { className: 'flex items-center gap-1 flex-shrink-0' },
+                        h(
+                          'button',
+                          {
+                            onClick: () => {
+                              setSelectedRepo([org, repo]);
+                              setShowWorktreeModal(true);
+                            },
+                            className: 'text-neutral-400 hover:text-neutral-200 flex-shrink-0',
+                            title: 'Create Worktree'
                           },
-                          className: 'text-neutral-400 hover:text-neutral-200 flex-shrink-0',
-                          title: 'Create Worktree'
-                        },
-                        h(GitPullRequest, { size: 14 })
+                          h(GitPullRequest, { size: 14 })
+                        ),
+                        h(
+                          'button',
+                          {
+                            onClick: () => setConfirmDeleteRepo({ org, repo }),
+                            className:
+                              'text-neutral-500 hover:text-rose-400 flex-shrink-0 rounded-md p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-neutral-500',
+                            title: 'Delete Repository',
+                            disabled: Boolean(isDeletingRepo),
+                            'aria-busy': isDeletingRepo ? 'true' : undefined
+                          },
+                          h(Trash2, { size: 12 })
+                        )
                       )
                     ),
                     h(
@@ -1340,6 +1421,71 @@ function LoginScreen({ onAuthenticated }) {
                           'Removing…'
                         )
                       : 'Remove'
+                  )
+                )
+              )
+            : null,
+          confirmDeleteRepo
+            ? h(
+                Modal,
+                {
+                  title: 'Delete repository',
+                  onClose: () => {
+                    if (!isDeletingRepo) {
+                      setConfirmDeleteRepo(null);
+                    }
+                  }
+                },
+                h(
+                  'div',
+                  { className: 'space-y-3 text-sm text-neutral-300' },
+                  h(
+                    'p',
+                    null,
+                    `Delete ${confirmDeleteRepo.org}/${confirmDeleteRepo.repo}?`
+                  ),
+                  h(
+                    'p',
+                    { className: 'text-xs text-neutral-500' },
+                    'This permanently removes all associated worktrees, terminal sessions, and local checkout data.'
+                  )
+                ),
+                h(
+                  'div',
+                  { className: 'flex justify-end gap-2 pt-3' },
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: () => {
+                        if (!isDeletingRepo) {
+                          setConfirmDeleteRepo(null);
+                        }
+                      },
+                      disabled: isDeletingRepo,
+                      className:
+                        'px-3 py-2 text-sm text-neutral-400 hover:text-neutral-200 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-neutral-400'
+                    },
+                    'Cancel'
+                  ),
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: handleConfirmDeleteRepo,
+                      disabled: isDeletingRepo,
+                      'aria-busy': isDeletingRepo,
+                      className:
+                        'px-3 py-2 text-sm bg-rose-500/80 hover:bg-rose-400 text-neutral-50 font-medium rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-rose-500/80'
+                    },
+                    isDeletingRepo
+                      ? h(
+                          'span',
+                          { className: 'inline-flex items-center gap-2' },
+                          renderSpinner('text-neutral-50'),
+                          'Deleting…'
+                        )
+                      : 'Delete'
                   )
                 )
               )
