@@ -26,8 +26,17 @@ node bin/terminal-worktree.js --port 4000 --host 127.0.0.1 --ui path/to/file.htm
 - `-H, --host <host>`: Host/interface to bind (default: `0.0.0.0`).
 - `-u, --ui <path>`: Path to the UI HTML file to serve (default: `ui.sample.html`).
 - `-w, --workdir <path>`: Root directory that contains cloned repositories (default: current working directory).
+- `-P, --password <string>`: Password that guards the web UI (default: randomly generated at startup).
 - `-h, --help`: Display the usage information.
 - `-v, --version`: Print the package version.
+
+### Authentication
+
+Every time the server boots it prints the password that protects the web UI. If you do not provide
+one with `--password`, a secure 12-character password is generated and written to stdout alongside
+the usual startup logs. The browser prompts for this password before any repository APIs are
+available. Successful logins receive an HTTP-only session cookie; click **Log out** in the UI (or hit
+`POST /api/auth/logout`) to terminate the session and force the login screen to reappear.
 
 The server keeps running until you terminate the process (e.g. `Ctrl+C`). The mock UI loads React
 and supporting libraries from public CDNs, so make sure the machine running the browser has

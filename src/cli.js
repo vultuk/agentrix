@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const path = require('path');
-const { startServer, DEFAULT_HOST, DEFAULT_PORT } = require('./server');
+const { startServer, DEFAULT_HOST, DEFAULT_PORT, generateRandomPassword } = require('./server');
 
 function printHelp() {
   const helpText = `Usage: terminal-worktree [options]
@@ -11,6 +11,7 @@ Options:
   -H, --host <host>      Host interface to bind (default: ${DEFAULT_HOST})
   -u, --ui <path>        Path to the UI HTML file (default: ui.sample.html)
   -w, --workdir <path>   Working directory root (default: current directory)
+  -P, --password <string>  Password for login (default: randomly generated)
   -h, --help             Display this help message
   -v, --version          Output the version number
 `;
@@ -23,6 +24,7 @@ function parseArgs(argv) {
     host: DEFAULT_HOST,
     ui: 'ui.sample.html',
     workdir: null,
+    password: null,
     help: false,
     version: false,
   };
@@ -71,6 +73,19 @@ function parseArgs(argv) {
         args.workdir = value;
         break;
       }
+      case '--password':
+      case '-P': {
+        const value = argv[++i];
+        if (!value) {
+          throw new Error(`Expected password value after ${token}`);
+        }
+        const trimmed = value.trim();
+        if (!trimmed) {
+          throw new Error('Password cannot be empty');
+        }
+        args.password = trimmed;
+        break;
+      }
       case '--help':
       case '-h':
         args.help = true;
@@ -117,19 +132,22 @@ async function main(argv = process.argv.slice(2)) {
   const workingDir = args.workdir
     ? path.resolve(process.cwd(), args.workdir)
     : process.cwd();
+  const chosenPassword = args.password || generateRandomPassword();
 
   try {
-    const { server, host, port, uiPath: resolvedUi, close } = await startServer({
+    const { server, host, port, uiPath: resolvedUi, close, password: serverPassword } = await startServer({
       uiPath,
       port: args.port,
       host: args.host,
       workdir: workingDir,
+      password: chosenPassword,
     });
 
     const localAddress = host === '0.0.0.0' ? 'localhost' : host;
     process.stdout.write(`Serving UI from ${resolvedUi}\n`);
     process.stdout.write(`Working directory set to ${workingDir}\n`);
     process.stdout.write(`Listening on http://${localAddress}:${port}\n`);
+    process.stdout.write(`Password: ${serverPassword || chosenPassword}\n`);
 
     let shuttingDown = false;
     const shutdown = () => {

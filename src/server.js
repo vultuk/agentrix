@@ -3,7 +3,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const { promisify } = require('util');
 const { execFile } = require('child_process');
-const { randomUUID } = require('crypto');
+const { randomUUID, randomBytes, randomInt } = require('crypto');
 const pty = require('node-pty');
 const { WebSocketServer, WebSocket } = require('ws');
 
@@ -11,6 +11,9 @@ const DEFAULT_HOST = '0.0.0.0';
 const DEFAULT_PORT = 3414;
 const execFileAsync = promisify(execFile);
 const MAX_TERMINAL_BUFFER = 200000;
+const PASSWORD_LENGTH = 12;
+const SESSION_COOKIE_NAME = 'terminal_worktree_session';
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 8;
 
 const TMUX_BIN = 'tmux';
 const TMUX_SESSION_PREFIX = 'tw-';
@@ -20,6 +23,60 @@ let tmuxDetection;
 
 const terminalSessions = new Map();
 const terminalSessionsById = new Map();
+
+function pickRandomChar(source) {
+  return source[randomInt(0, source.length)];
+}
+
+function shuffleArray(items) {
+  for (let i = items.length - 1; i > 0; i -= 1) {
+    const j = randomInt(0, i + 1);
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+}
+
+function generateRandomPassword() {
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+  const all = lowercase + uppercase + symbols;
+
+  const chars = [
+    pickRandomChar(lowercase),
+    pickRandomChar(uppercase),
+    pickRandomChar(symbols),
+  ];
+
+  while (chars.length < PASSWORD_LENGTH) {
+    chars.push(pickRandomChar(all));
+  }
+
+  shuffleArray(chars);
+  return chars.join('');
+}
+
+function generateSessionToken() {
+  return randomBytes(24).toString('hex');
+}
+
+function parseCookies(cookieHeader) {
+  if (typeof cookieHeader !== 'string' || !cookieHeader.trim()) {
+    return {};
+  }
+  return cookieHeader.split(';').reduce((acc, part) => {
+    const [name, ...rest] = part.split('=');
+    if (!name) {
+      return acc;
+    }
+    const key = name.trim();
+    if (!key) {
+      return acc;
+    }
+    const value = rest.join('=').trim();
+    acc[key] = value;
+    return acc;
+  }, {});
+}
 
 async function detectTmux() {
   if (!tmuxDetection) {
@@ -722,13 +779,130 @@ async function readJsonBody(req) {
   });
 }
 
-async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, workdir } = {}) {
+async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, workdir, password } = {}) {
   if (!uiPath) {
     throw new Error('Missing required option: uiPath');
   }
 
   const { resolvedPath, contents } = await loadUi(uiPath);
   const resolvedWorkdir = workdir ? await resolveWorkdir(workdir) : process.cwd();
+  const resolvedPassword =
+    typeof password === 'string' && password.length > 0 ? password : generateRandomPassword();
+  const validSessionTokens = new Set();
+  const AUTH_EXEMPT_PATHS = new Set(['/api/auth/login', '/api/auth/logout', '/api/auth/status']);
+
+  function getSessionTokenFromRequest(req) {
+    const cookies = parseCookies(req.headers.cookie);
+    return cookies[SESSION_COOKIE_NAME] || '';
+  }
+
+  function isAuthenticatedRequest(req) {
+    const token = getSessionTokenFromRequest(req);
+    return Boolean(token && validSessionTokens.has(token));
+  }
+
+  function setSessionCookie(res, token, options = {}) {
+    const parts = [
+      `${SESSION_COOKIE_NAME}=${token}`,
+      'HttpOnly',
+      'Path=/',
+      'SameSite=Strict',
+    ];
+    if (options.maxAge != null) {
+      parts.push(`Max-Age=${options.maxAge}`);
+    }
+    if (options.expires instanceof Date) {
+      parts.push(`Expires=${options.expires.toUTCString()}`);
+    }
+    res.setHeader('Set-Cookie', parts.join('; '));
+  }
+
+  function clearSessionCookie(res) {
+    const expires = new Date(0);
+    setSessionCookie(res, '', { maxAge: 0, expires });
+  }
+
+  function ensureAuthenticated(req, res) {
+    if (!isAuthenticatedRequest(req)) {
+      sendJson(res, 401, { error: 'Authentication required' });
+      return false;
+    }
+    return true;
+  }
+
+  async function handleLogin(req, res, method) {
+    if (method !== 'POST') {
+      res.setHeader('Allow', 'POST');
+      res.statusCode = 405;
+      res.end('Method Not Allowed');
+      return;
+    }
+
+    let payload;
+    try {
+      payload = await readJsonBody(req);
+    } catch (error) {
+      sendJson(res, 400, { error: error.message });
+      return;
+    }
+
+    const providedPassword =
+      typeof payload.password === 'string' ? payload.password.trim() : '';
+    if (!providedPassword) {
+      sendJson(res, 400, { error: 'Password is required' });
+      return;
+    }
+    if (providedPassword !== resolvedPassword) {
+      sendJson(res, 401, { error: 'Invalid password' });
+      return;
+    }
+
+    const existingToken = getSessionTokenFromRequest(req);
+    if (existingToken) {
+      validSessionTokens.delete(existingToken);
+    }
+
+    const token = generateSessionToken();
+    validSessionTokens.add(token);
+    setSessionCookie(res, token, { maxAge: SESSION_MAX_AGE_SECONDS });
+    sendJson(res, 200, { authenticated: true });
+  }
+
+  async function handleLogout(req, res, method) {
+    if (method !== 'POST') {
+      res.setHeader('Allow', 'POST');
+      res.statusCode = 405;
+      res.end('Method Not Allowed');
+      return;
+    }
+
+    const token = getSessionTokenFromRequest(req);
+    if (token) {
+      validSessionTokens.delete(token);
+    }
+    clearSessionCookie(res);
+    sendJson(res, 200, { authenticated: false });
+  }
+
+  function handleStatus(req, res, method) {
+    if (method !== 'GET' && method !== 'HEAD') {
+      res.setHeader('Allow', 'GET, HEAD');
+      res.statusCode = 405;
+      res.end('Method Not Allowed');
+      return;
+    }
+
+    const authenticated = isAuthenticatedRequest(req);
+    if (method === 'HEAD') {
+      res.statusCode = 200;
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('X-Authenticated', authenticated ? '1' : '0');
+      res.end();
+      return;
+    }
+
+    sendJson(res, 200, { authenticated });
+  }
   const tmuxInfo = await detectTmux();
   if (tmuxInfo.available) {
     // eslint-disable-next-line no-console
@@ -744,8 +918,30 @@ async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, w
     try {
       const method = req.method || 'GET';
       const requestUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+      const pathname = requestUrl.pathname;
 
-      if (requestUrl.pathname === '/api/repos') {
+      if (pathname === '/api/auth/login') {
+        await handleLogin(req, res, method);
+        return;
+      }
+
+      if (pathname === '/api/auth/logout') {
+        await handleLogout(req, res, method);
+        return;
+      }
+
+      if (pathname === '/api/auth/status') {
+        handleStatus(req, res, method);
+        return;
+      }
+
+      if (pathname.startsWith('/api/') && !AUTH_EXEMPT_PATHS.has(pathname)) {
+        if (!ensureAuthenticated(req, res)) {
+          return;
+        }
+      }
+
+      if (pathname === '/api/repos') {
         if (method === 'GET' || method === 'HEAD') {
           try {
             const payload = await discoverRepositories(resolvedWorkdir);
@@ -800,7 +996,7 @@ async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, w
         return;
       }
 
-      if (requestUrl.pathname === '/api/sessions') {
+      if (pathname === '/api/sessions') {
         if (method !== 'GET' && method !== 'HEAD') {
           res.setHeader('Allow', 'GET, HEAD');
           res.statusCode = 405;
@@ -823,7 +1019,7 @@ async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, w
         return;
       }
 
-      if (requestUrl.pathname === '/api/worktrees') {
+      if (pathname === '/api/worktrees') {
         if (method !== 'POST' && method !== 'DELETE') {
           res.setHeader('Allow', 'POST, DELETE');
           res.statusCode = 405;
@@ -862,7 +1058,7 @@ async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, w
         return;
       }
 
-      if (requestUrl.pathname === '/api/terminal/open') {
+      if (pathname === '/api/terminal/open') {
         if (method !== 'POST') {
           res.setHeader('Allow', 'POST');
           res.statusCode = 405;
@@ -910,7 +1106,7 @@ async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, w
         return;
       }
 
-      if (requestUrl.pathname === '/api/terminal/send') {
+      if (pathname === '/api/terminal/send') {
         if (method !== 'POST') {
           res.setHeader('Allow', 'POST');
           res.statusCode = 405;
@@ -1053,6 +1249,13 @@ async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, w
     try {
       const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
       if (url.pathname === '/api/terminal/socket') {
+        const cookies = parseCookies(req.headers.cookie);
+        const token = cookies[SESSION_COOKIE_NAME] || '';
+        if (!token || !validSessionTokens.has(token)) {
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+          socket.destroy();
+          return;
+        }
         wss.handleUpgrade(req, socket, head, (ws) => {
           wss.emit('connection', ws, req);
         });
@@ -1099,6 +1302,7 @@ async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, w
 
     terminalSessions.clear();
     terminalSessionsById.clear();
+    validSessionTokens.clear();
   }
 
   await new Promise((resolve, reject) => {
@@ -1116,6 +1320,7 @@ async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, w
     uiPath: resolvedPath,
     workdir: resolvedWorkdir,
     close: closeAll,
+    password: resolvedPassword,
   };
 }
 
@@ -1123,4 +1328,5 @@ module.exports = {
   startServer,
   DEFAULT_HOST,
   DEFAULT_PORT,
+  generateRandomPassword,
 };
