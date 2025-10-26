@@ -123,7 +123,51 @@ function makeTmuxSessionName(org, repo, branch) {
   const orgPart = sanitiseTmuxComponent(org, 'org');
   const repoPart = sanitiseTmuxComponent(repo, 'repo');
   const branchPart = sanitiseTmuxComponent(branch, 'branch');
-  return `${TMUX_SESSION_PREFIX}${orgPart}::${repoPart}::${branchPart}`;
+  // tmux session names cannot contain ':'; join with a safe delimiter instead.
+  return `${TMUX_SESSION_PREFIX}${orgPart}--${repoPart}--${branchPart}`;
+}
+
+function parseTmuxSessionName(sessionName) {
+  if (typeof sessionName !== 'string' || !sessionName.startsWith(TMUX_SESSION_PREFIX)) {
+    return null;
+  }
+  const remainder = sessionName.slice(TMUX_SESSION_PREFIX.length);
+  const parts = remainder.split('--');
+  if (parts.length !== 3) {
+    return null;
+  }
+  const [org, repo, branch] = parts;
+  if (!org || !repo || !branch) {
+    return null;
+  }
+  return { org, repo, branch };
+}
+
+function makeSanitisedSessionKey(org, repo, branch) {
+  const orgPart = sanitiseTmuxComponent(org, 'org');
+  const repoPart = sanitiseTmuxComponent(repo, 'repo');
+  const branchPart = sanitiseTmuxComponent(branch, 'branch');
+  return `${orgPart}--${repoPart}--${branchPart}`;
+}
+
+function buildSanitisedWorktreeLookup(structure) {
+  const map = new Map();
+  Object.entries(structure || {}).forEach(([org, repos]) => {
+    const repoEntries = repos && typeof repos === 'object' ? repos : {};
+    Object.entries(repoEntries).forEach(([repo, branches]) => {
+      const branchList = Array.isArray(branches) ? branches : [];
+      branchList.forEach((branch) => {
+        if (!branch) {
+          return;
+        }
+        const key = makeSanitisedSessionKey(org, repo, branch);
+        if (!map.has(key)) {
+          map.set(key, { org, repo, branch });
+        }
+      });
+    });
+  });
+  return map;
 }
 
 function tmuxTarget(sessionName) {
@@ -1004,18 +1048,75 @@ async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, w
           return;
         }
 
-        const sessions = Array.from(terminalSessions.keys()).map((key) => {
-          const [org, repo, branch] = key.split('::');
-          return { org, repo, branch };
-        });
-
         if (method === 'HEAD') {
           res.statusCode = 200;
           res.setHeader('Cache-Control', 'no-store');
           res.end();
-        } else {
-          sendJson(res, 200, { sessions });
+          return;
         }
+
+        const sessions = [];
+        const seenKeys = new Set();
+
+        terminalSessions.forEach((session) => {
+          const key = makeSessionKey(session.org, session.repo, session.branch);
+          if (seenKeys.has(key)) {
+            return;
+          }
+          sessions.push({ org: session.org, repo: session.repo, branch: session.branch });
+          seenKeys.add(key);
+        });
+
+        await detectTmux();
+        if (isTmuxAvailable()) {
+          let stdout = '';
+          try {
+            const result = await runTmux(['list-sessions', '-F', '#S']);
+            stdout = result && typeof result.stdout === 'string' ? result.stdout : '';
+          } catch (error) {
+            if (typeof error.code === 'number') {
+              stdout = '';
+            } else {
+              console.error('Failed to list tmux sessions', error);
+              stdout = '';
+            }
+          }
+
+          const names = stdout
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean);
+
+          const parsedSessions = names
+            .map((name) => parseTmuxSessionName(name))
+            .filter(Boolean);
+
+          if (parsedSessions.length > 0) {
+            let lookup;
+            try {
+              const structure = await discoverRepositories(resolvedWorkdir);
+              lookup = buildSanitisedWorktreeLookup(structure);
+            } catch (error) {
+              lookup = new Map();
+            }
+
+            parsedSessions.forEach((parsed) => {
+              const sanitisedKey = `${parsed.org}--${parsed.repo}--${parsed.branch}`;
+              const actual = lookup.get(sanitisedKey);
+              if (!actual) {
+                return;
+              }
+              const key = makeSessionKey(actual.org, actual.repo, actual.branch);
+              if (seenKeys.has(key)) {
+                return;
+              }
+              sessions.push({ org: actual.org, repo: actual.repo, branch: actual.branch });
+              seenKeys.add(key);
+            });
+          }
+        }
+
+        sendJson(res, 200, { sessions });
         return;
       }
 
@@ -1090,8 +1191,8 @@ async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, w
 
         try {
           const { session, created } = await getOrCreateTerminalSession(resolvedWorkdir, org, repo, branch);
-          if (command && created) {
-            const commandInput = command.endsWith('\n') || command.endsWith('\r') ? command : `${command}\r`;
+          if (command) {
+            const commandInput = /[\r\n]$/.test(command) ? command : `${command}\r`;
             session.process.write(commandInput);
           }
           sendJson(res, 200, {
