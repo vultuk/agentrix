@@ -74,16 +74,7 @@
       import { Resizable } from 're-resizable';
       import { Terminal } from 'xterm';
       import { FitAddon } from 'xterm-addon-fit';
-      import {
-        Github,
-        GitBranch,
-        Plus,
-        X,
-        GitPullRequest,
-        Terminal as TerminalIcon,
-        Trash2,
-        Menu
-      } from 'lucide-react';
+      import { Github, GitBranch, Plus, X, GitPullRequest, Trash2, Menu } from 'lucide-react';
 
       const { createElement: h, Fragment } = React;
 
@@ -937,7 +928,17 @@
                       )
                     )
                   ),
-                  h(TerminalIcon, { size: 16, className: 'text-neutral-500' })
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: () => setIsMobileMenuOpen(true),
+                      className:
+                        'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]'
+                    },
+                    h(Menu, { size: 18 }),
+                    h('span', { className: 'sr-only' }, 'Open sidebar')
+                  )
                 ),
                 h('div', {
                   ref: terminalContainerRef,
@@ -951,8 +952,33 @@
             )
           : h(
                 'div',
-                { className: 'flex-1 flex items-center justify-center text-neutral-500' },
-                h('p', null, 'Select a repository and branch from the left panel')
+                {
+                  className:
+                    'bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0'
+                },
+                h(
+                  'div',
+                  { className: 'flex justify-end px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: () => setIsMobileMenuOpen(true),
+                      className:
+                        'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]'
+                    },
+                    h(Menu, { size: 18 }),
+                    h('span', { className: 'sr-only' }, 'Open sidebar')
+                  )
+                ),
+                h(
+                  'div',
+                  {
+                    className:
+                      'flex-1 flex items-center justify-center text-neutral-500 px-4 text-center'
+                  },
+                  h('p', null, 'Select a repository and branch from the left panel')
+                )
               )
         );
 
@@ -962,31 +988,6 @@
           h(
             'div',
             { className: 'flex h-screen bg-neutral-950 text-neutral-100 relative flex-col lg:flex-row min-h-0' },
-            h(
-              'header',
-              {
-                className:
-                  'lg:hidden flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-925/95 backdrop-blur-sm sticky top-0 z-40 shadow-sm'
-              },
-              h(
-                'button',
-                {
-                  onClick: () => setIsMobileMenuOpen(true),
-                  className:
-                    'inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-3 py-2 text-sm text-neutral-300 shadow-sm active:scale-[0.97] transition'
-                },
-                h(Menu, { size: 18 }),
-                h('span', { className: 'sr-only' }, 'Open sidebar')
-              ),
-              h(
-                'div',
-                { className: 'text-sm font-medium text-neutral-300' },
-                activeWorktree
-                  ? `${activeWorktree.org}/${activeWorktree.repo}`
-                  : 'Worktrees'
-              ),
-              h('div', { className: 'w-9' })
-            ),
             desktopSidebar,
             mobileSidebar,
             h(
