@@ -524,6 +524,7 @@
               const firstNonMain = branches.find(branch => branch !== 'main');
               if (firstNonMain) {
                 setPendingWorktreeAction({ org: info.org, repo: info.repo, branch: firstNonMain });
+                setIsMobileMenuOpen(false);
               } else {
                 setActiveWorktree(null);
               }
@@ -554,6 +555,7 @@
             const payload = body && typeof body === 'object' && body.data ? body.data : {};
             applyDataUpdate(payload);
             setPendingWorktreeAction({ org, repo, branch: trimmedBranch });
+            setIsMobileMenuOpen(false);
             setBranchName('');
             setShowWorktreeModal(false);
           } catch (error) {
