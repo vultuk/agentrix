@@ -1,10 +1,58 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 
-import mime from 'mime-types';
+const require = createRequire(import.meta.url);
+
+const MIME_TYPES = new Map([
+  ['.apng', 'image/apng'],
+  ['.avif', 'image/avif'],
+  ['.css', 'text/css'],
+  ['.gif', 'image/gif'],
+  ['.html', 'text/html'],
+  ['.ico', 'image/x-icon'],
+  ['.jpeg', 'image/jpeg'],
+  ['.jpg', 'image/jpeg'],
+  ['.js', 'application/javascript'],
+  ['.json', 'application/json'],
+  ['.map', 'application/json'],
+  ['.mjs', 'application/javascript'],
+  ['.otf', 'font/otf'],
+  ['.pdf', 'application/pdf'],
+  ['.png', 'image/png'],
+  ['.svg', 'image/svg+xml'],
+  ['.txt', 'text/plain'],
+  ['.wasm', 'application/wasm'],
+  ['.webp', 'image/webp'],
+  ['.webm', 'video/webm'],
+  ['.woff', 'font/woff'],
+  ['.woff2', 'font/woff2'],
+  ['.xml', 'application/xml'],
+  ['.zip', 'application/zip'],
+]);
+
+function fallbackLookup(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  return MIME_TYPES.get(ext) || null;
+}
+
+let lookupMimeType = fallbackLookup;
+
+try {
+  const mime = require('mime-types');
+  if (mime && typeof mime.lookup === 'function') {
+    lookupMimeType = (filePath) => mime.lookup(filePath) || fallbackLookup(filePath);
+  }
+} catch (error) {
+  if (error?.code !== 'MODULE_NOT_FOUND' && error?.code !== 'ERR_MODULE_NOT_FOUND') {
+    console.error('[terminal-worktree] Failed to load optional dependency "mime-types":', error);
+  } else {
+    console.warn('[terminal-worktree] Optional dependency "mime-types" not found; using built-in MIME map.');
+  }
+}
 
 function applyContentType(res, filePath) {
-  const type = mime.lookup(filePath) || 'application/octet-stream';
+  const type = lookupMimeType(filePath) || 'application/octet-stream';
   const isText = type.startsWith('text/') && !type.includes('charset');
   const value = isText ? `${type}; charset=utf-8` : type;
   res.setHeader('Content-Type', value);
