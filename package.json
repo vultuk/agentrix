@@ -1,0 +1,17 @@
+{
+  "name": "ai-worktrees",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CLI utility for serving the ai-worktrees UI prototype",
+  "bin": {
+    "ai-worktrees": "bin/ai-worktrees.js"
+  },
+  "scripts": {
+    "start": "node bin/ai-worktrees.js"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "node-pty": "^1.0.0",
+    "ws": "^8.17.1"
+  }
+}

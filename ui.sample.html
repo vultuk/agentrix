@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Worktrees Prototype</title>
+
+    <script>
+      window.tailwind = window.tailwind || {};
+      window.tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              neutral: {
+                925: '#161616'
+              }
+            }
+          }
+        }
+      };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+
+    <style>
+      body {
+        margin: 0;
+        background-color: #09090b;
+      }
+
+      .mobile-sidebar-enter {
+        opacity: 0;
+        transform: translateX(-20px);
+      }
+
+      .mobile-sidebar-enter-active {
+        opacity: 1;
+        transform: translateX(0);
+        transition: opacity 150ms ease, transform 150ms ease;
+      }
+
+      .mobile-sidebar-exit {
+        opacity: 1;
+        transform: translateX(0);
+      }
+
+      .mobile-sidebar-exit-active {
+        opacity: 0;
+        transform: translateX(-40px);
+        transition: opacity 150ms ease, transform 150ms ease;
+      }
+    </style>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://cdn.jsdelivr.net/npm/react@18.3.1/+esm",
+          "react-dom/client": "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/client/+esm",
+          "re-resizable": "https://cdn.jsdelivr.net/npm/re-resizable@6.9.0/+esm",
+          "lucide-react": "https://cdn.jsdelivr.net/npm/lucide-react@0.378.0/+esm",
+          "xterm": "https://cdn.jsdelivr.net/npm/xterm@5.3.0/+esm",
+          "xterm-addon-fit": "https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/+esm"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="module">
+      import React, { useState, useEffect, useCallback, useRef } from 'react';
+      import { createRoot } from 'react-dom/client';
+      import { Resizable } from 're-resizable';
+      import { Terminal } from 'xterm';
+      import { FitAddon } from 'xterm-addon-fit';
+      import {
+        Github,
+        GitBranch,
+        Plus,
+        X,
+        GitPullRequest,
+        Terminal as TerminalIcon,
+        Trash2,
+        Menu
+      } from 'lucide-react';
+
+      const { createElement: h, Fragment } = React;
+
+      function Modal({ title, onClose, children }) {
+        const content = Array.isArray(children) ? children : [children];
+        return h(
+          'div',
+          {
+            className:
+              'fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4',
+            onClick: onClose
+          },
+          h(
+            'div',
+            {
+              className:
+                'bg-neutral-900 border border-neutral-700 rounded-lg w-full max-w-md shadow-xl',
+              onClick: event => event.stopPropagation()
+            },
+            h(
+              'div',
+              { className: 'flex items-center justify-between px-4 py-3 border-b border-neutral-800' },
+              h('h2', { className: 'text-sm font-semibold text-neutral-100' }, title),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  onClick: onClose,
+                  className: 'text-neutral-500 hover:text-neutral-200 transition-colors'
+                },
+                h(X, { size: 16 })
+              )
+            ),
+            h('div', { className: 'px-4 py-4 space-y-3' }, ...content)
+          )
+        );
+      }
+
+      function RepoBrowser() {
+        const [width, setWidth] = useState(340);
+        const [data, setData] = useState({});
+        const [showAddRepoModal, setShowAddRepoModal] = useState(false);
+        const [repoUrl, setRepoUrl] = useState('');
+        const [showWorktreeModal, setShowWorktreeModal] = useState(false);
+        const [selectedRepo, setSelectedRepo] = useState(null);
+        const [branchName, setBranchName] = useState('');
+        const [activeWorktree, setActiveWorktree] = useState(null);
+        const [confirmDelete, setConfirmDelete] = useState(null);
+        const [terminalStatus, setTerminalStatus] = useState('disconnected');
+        const [sessionId, setSessionId] = useState(null);
+        const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+        const [pendingWorktreeAction, setPendingWorktreeAction] = useState(null);
+
+        const terminalContainerRef = useRef(null);
+        const terminalRef = useRef(null);
+        const fitAddonRef = useRef(null);
+        const socketRef = useRef(null);
+        const resizeObserverRef = useRef(null);
+        const initSuppressedRef = useRef(false);
+        const closedByProcessRef = useRef(false);
+        const sessionMapRef = useRef(new Map());
+        const sessionKeyByIdRef = useRef(new Map());
+        const getWorktreeKey = useCallback((org, repo, branch) => `${org}::${repo}::${branch}`, []);
+
+        const applyDataUpdate = useCallback(payload => {
+          setData(payload);
+          setActiveWorktree(current => {
+            if (!current) {
+              return current;
+            }
+            const branches = payload?.[current.org]?.[current.repo] || [];
+            if (branches.includes(current.branch) && current.branch !== 'main') {
+              return current;
+            }
+            return null;
+          });
+          sessionMapRef.current.forEach((session, key) => {
+            const [orgKey, repoKey, branchKey] = key.split('::');
+            const branches = payload?.[orgKey]?.[repoKey] || [];
+            if (!branches.includes(branchKey)) {
+              sessionMapRef.current.delete(key);
+              sessionKeyByIdRef.current.delete(session);
+            }
+          });
+        }, []);
+
+        const refreshRepositories = useCallback(async () => {
+          try {
+            const response = await fetch('/api/repos');
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+            const body = await response.json();
+            const payload = body && typeof body === 'object' && body.data ? body.data : {};
+            const normalised = Object.fromEntries(
+              Object.entries(payload).map(([org, repos]) => [
+                org,
+                Object.fromEntries(
+                  Object.entries(repos || {}).map(([repo, branches]) => [
+                    repo,
+                    Array.isArray(branches) ? branches : []
+                  ])
+                )
+              ])
+            );
+            applyDataUpdate(normalised);
+          } catch (error) {
+            console.error('Failed to load repositories', error);
+          }
+        }, [applyDataUpdate]);
+
+        useEffect(() => {
+          refreshRepositories();
+        }, [refreshRepositories]);
+
+        const disposeSocket = useCallback(() => {
+          if (socketRef.current) {
+            try {
+              socketRef.current.close();
+            } catch (err) {
+              // ignore
+            }
+            socketRef.current = null;
+          }
+        }, []);
+
+        const disposeTerminal = useCallback(() => {
+          if (terminalRef.current) {
+            try {
+              terminalRef.current.dispose();
+            } catch (err) {
+              // ignore
+            }
+            terminalRef.current = null;
+          }
+          fitAddonRef.current = null;
+          if (terminalContainerRef.current) {
+            terminalContainerRef.current.innerHTML = '';
+          }
+        }, []);
+
+        useEffect(
+          () => () => {
+            disposeSocket();
+            disposeTerminal();
+            if (resizeObserverRef.current) {
+              resizeObserverRef.current.disconnect();
+            }
+          },
+          [disposeSocket, disposeTerminal]
+        );
+
+        const sendResize = useCallback(() => {
+          if (!terminalRef.current || !fitAddonRef.current) {
+            return;
+          }
+          fitAddonRef.current.fit();
+          if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+            const { cols, rows } = terminalRef.current;
+            socketRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
+          }
+        }, []);
+
+        useEffect(() => {
+          requestAnimationFrame(() => {
+            sendResize();
+          });
+          const timeout = setTimeout(() => {
+            sendResize();
+          }, 200);
+          return () => clearTimeout(timeout);
+        }, [width, isMobileMenuOpen, sessionId, sendResize]);
+
+        useEffect(() => {
+          const handler = () => {
+            sendResize();
+            requestAnimationFrame(() => sendResize());
+            setTimeout(() => sendResize(), 200);
+          };
+          window.addEventListener('resize', handler, { passive: true });
+          window.addEventListener('orientationchange', handler, { passive: true });
+          return () => {
+            window.removeEventListener('resize', handler);
+            window.removeEventListener('orientationchange', handler);
+          };
+        }, [sendResize]);
+
+        useEffect(() => {
+          if (!terminalContainerRef.current) {
+            return;
+          }
+          const observer = new ResizeObserver(() => {
+            sendResize();
+          });
+          observer.observe(terminalContainerRef.current);
+          resizeObserverRef.current = observer;
+          return () => observer.disconnect();
+        }, [sendResize]);
+
+        const setupTerminal = useCallback(initialLog => {
+          disposeTerminal();
+          if (!terminalContainerRef.current) {
+            return;
+          }
+          const term = new Terminal({
+            allowTransparency: true,
+            convertEol: true,
+            cursorBlink: true,
+            fontFamily: 'JetBrains Mono, Menlo, Consolas, monospace',
+            fontSize: 13,
+            theme: {
+              background: '#111111',
+              foreground: '#f4f4f5',
+              cursor: '#f4f4f5'
+            },
+            scrollback: 8000
+          });
+          const fitAddon = new FitAddon();
+          term.loadAddon(fitAddon);
+          terminalRef.current = term;
+          fitAddonRef.current = fitAddon;
+          term.open(terminalContainerRef.current);
+          term.focus();
+          if (initialLog) {
+            term.write(initialLog);
+          }
+          term.onData(data => {
+            if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+              socketRef.current.send(JSON.stringify({ type: 'input', data }));
+            }
+          });
+          term.onResize(({ cols, rows }) => {
+            if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+              socketRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
+            }
+          });
+          requestAnimationFrame(() => {
+            sendResize();
+            term.focus();
+          });
+        }, [disposeTerminal, sendResize]);
+
+        useEffect(() => {
+          const container = terminalContainerRef.current;
+          if (!container) {
+            return;
+          }
+          let touchStartY = null;
+
+          const handleWheel = (event) => {
+            if (!terminalRef.current) {
+              return;
+            }
+            if (event.deltaY === 0) {
+              return;
+            }
+            event.preventDefault();
+            const multiplier = event.deltaMode === 0 ? 1 / 40 : 1; // pixel or line
+            const amount = Math.round(event.deltaY * multiplier);
+            if (amount !== 0) {
+              terminalRef.current.scrollLines(amount);
+            }
+          };
+
+          const handleTouchStart = (event) => {
+            if (!terminalRef.current) {
+              return;
+            }
+            if (event.touches.length === 1) {
+              touchStartY = event.touches[0].clientY;
+            }
+          };
+
+          const handleTouchMove = (event) => {
+            if (!terminalRef.current) {
+              return;
+            }
+            if (event.touches.length === 1 && touchStartY !== null) {
+              const delta = touchStartY - event.touches[0].clientY;
+              if (Math.abs(delta) > 2) {
+                event.preventDefault();
+                terminalRef.current.scrollLines(Math.round(delta / 30));
+                touchStartY = event.touches[0].clientY;
+              }
+            }
+          };
+
+          const handleTouchEnd = () => {
+            touchStartY = null;
+          };
+
+          container.addEventListener('wheel', handleWheel, { passive: false });
+          container.addEventListener('touchstart', handleTouchStart, { passive: false });
+          container.addEventListener('touchmove', handleTouchMove, { passive: false });
+          container.addEventListener('touchend', handleTouchEnd);
+          container.addEventListener('touchcancel', handleTouchEnd);
+
+          return () => {
+            container.removeEventListener('wheel', handleWheel);
+            container.removeEventListener('touchstart', handleTouchStart);
+            container.removeEventListener('touchmove', handleTouchMove);
+            container.removeEventListener('touchend', handleTouchEnd);
+            container.removeEventListener('touchcancel', handleTouchEnd);
+          };
+        }, [sessionId]);
+
+        const connectSocket = useCallback(newSessionId => {
+          if (!newSessionId) {
+            return;
+          }
+          const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+          const socketUrl = `${protocol}://${window.location.host}/api/terminal/socket?sessionId=${encodeURIComponent(
+            newSessionId
+          )}`;
+          const socket = new WebSocket(socketUrl);
+          socketRef.current = socket;
+
+          socket.addEventListener('open', () => {
+            setTerminalStatus('connected');
+            sendResize();
+          });
+
+          socket.addEventListener('message', event => {
+            let payload;
+            try {
+              payload = JSON.parse(event.data);
+            } catch (err) {
+              return;
+            }
+            if (payload.type === 'output') {
+              if (payload.reset && terminalRef.current) {
+                terminalRef.current.reset();
+                sendResize();
+              }
+              if (terminalRef.current && payload.chunk) {
+                terminalRef.current.write(payload.chunk);
+              }
+            } else if (payload.type === 'exit') {
+              closedByProcessRef.current = true;
+              setTerminalStatus('closed');
+            } else if (payload.type === 'init') {
+              if (!initSuppressedRef.current && payload.log && terminalRef.current) {
+                terminalRef.current.write(payload.log);
+              }
+              initSuppressedRef.current = false;
+              if (payload.closed) {
+                closedByProcessRef.current = true;
+                setTerminalStatus('closed');
+              }
+            } else if (payload.type === 'error') {
+              console.error(payload.message || 'Terminal connection error');
+              setTerminalStatus('error');
+            }
+          });
+
+          socket.addEventListener('close', () => {
+            if (closedByProcessRef.current) {
+              setTerminalStatus('closed');
+            } else {
+              setTerminalStatus('disconnected');
+            }
+          });
+
+          socket.addEventListener('error', () => {
+            setTerminalStatus('error');
+          });
+        }, [sendResize]);
+
+        const openTerminalForWorktree = useCallback(async (worktree, options = {}) => {
+          const { command } = options;
+          disposeSocket();
+          if (!worktree) {
+            disposeTerminal();
+            setSessionId(null);
+            setTerminalStatus('disconnected');
+            return;
+          }
+          setTerminalStatus('connecting');
+          closedByProcessRef.current = false;
+          initSuppressedRef.current = true;
+          try {
+            const response = await fetch('/api/terminal/open', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(
+                command ? { ...worktree, command } : worktree
+              )
+            });
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+            const body = await response.json();
+            const session = body && body.sessionId ? body.sessionId : null;
+            if (!session) {
+              throw new Error('Invalid session response');
+            }
+            setSessionId(session);
+            const worktreeKey = getWorktreeKey(worktree.org, worktree.repo, worktree.branch);
+            const previousSession = sessionMapRef.current.get(worktreeKey);
+            if (previousSession && previousSession !== session) {
+              sessionKeyByIdRef.current.delete(previousSession);
+            }
+            sessionMapRef.current.set(worktreeKey, session);
+            sessionKeyByIdRef.current.set(session, worktreeKey);
+            const initialLog = body && typeof body.log === 'string' ? body.log : '';
+            setupTerminal(initialLog);
+            connectSocket(session);
+            setIsMobileMenuOpen(false);
+          } catch (error) {
+            console.error('Failed to open terminal session', error);
+            disposeTerminal();
+            setSessionId(null);
+            setTerminalStatus('error');
+          }
+        }, [connectSocket, disposeSocket, disposeTerminal, setupTerminal, getWorktreeKey]);
+
+        const handleAddRepo = async () => {
+          const trimmed = repoUrl.trim();
+          if (!trimmed) {
+            window.alert('Please enter a repository URL.');
+            return;
+          }
+          try {
+            const response = await fetch('/api/repos', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: trimmed })
+            });
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+            const body = await response.json();
+            const payload = body && typeof body === 'object' && body.data ? body.data : {};
+            applyDataUpdate(payload);
+            const info = body && body.repo ? body.repo : null;
+            if (info && info.org && info.repo) {
+              const branches = payload?.[info.org]?.[info.repo] || [];
+              const firstNonMain = branches.find(branch => branch !== 'main');
+              if (firstNonMain) {
+                setPendingWorktreeAction({ org: info.org, repo: info.repo, branch: firstNonMain });
+              } else {
+                setActiveWorktree(null);
+              }
+            }
+            setRepoUrl('');
+            setShowAddRepoModal(false);
+          } catch (error) {
+            console.error('Failed to clone repository', error);
+            window.alert('Failed to clone repository. Check server logs for details.');
+          }
+        };
+
+        const handleCreateWorktree = async () => {
+          if (!selectedRepo) return;
+          const trimmedBranch = branchName.trim();
+          if (!trimmedBranch) return;
+          const [org, repo] = selectedRepo;
+          try {
+            const response = await fetch('/api/worktrees', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ org, repo, branch: trimmedBranch })
+            });
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+            const body = await response.json();
+            const payload = body && typeof body === 'object' && body.data ? body.data : {};
+            applyDataUpdate(payload);
+            setPendingWorktreeAction({ org, repo, branch: trimmedBranch });
+            setBranchName('');
+            setShowWorktreeModal(false);
+          } catch (error) {
+            console.error('Failed to create worktree', error);
+            window.alert('Failed to create worktree. Check server logs for details.');
+          }
+        };
+
+        const handleConfirmDelete = async () => {
+          if (!confirmDelete) return;
+          const { org, repo, branch } = confirmDelete;
+          try {
+            const response = await fetch('/api/worktrees', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ org, repo, branch })
+            });
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+            const body = await response.json();
+            const payload = body && typeof body === 'object' && body.data ? body.data : {};
+            applyDataUpdate(payload);
+            const key = getWorktreeKey(org, repo, branch);
+            const session = sessionMapRef.current.get(key);
+            if (session) {
+              sessionMapRef.current.delete(key);
+              sessionKeyByIdRef.current.delete(session);
+            }
+            if (
+              activeWorktree &&
+              activeWorktree.org === org &&
+              activeWorktree.repo === repo &&
+              activeWorktree.branch === branch
+            ) {
+              setActiveWorktree(null);
+            }
+            setConfirmDelete(null);
+          } catch (error) {
+            console.error('Failed to remove worktree', error);
+            window.alert('Failed to remove worktree. Check server logs for details.');
+          }
+        };
+
+        const handleWorktreeSelection = useCallback((org, repo, branch) => {
+          if (branch === 'main') {
+            return;
+          }
+          const worktree = { org, repo, branch };
+          const key = getWorktreeKey(org, repo, branch);
+          if (sessionMapRef.current.has(key)) {
+            setActiveWorktree(worktree);
+            openTerminalForWorktree(worktree);
+          } else {
+            setPendingWorktreeAction(worktree);
+            setIsMobileMenuOpen(false);
+          }
+        }, [getWorktreeKey, openTerminalForWorktree]);
+
+        const handleWorktreeAction = useCallback((action) => {
+          if (!pendingWorktreeAction) {
+            return;
+          }
+          const worktree = pendingWorktreeAction;
+          const commandMap = {
+            terminal: undefined,
+            codex: 'codex',
+            cursor: 'cursor-agent',
+            claude: 'claude'
+          };
+          const command = commandMap[action];
+          setActiveWorktree(worktree);
+          openTerminalForWorktree(worktree, command ? { command } : {});
+          setPendingWorktreeAction(null);
+        }, [openTerminalForWorktree, pendingWorktreeAction]);
+
+        const statusStyles = {
+          connected: 'border border-emerald-500/40 text-emerald-300 bg-emerald-500/15',
+          connecting: 'border border-amber-500/40 text-amber-200 bg-amber-500/15',
+          closed: 'border border-neutral-700 text-neutral-400 bg-neutral-800',
+          error: 'border border-rose-500/40 text-rose-200 bg-rose-500/15',
+          disconnected: 'border border-neutral-800 text-neutral-500 bg-neutral-900'
+        };
+        const statusLabels = {
+          connected: 'Connected',
+          connecting: 'Connecting…',
+          closed: 'Closed',
+          error: 'Error',
+          disconnected: 'Disconnected'
+        };
+        const statusClass = statusStyles[terminalStatus] || statusStyles.disconnected;
+        const statusLabel = statusLabels[terminalStatus] || statusLabels.disconnected;
+
+        const sidebarContent = h(
+          'div',
+          { className: 'p-3 text-sm font-mono space-y-5 overflow-y-auto h-full pb-14' },
+          Object.entries(data).map(([org, repos]) =>
+            h(
+              'div',
+              { key: org },
+              h(
+                'div',
+                { className: 'text-neutral-400 uppercase tracking-wider text-xs mb-1 pl-1' },
+                org
+              ),
+              h(
+                'ul',
+                { className: 'space-y-2' },
+                Object.entries(repos).map(([repo, branches]) =>
+                  h(
+                    'li',
+                    {
+                      key: repo,
+                      className: 'bg-neutral-900/60 hover:bg-neutral-900 transition-colors rounded-lg px-2 py-1.5'
+                    },
+                    h(
+                      'div',
+                      { className: 'flex items-center justify-between' },
+                      h(
+                        'div',
+                        {
+                          className: 'flex items-center space-x-2 cursor-pointer min-w-0 overflow-hidden',
+                          onClick: () => {
+                            const firstNonMain = branches.find(branch => branch !== 'main');
+                            if (firstNonMain) {
+                              handleWorktreeSelection(org, repo, firstNonMain);
+                            }
+                          }
+                        },
+                        h(Github, { size: 14, className: 'text-neutral-400 flex-shrink-0' }),
+                        h(
+                          'span',
+                          { className: 'text-neutral-200 whitespace-nowrap overflow-hidden' },
+                          repo
+                        )
+                      ),
+                      h(
+                        'button',
+                        {
+                          onClick: () => {
+                            setSelectedRepo([org, repo]);
+                            setShowWorktreeModal(true);
+                          },
+                          className: 'text-neutral-400 hover:text-neutral-200 flex-shrink-0',
+                          title: 'Create Worktree'
+                        },
+                        h(GitPullRequest, { size: 14 })
+                      )
+                    ),
+                    h(
+                      'ul',
+                      { className: 'ml-5 mt-1 space-y-[2px]' },
+                      branches.map(branch =>
+                        h(
+                          'li',
+                          { key: branch },
+                          h(
+                            'div',
+                            {
+                              className: `flex items-center justify-between rounded-sm px-2 py-2 transition-colors ${
+                                activeWorktree &&
+                                activeWorktree.org === org &&
+                                activeWorktree.repo === repo &&
+                                activeWorktree.branch === branch
+                                  ? 'bg-neutral-800 text-neutral-100'
+                                  : branch === 'main'
+                                  ? 'text-neutral-600'
+                                  : 'text-neutral-500 hover:bg-neutral-800/70 hover:text-neutral-100'
+                              }`
+                            },
+                            h(
+                              'button',
+                              {
+                                type: 'button',
+                                disabled: branch === 'main',
+                                onClick: () => handleWorktreeSelection(org, repo, branch),
+                                className: `flex items-center gap-2 min-w-0 overflow-hidden text-left w-full ${
+                                  branch === 'main' ? 'cursor-not-allowed' : 'cursor-pointer'
+                                }`
+                              },
+                              h(GitBranch, { size: 14, className: 'flex-shrink-0' }),
+                              h(
+                                'span',
+                                { className: 'whitespace-nowrap overflow-hidden text-ellipsis text-sm' },
+                                branch
+                              )
+                            ),
+                            h(
+                              'button',
+                              {
+                                onClick: () => {
+                                  if (branch === 'main') {
+                                    return;
+                                  }
+                                  setConfirmDelete({ org, repo, branch });
+                                },
+                                disabled: branch === 'main',
+                                className: `ml-2 rounded-md p-1 transition-colors ${
+                                  branch === 'main'
+                                    ? 'text-neutral-700 cursor-not-allowed'
+                                    : 'text-neutral-500 hover:text-red-400'
+                                }`,
+                                title: branch === 'main' ? 'Main branch cannot be removed' : 'Delete Worktree'
+                              },
+                              h(Trash2, { size: 12 })
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          ),
+          h(
+            'button',
+            {
+              onClick: () => setShowAddRepoModal(true),
+              className:
+                'absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center space-x-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-100 text-xs px-3 py-1.5 rounded-md transition-colors'
+            },
+            h(Plus, { size: 14 }),
+            h('span', null, 'Add Repo')
+          )
+        );
+
+        const desktopSidebar = h(
+          Resizable,
+          {
+            size: { width, height: '100%' },
+            onResizeStop: (_event, _direction, _ref, delta) => setWidth(width + delta.width),
+            minWidth: 260,
+            maxWidth: 540,
+            className: 'border-r border-neutral-800 bg-neutral-925 relative hidden lg:block'
+          },
+          sidebarContent
+        );
+
+        const mobileSidebar = h(
+          'div',
+          {
+            className: `lg:hidden fixed inset-0 z-40 bg-neutral-950/95 backdrop-blur-md transition-transform duration-150 ease-out ${
+              isMobileMenuOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 pointer-events-none'
+            }`
+          },
+          h(
+            'div',
+            { className: 'h-full w-[88vw] max-w-sm border-r border-neutral-800 bg-neutral-925 relative' },
+            sidebarContent,
+            h(
+              'button',
+              {
+                onClick: () => setIsMobileMenuOpen(false),
+                className: 'absolute top-3 right-3 text-neutral-400 hover:text-neutral-100 transition-colors'
+              },
+              h(X, { size: 16 })
+            )
+          )
+        );
+
+        const mainPane = h(
+          'div',
+          { className: 'flex-1 bg-neutral-950 p-6 text-neutral-100 font-mono flex flex-col min-h-0' },
+          activeWorktree
+            ? h(
+                'div',
+                { className: 'bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0' },
+                h(
+                  'div',
+                  { className: 'flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
+                  h(
+                    'div',
+                    null,
+                    h(
+                      'div',
+                      { className: 'text-xs text-neutral-500' },
+                      `${activeWorktree.org}/${activeWorktree.repo}`
+                    ),
+                    h(
+                      'div',
+                      { className: 'text-sm text-neutral-300 flex items-center gap-2' },
+                      h('span', null, ` ${activeWorktree.branch}`),
+                      h(
+                        'span',
+                        { className: `inline-flex items-center px-2 py-0.5 rounded-md text-2xs uppercase tracking-wide ${statusClass}` },
+                        statusLabel
+                      )
+                    )
+                  ),
+                  h(TerminalIcon, { size: 16, className: 'text-neutral-500' })
+                ),
+                h('div', {
+                  ref: terminalContainerRef,
+                  className: 'flex-1 bg-neutral-950 min-h-0 overflow-hidden relative'
+                }),
+                h(
+                  'div',
+                  { className: 'border-t border-neutral-800 px-4 py-2 text-xs text-neutral-500 bg-neutral-900/80' },
+                  sessionId ? `Session: ${sessionId}` : 'Interactive shell session'
+                )
+            )
+          : h(
+                'div',
+                { className: 'flex-1 flex items-center justify-center text-neutral-500' },
+                h('p', null, 'Select a repository and branch from the left panel')
+              )
+        );
+
+        return h(
+          Fragment,
+          null,
+          h(
+            'div',
+            { className: 'flex h-screen bg-neutral-950 text-neutral-100 relative flex-col lg:flex-row min-h-0' },
+            h(
+              'header',
+              {
+                className:
+                  'lg:hidden flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-925/95 backdrop-blur-sm sticky top-0 z-40 shadow-sm'
+              },
+              h(
+                'button',
+                {
+                  onClick: () => setIsMobileMenuOpen(true),
+                  className:
+                    'inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-3 py-2 text-sm text-neutral-300 shadow-sm active:scale-[0.97] transition'
+                },
+                h(Menu, { size: 18 }),
+                h('span', { className: 'sr-only' }, 'Open sidebar')
+              ),
+              h(
+                'div',
+                { className: 'text-sm font-medium text-neutral-300' },
+                activeWorktree
+                  ? `${activeWorktree.org}/${activeWorktree.repo}`
+                  : 'Worktrees'
+              ),
+              h('div', { className: 'w-9' })
+            ),
+            desktopSidebar,
+            mobileSidebar,
+            h(
+              'div',
+              { className: 'flex-1 h-full w-full lg:w-auto overflow-hidden flex flex-col min-h-0' },
+              mainPane
+            )
+          ),
+          showAddRepoModal
+            ? h(
+                Modal,
+                { title: 'Add repository', onClose: () => setShowAddRepoModal(false) },
+                h(
+                  'div',
+                  { className: 'space-y-2' },
+                  h(
+                    'label',
+                    { className: 'block text-xs uppercase tracking-wide text-neutral-400' },
+                    'Repository URL'
+                  ),
+                  h('input', {
+                    value: repoUrl,
+                    onChange: event => setRepoUrl(event.target.value),
+                    placeholder: 'https://github.com/org/repo.git',
+                    className:
+                      'w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500/60'
+                  })
+                ),
+                h(
+                  'div',
+                  { className: 'flex justify-end gap-2 pt-2' },
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: () => setShowAddRepoModal(false),
+                      className: 'px-3 py-2 text-sm text-neutral-400 hover:text-neutral-200'
+                    },
+                    'Cancel'
+                  ),
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: handleAddRepo,
+                      className:
+                        'px-3 py-2 text-sm bg-emerald-500/80 hover:bg-emerald-400 text-neutral-900 font-medium rounded-md transition-colors'
+                    },
+                    'Add repository'
+                  )
+                )
+              )
+            : null,
+          showWorktreeModal && selectedRepo
+            ? h(
+                Modal,
+                {
+                  title: `Create worktree for ${selectedRepo[1]}`,
+                  onClose: () => setShowWorktreeModal(false)
+                },
+                h(
+                  'div',
+                  { className: 'space-y-2' },
+                  h(
+                    'label',
+                    { className: 'block text-xs uppercase tracking-wide text-neutral-400' },
+                    'Branch name'
+                  ),
+                  h('input', {
+                    value: branchName,
+                    onChange: event => setBranchName(event.target.value),
+                    placeholder: 'feature/my-awesome-branch',
+                    className:
+                      'w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500/60'
+                  })
+                ),
+                h(
+                  'div',
+                  { className: 'flex justify-end gap-2 pt-2' },
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: () => setShowWorktreeModal(false),
+                      className: 'px-3 py-2 text-sm text-neutral-400 hover:text-neutral-200'
+                    },
+                    'Cancel'
+                  ),
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: handleCreateWorktree,
+                      className:
+                        'px-3 py-2 text-sm bg-emerald-500/80 hover:bg-emerald-400 text-neutral-900 font-medium rounded-md transition-colors'
+                    },
+                    'Create worktree'
+                  )
+                )
+              )
+            : null,
+          confirmDelete
+            ? h(
+                Modal,
+                {
+                  title: 'Remove worktree',
+                  onClose: () => setConfirmDelete(null)
+                },
+                h(
+                  'div',
+                  { className: 'space-y-3 text-sm text-neutral-300' },
+                  h(
+                    'p',
+                    null,
+                    `Remove ${confirmDelete.branch} from ${confirmDelete.repo}?`
+                  ),
+                  h(
+                    'p',
+                    { className: 'text-xs text-neutral-500' },
+                    'This only detaches the worktree locally. The Git branch remains.'
+                  )
+                ),
+                h(
+                  'div',
+                  { className: 'flex justify-end gap-2 pt-3' },
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: () => setConfirmDelete(null),
+                      className: 'px-3 py-2 text-sm text-neutral-400 hover:text-neutral-200'
+                    },
+                    'Cancel'
+                  ),
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: handleConfirmDelete,
+                      className:
+                        'px-3 py-2 text-sm bg-rose-500/80 hover:bg-rose-400 text-neutral-50 font-medium rounded-md transition-colors'
+                    },
+                    'Remove'
+                  )
+                )
+              )
+            : null,
+          pendingWorktreeAction
+            ? h(
+                Modal,
+                {
+                  title: `Open ${pendingWorktreeAction.repo}`,
+                  onClose: () => setPendingWorktreeAction(null)
+                },
+                h(
+                  'div',
+                  { className: 'space-y-3 text-sm text-neutral-300' },
+                  h(
+                    'p',
+                    null,
+                    'Choose how you want to start working in this worktree:'
+                  ),
+                  h(
+                    'div',
+                    { className: 'space-y-2' },
+                    h(
+                      'button',
+                      {
+                        onClick: () => handleWorktreeAction('terminal'),
+                        className:
+                          'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors'
+                      },
+                      'Open Terminal'
+                    ),
+                    h(
+                      'button',
+                      {
+                        onClick: () => handleWorktreeAction('codex'),
+                        className:
+                          'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors'
+                      },
+                      'Open Codex'
+                    ),
+                    h(
+                      'button',
+                      {
+                        onClick: () => handleWorktreeAction('cursor'),
+                        className:
+                          'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors'
+                      },
+                      'Open Cursor'
+                    ),
+                    h(
+                      'button',
+                      {
+                        onClick: () => handleWorktreeAction('claude'),
+                        className:
+                          'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors'
+                      },
+                      'Open Claude'
+                    )
+                  )
+                )
+              )
+            : null
+        );
+      }
+
+      function App() {
+        return h(Fragment, null, h(RepoBrowser));
+      }
+
+      const root = createRoot(document.getElementById('root'));
+      root.render(h(App));
+    </script>
+  </body>
+</html>
