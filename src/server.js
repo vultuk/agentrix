@@ -12,8 +12,89 @@ const DEFAULT_PORT = 3414;
 const execFileAsync = promisify(execFile);
 const MAX_TERMINAL_BUFFER = 200000;
 
+const TMUX_BIN = 'tmux';
+const TMUX_SESSION_PREFIX = 'tw-';
+let tmuxAvailable = false;
+let tmuxVersion = null;
+let tmuxDetection;
+
 const terminalSessions = new Map();
 const terminalSessionsById = new Map();
+
+async function detectTmux() {
+  if (!tmuxDetection) {
+    tmuxDetection = (async () => {
+      try {
+        const { stdout } = await execFileAsync(TMUX_BIN, ['-V'], { maxBuffer: 1024 * 1024 });
+        tmuxAvailable = true;
+        tmuxVersion = stdout ? stdout.trim() : null;
+      } catch (error) {
+        tmuxAvailable = false;
+        tmuxVersion = null;
+      }
+      return { available: tmuxAvailable, version: tmuxVersion };
+    })();
+  }
+  return tmuxDetection;
+}
+
+function isTmuxAvailable() {
+  return tmuxAvailable;
+}
+
+async function runTmux(args, options = {}) {
+  return execFileAsync(TMUX_BIN, args, { maxBuffer: 1024 * 1024, ...options });
+}
+
+function sanitiseTmuxComponent(value, fallback) {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  const cleaned = trimmed
+    .replace(/\s+/g, '-')
+    .replace(/[^A-Za-z0-9._-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return cleaned || fallback;
+}
+
+function makeTmuxSessionName(org, repo, branch) {
+  const orgPart = sanitiseTmuxComponent(org, 'org');
+  const repoPart = sanitiseTmuxComponent(repo, 'repo');
+  const branchPart = sanitiseTmuxComponent(branch, 'branch');
+  return `${TMUX_SESSION_PREFIX}${orgPart}::${repoPart}::${branchPart}`;
+}
+
+function tmuxTarget(sessionName) {
+  return `=${sessionName}`;
+}
+
+async function tmuxHasSession(sessionName) {
+  try {
+    await runTmux(['has-session', '-t', tmuxTarget(sessionName)]);
+    return true;
+  } catch (error) {
+    if (typeof error.code === 'number') {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function tmuxKillSession(sessionName) {
+  try {
+    await runTmux(['kill-session', '-t', tmuxTarget(sessionName)]);
+  } catch (error) {
+    if (typeof error.code === 'number') {
+      return;
+    }
+    throw error;
+  }
+}
 
 function sendJson(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -433,15 +514,45 @@ async function getOrCreateTerminalSession(workdir, org, repo, branch) {
   const shellCommand = process.env.SHELL || '/bin/bash';
   const args = determineShellArgs(shellCommand);
 
-  const child = pty.spawn(shellCommand, args, {
-    cwd: worktreePath,
-    env: {
-      ...process.env,
-      TERM: process.env.TERM || 'xterm-256color',
-    },
-    cols: 120,
-    rows: 36,
-  });
+  let child;
+  let usingTmux = false;
+  let tmuxSessionName = null;
+  let tmuxSessionExists = false;
+
+  await detectTmux();
+  if (isTmuxAvailable()) {
+    tmuxSessionName = makeTmuxSessionName(org, repo, branch);
+    tmuxSessionExists = await tmuxHasSession(tmuxSessionName);
+    const tmuxArgs = tmuxSessionExists
+      ? ['attach-session', '-t', tmuxTarget(tmuxSessionName)]
+      : ['new-session', '-s', tmuxSessionName, '-c', worktreePath];
+    if (!tmuxSessionExists && shellCommand) {
+      tmuxArgs.push(shellCommand);
+      if (Array.isArray(args) && args.length > 0) {
+        tmuxArgs.push(...args);
+      }
+    }
+    child = pty.spawn(TMUX_BIN, tmuxArgs, {
+      cwd: worktreePath,
+      env: {
+        ...process.env,
+        TERM: process.env.TERM || 'xterm-256color',
+      },
+      cols: 120,
+      rows: 36,
+    });
+    usingTmux = true;
+  } else {
+    child = pty.spawn(shellCommand, args, {
+      cwd: worktreePath,
+      env: {
+        ...process.env,
+        TERM: process.env.TERM || 'xterm-256color',
+      },
+      cols: 120,
+      rows: 36,
+    });
+  }
 
   session = {
     id: randomUUID(),
@@ -451,6 +562,8 @@ async function getOrCreateTerminalSession(workdir, org, repo, branch) {
     branch,
     process: child,
     worktreePath,
+    usingTmux,
+    tmuxSessionName,
     log: '',
     watchers: new Set(),
     closed: false,
@@ -463,7 +576,8 @@ async function getOrCreateTerminalSession(workdir, org, repo, branch) {
   child.on('data', (chunk) => handleSessionOutput(session, chunk));
   child.on('exit', (code, signal) => handleSessionExit(session, code, signal));
 
-  return { session, created: true };
+  const created = usingTmux ? !tmuxSessionExists : true;
+  return { session, created };
 }
 
 async function discoverRepositories(workdir) {
@@ -542,6 +656,16 @@ async function removeWorktree(workdir, org, repo, branch) {
 
   const sessionKey = makeSessionKey(org, repo, branchName);
   await disposeSessionByKey(sessionKey);
+  await detectTmux();
+  if (isTmuxAvailable()) {
+    const tmuxSessionName = makeTmuxSessionName(org, repo, branchName);
+    try {
+      await tmuxKillSession(tmuxSessionName);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(`[terminal-worktree] Failed to kill tmux session ${tmuxSessionName}:`, err.message);
+    }
+  }
 
   const { repositoryPath } = await ensureRepository(workdir, org, repo);
   const worktrees = await listWorktrees(repositoryPath);
@@ -605,6 +729,16 @@ async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, w
 
   const { resolvedPath, contents } = await loadUi(uiPath);
   const resolvedWorkdir = workdir ? await resolveWorkdir(workdir) : process.cwd();
+  const tmuxInfo = await detectTmux();
+  if (tmuxInfo.available) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[terminal-worktree] tmux detected${tmuxInfo.version ? ` (${tmuxInfo.version})` : ''}; persistent terminal sessions enabled`,
+    );
+  } else {
+    // eslint-disable-next-line no-console
+    console.log('[terminal-worktree] tmux not available; using direct node-pty sessions');
+  }
 
   const server = http.createServer(async (req, res) => {
     try {
