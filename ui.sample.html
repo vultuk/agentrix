@@ -129,6 +129,8 @@
         const [pendingWorktreeAction, setPendingWorktreeAction] = useState(null);
         const [isAddingRepo, setIsAddingRepo] = useState(false);
         const [isCreatingWorktree, setIsCreatingWorktree] = useState(false);
+        const [isDeletingWorktree, setIsDeletingWorktree] = useState(false);
+        const [pendingActionLoading, setPendingActionLoading] = useState(null);
 
         const renderSpinner = (colorClass = '') =>
           h(
@@ -670,8 +672,11 @@
         };
 
         const handleConfirmDelete = async () => {
-          if (!confirmDelete) return;
+          if (isDeletingWorktree || !confirmDelete) {
+            return;
+          }
           const { org, repo, branch } = confirmDelete;
+          setIsDeletingWorktree(true);
           try {
             const response = await fetch('/api/worktrees', {
               method: 'DELETE',
@@ -703,6 +708,8 @@
           } catch (error) {
             console.error('Failed to remove worktree', error);
             window.alert('Failed to remove worktree. Check server logs for details.');
+          } finally {
+            setIsDeletingWorktree(false);
           }
         };
 
@@ -730,9 +737,10 @@
         }, [getWorktreeKey, openTerminalForWorktree, loadSessions]);
 
         const handleWorktreeAction = useCallback(async (action) => {
-          if (!pendingWorktreeAction) {
+          if (!pendingWorktreeAction || pendingActionLoading) {
             return;
           }
+          setPendingActionLoading(action);
           const worktree = pendingWorktreeAction;
           const commandMap = {
             terminal: undefined,
@@ -748,8 +756,10 @@
           } catch (error) {
             console.error('Failed to launch terminal action', error);
             window.alert('Failed to launch the selected option. Check server logs for details.');
+          } finally {
+            setPendingActionLoading(null);
           }
-        }, [openTerminalForWorktree, pendingWorktreeAction]);
+        }, [openTerminalForWorktree, pendingWorktreeAction, pendingActionLoading]);
 
         const statusStyles = {
           connected: 'border border-emerald-500/40 text-emerald-300 bg-emerald-500/15',
@@ -1149,7 +1159,11 @@
                 Modal,
                 {
                   title: 'Remove worktree',
-                  onClose: () => setConfirmDelete(null)
+                  onClose: () => {
+                    if (!isDeletingWorktree) {
+                      setConfirmDelete(null);
+                    }
+                  }
                 },
                 h(
                   'div',
@@ -1172,8 +1186,14 @@
                     'button',
                     {
                       type: 'button',
-                      onClick: () => setConfirmDelete(null),
-                      className: 'px-3 py-2 text-sm text-neutral-400 hover:text-neutral-200'
+                      onClick: () => {
+                        if (!isDeletingWorktree) {
+                          setConfirmDelete(null);
+                        }
+                      },
+                      disabled: isDeletingWorktree,
+                      className:
+                        'px-3 py-2 text-sm text-neutral-400 hover:text-neutral-200 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-neutral-400'
                     },
                     'Cancel'
                   ),
@@ -1182,10 +1202,19 @@
                     {
                       type: 'button',
                       onClick: handleConfirmDelete,
+                      disabled: isDeletingWorktree,
+                      'aria-busy': isDeletingWorktree,
                       className:
-                        'px-3 py-2 text-sm bg-rose-500/80 hover:bg-rose-400 text-neutral-50 font-medium rounded-md transition-colors'
+                        'px-3 py-2 text-sm bg-rose-500/80 hover:bg-rose-400 text-neutral-50 font-medium rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-rose-500/80'
                     },
-                    'Remove'
+                    isDeletingWorktree
+                      ? h(
+                          'span',
+                          { className: 'inline-flex items-center gap-2' },
+                          renderSpinner('text-neutral-50'),
+                          'Removing…'
+                        )
+                      : 'Remove'
                   )
                 )
               )
@@ -1195,7 +1224,11 @@
                 Modal,
                 {
                   title: `Open ${pendingWorktreeAction.repo}`,
-                  onClose: () => setPendingWorktreeAction(null)
+                  onClose: () => {
+                    if (!pendingActionLoading) {
+                      setPendingWorktreeAction(null);
+                    }
+                  }
                 },
                 h(
                   'div',
@@ -1212,37 +1245,73 @@
                       'button',
                       {
                         onClick: () => handleWorktreeAction('terminal'),
+                        disabled: Boolean(pendingActionLoading),
+                        'aria-busy': pendingActionLoading === 'terminal',
                         className:
-                          'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors'
+                          'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-neutral-700 disabled:hover:bg-neutral-900'
                       },
-                      'Open Terminal'
+                      pendingActionLoading === 'terminal'
+                        ? h(
+                            'span',
+                            { className: 'inline-flex items-center gap-2' },
+                            renderSpinner('text-neutral-100'),
+                            'Opening…'
+                          )
+                        : 'Open Terminal'
                     ),
                     h(
                       'button',
                       {
                         onClick: () => handleWorktreeAction('codex'),
+                        disabled: Boolean(pendingActionLoading),
+                        'aria-busy': pendingActionLoading === 'codex',
                         className:
-                          'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors'
+                          'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-neutral-700 disabled:hover:bg-neutral-900'
                       },
-                      'Open Codex'
+                      pendingActionLoading === 'codex'
+                        ? h(
+                            'span',
+                            { className: 'inline-flex items-center gap-2' },
+                            renderSpinner('text-neutral-100'),
+                            'Opening…'
+                          )
+                        : 'Open Codex'
                     ),
                     h(
                       'button',
                       {
                         onClick: () => handleWorktreeAction('cursor'),
+                        disabled: Boolean(pendingActionLoading),
+                        'aria-busy': pendingActionLoading === 'cursor',
                         className:
-                          'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors'
+                          'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-neutral-700 disabled:hover:bg-neutral-900'
                       },
-                      'Open Cursor'
+                      pendingActionLoading === 'cursor'
+                        ? h(
+                            'span',
+                            { className: 'inline-flex items-center gap-2' },
+                            renderSpinner('text-neutral-100'),
+                            'Opening…'
+                          )
+                        : 'Open Cursor'
                     ),
                     h(
                       'button',
                       {
                         onClick: () => handleWorktreeAction('claude'),
+                        disabled: Boolean(pendingActionLoading),
+                        'aria-busy': pendingActionLoading === 'claude',
                         className:
-                          'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors'
+                          'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-neutral-700 disabled:hover:bg-neutral-900'
                       },
-                      'Open Claude'
+                      pendingActionLoading === 'claude'
+                        ? h(
+                            'span',
+                            { className: 'inline-flex items-center gap-2' },
+                            renderSpinner('text-neutral-100'),
+                            'Opening…'
+                          )
+                        : 'Open Claude'
                     )
                   )
                 )
