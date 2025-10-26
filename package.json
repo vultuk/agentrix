@@ -1,13 +1,13 @@
 {
-  "name": "ai-worktrees",
+  "name": "terminal-worktree",
   "version": "0.1.0",
   "private": true,
-  "description": "CLI utility for serving the ai-worktrees UI prototype",
+  "description": "CLI utility for serving the terminal-worktree UI prototype",
   "bin": {
-    "ai-worktrees": "bin/ai-worktrees.js"
+    "terminal-worktree": "bin/terminal-worktree.js"
   },
   "scripts": {
-    "start": "node bin/ai-worktrees.js"
+    "start": "node bin/terminal-worktree.js"
   },
   "type": "commonjs",
   "dependencies": {

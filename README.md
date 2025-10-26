@@ -1,6 +1,6 @@
-# ai-worktrees CLI
+# terminal-worktree CLI
 
-This repository hosts the early prototype of the `ai-worktrees` console application. The first milestone is a small CLI that serves the static UI mockup in `ui.sample.html` so that it is accessible in a browser.
+This repository hosts the early prototype of the `terminal-worktree` console application. The first milestone is a small CLI that serves the static UI mockup in `ui.sample.html` so that it is accessible in a browser.
 
 ## Prerequisites
 
@@ -11,13 +11,13 @@ This repository hosts the early prototype of the `ai-worktrees` console applicat
 From the repository root run:
 
 ```bash
-node bin/ai-worktrees.js
+node bin/terminal-worktree.js
 ```
 
 By default the UI is served from `ui.sample.html` on port `3414` and bound to `0.0.0.0`. Customise this behaviour with flags:
 
 ```bash
-node bin/ai-worktrees.js --port 4000 --host 127.0.0.1 --ui path/to/file.html
+node bin/terminal-worktree.js --port 4000 --host 127.0.0.1 --ui path/to/file.html
 ```
 
 ### CLI Options

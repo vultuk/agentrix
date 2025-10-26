@@ -4,7 +4,7 @@ const path = require('path');
 const { startServer, DEFAULT_HOST, DEFAULT_PORT } = require('./server');
 
 function printHelp() {
-  const helpText = `Usage: ai-worktrees [options]
+  const helpText = `Usage: terminal-worktree [options]
 
 Options:
   -p, --port <number>    Port to bind the HTTP server (default: ${DEFAULT_PORT})
