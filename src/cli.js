@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   startServer,
   DEFAULT_HOST,
@@ -8,13 +9,15 @@ import {
   generateRandomPassword,
 } from './server/index.js';
 
+const BUNDLED_UI_PATH = fileURLToPath(new URL('../ui/dist', import.meta.url));
+
 function printHelp() {
   const helpText = `Usage: terminal-worktree [options]
 
 Options:
   -p, --port <number>    Port to bind the HTTP server (default: ${DEFAULT_PORT})
   -H, --host <host>      Host interface to bind (default: ${DEFAULT_HOST})
-  -u, --ui <path>        Path to the UI directory or entry file (default: ui/dist)
+  -u, --ui <path>        Path to the UI directory or entry file (default: bundled build)
   -w, --workdir <path>   Working directory root (default: current directory)
   -P, --password <string>  Password for login (default: randomly generated)
   -h, --help             Display this help message
@@ -27,7 +30,7 @@ function parseArgs(argv) {
   const args = {
     port: DEFAULT_PORT,
     host: DEFAULT_HOST,
-    ui: 'ui/dist',
+    ui: null,
     workdir: null,
     password: null,
     help: false,
@@ -133,15 +136,17 @@ async function main(argv = process.argv.slice(2)) {
     return;
   }
 
-  const uiPath = path.resolve(process.cwd(), args.ui);
   const workingDir = args.workdir
     ? path.resolve(process.cwd(), args.workdir)
     : process.cwd();
   const chosenPassword = args.password || generateRandomPassword();
+  const resolvedUiPath = args.ui
+    ? path.resolve(process.cwd(), args.ui)
+    : BUNDLED_UI_PATH;
 
   try {
     const { server, host, port, uiPath: resolvedUi, close, password: serverPassword } = await startServer({
-      uiPath,
+      uiPath: resolvedUiPath,
       port: args.port,
       host: args.host,
       workdir: workingDir,

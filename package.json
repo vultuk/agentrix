@@ -1,19 +1,47 @@
 {
   "name": "terminal-worktree",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.1.2",
   "description": "CLI utility for serving the terminal-worktree UI",
+  "license": "MIT",
+  "author": "Simon Skinner (vultuk) <talkto@simonskinner.me>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vultuk/terminal-worktree.git"
+  },
+  "homepage": "https://github.com/vultuk/terminal-worktree#readme",
+  "bugs": {
+    "url": "https://github.com/vultuk/terminal-worktree/issues"
+  },
+  "keywords": [
+    "terminal",
+    "worktree",
+    "git",
+    "cli",
+    "pty",
+    "tmux",
+    "devtools"
+  ],
+  "files": [
+    "bin/",
+    "src/",
+    "ui/dist/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "bin": {
     "terminal-worktree": "bin/terminal-worktree.js"
   },
   "scripts": {
     "start": "node bin/terminal-worktree.js",
     "dev": "node bin/terminal-worktree.js",
-    "dev:ui": "npm --prefix ui run dev",
-    "build": "npm --prefix ui run build",
-    "build:ui": "npm --prefix ui run build",
-    "preview": "npm --prefix ui run preview",
-    "preview:ui": "npm --prefix ui run preview"
+    "dev:ui": "node scripts/ensure-ui-deps.js && npm --prefix ui run dev",
+    "build": "npm run build:ui",
+    "build:ui": "node scripts/ensure-ui-deps.js && npm --prefix ui run build",
+    "prepack": "npm run build:ui",
+    "preview": "node scripts/ensure-ui-deps.js && npm --prefix ui run preview",
+    "preview:ui": "node scripts/ensure-ui-deps.js && npm --prefix ui run preview"
   },
   "type": "module",
   "dependencies": {
