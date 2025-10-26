@@ -1,84 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AI Worktrees Prototype</title>
+import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Resizable } from 're-resizable';
+import { Terminal } from 'xterm';
+import { FitAddon } from 'xterm-addon-fit';
+import { Github, GitBranch, GitPullRequest, Menu, Plus, Trash2, X } from 'lucide-react';
 
-    <script>
-      window.tailwind = window.tailwind || {};
-      window.tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              neutral: {
-                925: '#161616'
-              }
-            }
-          }
-        }
-      };
-    </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+import 'xterm/css/xterm.css';
 
-    <style>
-      body {
-        margin: 0;
-        background-color: #09090b;
-      }
+const { createElement: h } = React;
 
-      .mobile-sidebar-enter {
-        opacity: 0;
-        transform: translateX(-20px);
-      }
-
-      .mobile-sidebar-enter-active {
-        opacity: 1;
-        transform: translateX(0);
-        transition: opacity 150ms ease, transform 150ms ease;
-      }
-
-      .mobile-sidebar-exit {
-        opacity: 1;
-        transform: translateX(0);
-      }
-
-      .mobile-sidebar-exit-active {
-        opacity: 0;
-        transform: translateX(-40px);
-        transition: opacity 150ms ease, transform 150ms ease;
-      }
-    </style>
-
-    <script type="importmap">
-      {
-        "imports": {
-          "react": "https://cdn.jsdelivr.net/npm/react@18.3.1/+esm",
-          "react-dom/client": "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/client/+esm",
-          "re-resizable": "https://cdn.jsdelivr.net/npm/re-resizable@6.9.0/+esm",
-          "lucide-react": "https://cdn.jsdelivr.net/npm/lucide-react@0.378.0/+esm",
-          "xterm": "https://cdn.jsdelivr.net/npm/xterm@5.3.0/+esm",
-          "xterm-addon-fit": "https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/+esm"
-        }
-      }
-    </script>
-  </head>
-  <body>
-    <div id="root"></div>
-
-    <script type="module">
-      import React, { useState, useEffect, useCallback, useRef } from 'react';
-      import { createRoot } from 'react-dom/client';
-      import { Resizable } from 're-resizable';
-      import { Terminal } from 'xterm';
-      import { FitAddon } from 'xterm-addon-fit';
-      import { Github, GitBranch, Plus, X, GitPullRequest, Trash2, Menu } from 'lucide-react';
-
-      const { createElement: h, Fragment } = React;
-
-      function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children }) {
         const content = Array.isArray(children) ? children : [children];
         return h(
           'div',
@@ -113,7 +43,7 @@
         );
       }
 
-      function LoginScreen({ onAuthenticated }) {
+function LoginScreen({ onAuthenticated }) {
         const [password, setPassword] = useState('');
         const [error, setError] = useState(null);
         const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1515,7 +1445,7 @@
         );
       }
 
-      function App() {
+export default function App() {
         const [authStatus, setAuthStatus] = useState('checking');
         const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -1585,9 +1515,3 @@
           isLoggingOut
         });
       }
-
-      const root = createRoot(document.getElementById('root'));
-      root.render(h(App));
-    </script>
-  </body>
-</html>

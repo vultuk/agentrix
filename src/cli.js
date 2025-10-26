@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 
-const path = require('path');
-const { startServer, DEFAULT_HOST, DEFAULT_PORT, generateRandomPassword } = require('./server');
+import path from 'node:path';
+import {
+  startServer,
+  DEFAULT_HOST,
+  DEFAULT_PORT,
+  generateRandomPassword,
+} from './server/index.js';
 
 function printHelp() {
   const helpText = `Usage: terminal-worktree [options]
@@ -9,7 +14,7 @@ function printHelp() {
 Options:
   -p, --port <number>    Port to bind the HTTP server (default: ${DEFAULT_PORT})
   -H, --host <host>      Host interface to bind (default: ${DEFAULT_HOST})
-  -u, --ui <path>        Path to the UI HTML file (default: ui.sample.html)
+  -u, --ui <path>        Path to the UI directory or entry file (default: ui/dist)
   -w, --workdir <path>   Working directory root (default: current directory)
   -P, --password <string>  Password for login (default: randomly generated)
   -h, --help             Display this help message
@@ -22,7 +27,7 @@ function parseArgs(argv) {
   const args = {
     port: DEFAULT_PORT,
     host: DEFAULT_HOST,
-    ui: 'ui.sample.html',
+    ui: 'ui/dist',
     workdir: null,
     password: null,
     help: false,
@@ -123,8 +128,8 @@ async function main(argv = process.argv.slice(2)) {
   }
 
   if (args.version) {
-    const pkg = require('../package.json');
-    process.stdout.write(`${pkg.version}\n`);
+    const pkg = await import('../package.json', { with: { type: 'json' } });
+    process.stdout.write(`${pkg.default.version}\n`);
     return;
   }
 
@@ -171,4 +176,4 @@ async function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { main, parseArgs };
+export { main, parseArgs };

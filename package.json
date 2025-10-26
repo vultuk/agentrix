@@ -2,15 +2,22 @@
   "name": "terminal-worktree",
   "version": "0.1.0",
   "private": true,
-  "description": "CLI utility for serving the terminal-worktree UI prototype",
+  "description": "CLI utility for serving the terminal-worktree UI",
   "bin": {
     "terminal-worktree": "bin/terminal-worktree.js"
   },
   "scripts": {
-    "start": "node bin/terminal-worktree.js"
+    "start": "node bin/terminal-worktree.js",
+    "dev": "node bin/terminal-worktree.js",
+    "dev:ui": "npm --prefix ui run dev",
+    "build": "npm --prefix ui run build",
+    "build:ui": "npm --prefix ui run build",
+    "preview": "npm --prefix ui run preview",
+    "preview:ui": "npm --prefix ui run preview"
   },
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
+    "mime-types": "^2.1.35",
     "node-pty": "^1.0.0",
     "ws": "^8.17.1"
   }

@@ -1,40 +1,50 @@
 # Terminal-Worktree Agent Handbook
 
-This document captures the working knowledge gathered while building and operating the `terminal-worktree` console app. It is intended as a quick-start reference for future agents so the project can be resumed without rediscovering prior decisions.
+This handbook captures the working knowledge required to extend or maintain the `terminal-worktree`
+console application now that the project has been restructured into a modular backend and a modern
+React frontend.
 
-## 1. Overview
-- `terminal-worktree` is a CLI that serves the React-based UI in `ui.sample.html` over HTTP.
-- The backend (`src/server.js`) manages:
-  - Git repository discovery and cloning into a fixed structure.
-  - Worktree creation/removal, with safeguards around the `main` branch.
-  - Persistent PTY-backed terminal sessions exposed via WebSockets.
-- The frontend uses CDN-hosted React + Tailwind (via `cdn.tailwindcss.com`) and xterm.js to render the UI. Mobile and desktop layouts are supported, including a hamburger sidebar for small screens.
+## 1. Architecture Overview
+- **Backend** – ES module Node.js service under `src/` responsible for authentication, Git
+  orchestration, worktree lifecycle, and PTY-backed terminal sessions (with optional tmux
+  attachment). HTTP endpoints are organised by feature area under `src/api/`, domain logic under
+  `src/core/`, shared helpers in `src/utils/`, and server/bootstrap code in `src/server/`.
+- **Frontend** – Vite + React application in `ui/` built with TailwindCSS/PostCSS and xterm.js. The
+  production build lives in `ui/dist/` and is served by the backend. During development the Vite dev
+  server (`npm run dev:ui`) provides hot reloading.
 
-## 2. File Layout
-- `bin/terminal-worktree.js` – CLI entry point (thin wrapper around `src/cli.js`).
-- `src/cli.js` – command-line argument parsing, server startup, graceful shutdown handling.
-- `src/server.js` – HTTP + WebSocket server, Git and PTY orchestration.
-- `ui.sample.html` – full UI (React + JSX via CDN ESM modules).
-- `README.md` – basic usage instructions (now aligned with the new name).
-- `AGENTS.md` – this guide.
+## 2. File Layout Highlights
+- `bin/terminal-worktree.js` – CLI entry point (imports `src/cli.js`).
+- `src/cli.js` – argument parsing, server startup, shutdown orchestration.
+- `src/server/index.js` – HTTP server bootstrap, routing, WebSocket wiring.
+- `src/server/ui.js` – static asset serving (supports single files and built directories).
+- `src/api/*` – request handlers (`auth`, `repos`, `sessions`, `terminal`, `worktrees`).
+- `src/core/*` – shared domain modules (`auth`, `git`, `terminal-sessions`, `tmux`, `workdir`).
+- `src/utils/*` – helpers (`cookies`, `http`, `random`).
+- `ui/` – frontend source (`src/`), Tailwind/Vite config, and `dist/` build output.
+- `.gitignore` – excludes `node_modules`, `ui/node_modules`, and `ui/dist`.
 
-## 3. Running the CLI
+## 3. CLI Usage
+
 ```bash
 node bin/terminal-worktree.js [options]
 ```
 
-Options (from `src/cli.js`):
+Arguments (see `src/cli.js`):
 - `-p, --port <number>` – HTTP port (default `3414`).
 - `-H, --host <host>` – Bind interface (default `0.0.0.0`).
-- `-u, --ui <path>` – UI HTML file (default `ui.sample.html`).
-- `-w, --workdir <path>` – Working directory root; if omitted, uses the process CWD.
-- `-h, --help` – Show usage.
-- `-v, --version` – Print the package version.
+- `-u, --ui <path>` – Built UI directory or entry file (default `ui/dist`).
+- `-w, --workdir <path>` – Root of the Git worktree structure (default: process CWD).
+- `-P, --password <string>` – Explicit UI password (default: random 12-char string printed at
+  startup).
+- `-h, --help` – Usage information.
+- `-v, --version` – Package version (resolved via JSON import).
 
-On startup the CLI logs the resolved UI path, working directory, and accessible URL. The process listens for `SIGINT`/`SIGTERM` and calls `server.close()` plus PTY cleanup.
+The CLI logs the resolved UI root, work directory, listening address, and password. Shutdown is
+guarded against duplicate signals and cleans up HTTP, WebSocket, tmux, and PTY resources.
 
-## 4. Workdir & Repository Structure
-- Expected layout when cloning `git@github.com:org/repo.git`:
+## 4. Workdir Expectations & Git Flow
+- Repository layout for `git@github.com:org/repo.git`:
   ```
   [workdir]/
     org/
@@ -42,63 +52,72 @@ On startup the CLI logs the resolved UI path, working directory, and accessible 
         repository/      # main checkout
         <worktree-name>/ # additional worktrees (one per branch)
   ```
-- `/api/repos` builds the sidebar by scanning this structure with `discoverRepositories`.
-- The **Add Repo** modal triggers `/api/repos` (POST) which:
-  1. Parses the repo URL.
-  2. Creates `[workdir]/org/repo/`.
-  3. Clones into `repository/`.
-- Creating a worktree (`/api/worktrees`, POST) performs:
-  1. `git checkout main` inside `repository`.
-  2. `git pull --ff-only origin main`.
-  3. `git worktree add ...` (creates branch if missing).
-- Deleting a worktree (`/api/worktrees`, DELETE) calls `git worktree remove --force`.
-- `main`:
-  - Cannot be opened as a terminal.
-  - Cannot be deleted.
+- `/api/repos` reads this structure via `core/git.discoverRepositories`.
+- Adding a repo (`POST /api/repos`) parses the URL, ensures the `org/repo` folder exists, and clones
+  into `repository/`.
+- Creating a worktree (`POST /api/worktrees`):
+  1. Ensures `repository/` exists.
+  2. Checks out `main` and fast-forwards with `git pull --ff-only origin main`.
+  3. Adds the worktree (creating the branch if needed).
+- Removing a worktree (`DELETE /api/worktrees`) disposes active sessions, kills tmux mirrors, and
+  runs `git worktree remove --force`. Branch `main` remains protected.
 
 ## 5. Terminal Sessions
-- Terminal sessions are keyed by `org::repo::branch`.
-- `/api/terminal/open` returns existing sessions or spawns new PTYs with `node-pty`.
-- The shell defaults to `process.env.SHELL` (spawned with `-il` for common shells), so aliases/profile scripts load (addressing the earlier “standard terminal” concern).
-- When the UI launches Codex/Cursor/Claude, it posts `{ command: 'codex' | 'cursor-agent' | 'claude' }`; the backend writes the command to the PTY only when the session is newly created.
-- Sessions persist across refreshes; the UI polls `/api/sessions` every 15s and keeps session maps in memory so existing terminals reconnect automatically.
-- `/api/terminal/send` forwards typed input; `/api/terminal/socket` streams PTY IO and window resize events.
-- Scrollback (8k lines) and wheel/touch scrolling are enabled in the xterm wrapper.
+- Sessions keyed by `org::repo::branch` and tracked in-memory (`core/terminal-sessions`).
+- `/api/terminal/open` returns existing sessions or spawns new PTYs (`node-pty`) and attaches tmux
+  when available.
+- Shell command respects `process.env.SHELL` and launches with `-il` for bash/zsh/fish.
+- `/api/terminal/socket` upgrades to WebSocket, streams PTY IO, handles resize, and replays buffered
+  output (trimmed to 200k chars). Authentication is validated during upgrade using session cookies.
+- `/api/sessions` merges in-memory sessions with live tmux sessions to restore orphaned terminals.
 
-## 6. Frontend Notes
-- Desktop: resizable sidebar (horizontal only, per user request); terminal pane fills remaining space.
-- Mobile:
-  - Sticky top bar with hamburger icon (lucide `Menu` icon).
-  - Sidebar slides in full-screen; selecting a worktree closes it.
-  - Terminal view becomes full-screen when active.
-- Modals:
-  - Add Repo: triggers clone.
-  - Create Worktree: prompts for branch, then `git pull` + `worktree add`.
-  - Delete Worktree: confirmation before removal.
-  - Worktree action chooser: shown only when no existing session is found; options map to Terminal/Codex/Cursor/Claude.
-- Terminal status badge reflects current state (`connecting`, `connected`, `closed`, `error`, `disconnected`).
-- The terminal container uses ResizeObserver + window resize/orientation listeners to keep the PTY size in sync; vertical sizing honors available space and allows shrinking the browser window.
+## 6. Frontend Behaviour
+- Built with React function components and hooks (mirrors the original mockup functionality).
+- TailwindCSS + PostCSS deliver the utility classes formerly provided by `cdn.tailwindcss.com`.
+- `re-resizable` powers the sidebar resize on desktop; mobile view swaps to a hamburger drawer.
+- Modals cover Add Repo, Create Worktree, Delete Worktree, and “How do you want to open this
+  worktree?” action chooser (Terminal/Codex/Cursor/Claude auto-fill terminal input on first launch).
+- xterm.js + fit addon render the terminal, preserve scrollback, and keep geometry synced via
+  `ResizeObserver`.
 
-## 7. Shutdown Behavior
-- The CLI listens for Ctrl+C; earlier reports mentioned repeated “Shutting down…” logs. The current implementation guards against duplicate shutdown attempts with `shuttingDown` and calls `closeAll()` (server + PTYs).
-  - If multiple interrupts are still observed, double-check for long-running PTY tear-down; `terminateSession` escalates from `SIGTERM` to `SIGKILL` after 2s.
+## 7. Auth & Session Notes
+- `core/auth` manages session tokens and cookie serialisation. Login failures surface 400/401 with
+  descriptive messages.
+- Cookies: `SameSite=Strict`, `HttpOnly`, path `/`, and session max-age `8h`.
+- Logout clears the session cookie and in-memory token set.
 
-## 8. Troubleshooting Tips
-- **`{"error":"command is not defined"}`** – resolved by ensuring `/api/terminal/open` reads `payload.command` only once and passes it along when the PTY is first created (already fixed).
-- **PTY command availability** – if Codex/Cursor/Claude binaries are absent, the command will fail silently in the shell; consider verifying presence or surfacing stdout/stderr in future work.
-- **MaxListeners warnings** – can appear if many sessions are opened without closing; `closeAll()` now tears down watchers, but watch logs if the warning reappears.
-- **Noise from Tailwind CDN warning** – expected from `cdn.tailwindcss.com`, acceptable for this prototype.
+## 8. Shutdown Path
+- `startServer` exposes `close()` which:
+  - Terminates PTY/tmux sessions (escalating from `SIGTERM` to `SIGKILL` after 2s if required).
+  - Closes the WebSocket server and HTTP server.
+  - Clears auth session tokens/maps.
 
-## 9. Development Constraints & Practices
-- Live testing was paused per user instruction (“continue without live testing”).
-- Do not revert user changes; avoid destructive Git commands without explicit request.
-- Maintain ASCII (unless existing files use other encodings).
-- Keep UI true to the provided mockup; avoid introducing extra UI elements without instruction.
+## 9. Frontend Build & Dev
+- `npm run build` (root) → runs Vite build under `ui/` to refresh `ui/dist`.
+- `npm run dev:ui` → Vite dev server with HMR.
+- Backend serving expects `ui/dist` to exist; rebuild after UI changes before using the CLI.
+- Access the dev server directly in the browser when iterating on frontend features; backend APIs
+  continue to run on port `3414`.
 
-## 10. Next Steps / Open Questions
-- Optional: add verification that tool binaries (`codex`, `cursor-agent`, `claude`) exist before launching.
-- Consider backend cleanup when a worktree is deleted while a session is active (currently relies on `/api/sessions` polling).
-- Potential enhancement: richer error reporting on clone/worktree failures beyond generic alerts.
+## 10. Troubleshooting
+- **Missing `ui/dist`** – `createUiProvider` throws `UI path not found`. Run `npm run build`.
+- **Auth errors / 401** – Usually indicates expired session; login again or inspect cookie.
+- **Terminal stuck `disconnected`** – Investigate WebSocket connection in browser console, check
+  logs for tmux availability, and ensure `/api/terminal/open` succeeded.
+- **Git failures** – API responses include stderr/messages; check console output for command details.
+- **Deprecated xterm packages** – Vite warns that upstream packages are deprecated; switching to
+  `@xterm/*` addons is a future improvement.
 
-Refer back to this guide whenever you revisit the project to stay aligned with established decisions and user expectations.
+## 11. Practices & Constraints
+- Preserve existing ESM structure; avoid reintroducing CommonJS.
+- Stay within ASCII unless a file already includes Unicode.
+- Avoid destructive Git commands; never revert user-authored changes without direction.
+- UI changes should honour the established layout and behaviour.
 
+## 12. Future Enhancements
+- Validate existence of helper binaries (`codex`, `cursor-agent`, `claude`) before auto-running them.
+- Improve error messaging for Git/tmux failures surfaced to the UI.
+- Consider clean-up when worktrees are removed while users are still connected (auto-close sessions).
+
+Refer to this handbook whenever you return to the project to stay aligned with the agreed design and
+workflow.
