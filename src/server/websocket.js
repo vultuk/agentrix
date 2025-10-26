@@ -2,7 +2,11 @@ import { WebSocketServer } from 'ws';
 
 import { SESSION_COOKIE_NAME } from '../config/constants.js';
 import { parseCookies } from '../utils/cookies.js';
-import { addSocketWatcher, getSessionById } from '../core/terminal-sessions.js';
+import {
+  addSocketWatcher,
+  getSessionById,
+  queueSessionInput,
+} from '../core/terminal-sessions.js';
 
 export function attachTerminalWebSockets(server, authManager) {
   const wss = new WebSocketServer({ noServer: true });
@@ -40,7 +44,7 @@ export function attachTerminalWebSockets(server, authManager) {
 
         if (parsed && parsed.type === 'input') {
           const payload = typeof parsed.data === 'string' ? parsed.data : '';
-          session.process.write(payload);
+          queueSessionInput(session, payload);
         } else if (parsed && parsed.type === 'resize') {
           const cols = Number.parseInt(parsed.cols, 10);
           const rows = Number.parseInt(parsed.rows, 10);
@@ -48,7 +52,7 @@ export function attachTerminalWebSockets(server, authManager) {
             session.process.resize(cols, rows);
           }
         } else {
-          session.process.write(raw);
+          queueSessionInput(session, raw);
         }
       });
 

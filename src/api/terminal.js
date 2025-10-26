@@ -1,4 +1,8 @@
-import { getOrCreateTerminalSession, getSessionById } from '../core/terminal-sessions.js';
+import {
+  getOrCreateTerminalSession,
+  getSessionById,
+  queueSessionInput,
+} from '../core/terminal-sessions.js';
 import { sendJson } from '../utils/http.js';
 
 export function createTerminalHandlers(workdir) {
@@ -29,7 +33,7 @@ export function createTerminalHandlers(workdir) {
       const { session, created } = await getOrCreateTerminalSession(workdir, org, repo, branch);
       if (command) {
         const commandInput = /[\r\n]$/.test(command) ? command : `${command}\r`;
-        session.process.write(commandInput);
+        queueSessionInput(session, commandInput);
       }
       sendJson(context.res, 200, {
         sessionId: session.id,
@@ -65,7 +69,7 @@ export function createTerminalHandlers(workdir) {
       return;
     }
 
-    session.process.write(input);
+    queueSessionInput(session, input);
     sendJson(context.res, 200, { ok: true });
   }
 

@@ -9,6 +9,68 @@ import { detectTmux, isTmuxAvailable, makeTmuxSessionName, tmuxHasSession } from
 const terminalSessions = new Map();
 const terminalSessionsById = new Map();
 
+function normaliseSessionInput(input) {
+  if (typeof input === 'string') {
+    return input;
+  }
+  if (Buffer.isBuffer(input)) {
+    return input.toString('utf8');
+  }
+  return '';
+}
+
+function flushPendingInputs(session) {
+  if (!session || !Array.isArray(session.pendingInputs) || session.pendingInputs.length === 0) {
+    return;
+  }
+  const inputs = session.pendingInputs.slice();
+  session.pendingInputs.length = 0;
+  inputs.forEach((value) => {
+    if (!value) {
+      return;
+    }
+    try {
+      session.process.write(value);
+    } catch {
+      // ignore write errors; process lifecycle handlers will surface issues elsewhere
+    }
+  });
+}
+
+function markSessionReady(session) {
+  if (!session || session.ready) {
+    return;
+  }
+  session.ready = true;
+  if (session.readyTimer) {
+    clearTimeout(session.readyTimer);
+    session.readyTimer = null;
+  }
+  flushPendingInputs(session);
+}
+
+export function queueSessionInput(session, input) {
+  if (!session || session.closed) {
+    return;
+  }
+  if (!Array.isArray(session.pendingInputs)) {
+    session.pendingInputs = [];
+  }
+  const value = normaliseSessionInput(input);
+  if (!value) {
+    return;
+  }
+  if (session.ready) {
+    try {
+      session.process.write(value);
+    } catch {
+      // ignore write errors
+    }
+    return;
+  }
+  session.pendingInputs.push(value);
+}
+
 function trimLogBuffer(log) {
   if (log.length <= MAX_TERMINAL_BUFFER) {
     return log;
@@ -44,6 +106,7 @@ function broadcast(session, event, payload) {
 }
 
 function handleSessionOutput(session, chunk) {
+  markSessionReady(session);
   const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
   session.log = trimLogBuffer((session.log || '') + text);
   broadcast(session, 'output', { chunk: text });
@@ -57,6 +120,13 @@ function handleSessionExit(session, code, signal, error) {
   session.exitCode = code;
   session.exitSignal = signal;
   session.exitError = error ? error.message : undefined;
+  if (session.readyTimer) {
+    clearTimeout(session.readyTimer);
+    session.readyTimer = null;
+  }
+  if (Array.isArray(session.pendingInputs)) {
+    session.pendingInputs.length = 0;
+  }
   broadcast(session, 'exit', {
     code: session.exitCode,
     signal: session.exitSignal,
@@ -189,9 +259,10 @@ export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
     tmuxSessionExists = await tmuxHasSession(tmuxSessionName);
     const tmuxArgs = tmuxSessionExists
       ? ['attach-session', '-t', tmuxSessionName]
-      : ['new-session', '-s', tmuxSessionName, '-x', '120', '-y', '36', '-d'];
+      : ['new-session', '-s', tmuxSessionName, '-x', '120', '-y', '36'];
 
     if (!tmuxSessionExists) {
+      // Keep the tmux client attached so the PTY stays open on first launch.
       tmuxArgs.push(shellCommand);
       if (args.length > 0) {
         tmuxArgs.push(...args);
@@ -234,6 +305,9 @@ export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
     watchers: new Set(),
     closed: false,
     waiters: [],
+    pendingInputs: [],
+    ready: false,
+    readyTimer: null,
   };
 
   terminalSessions.set(key, session);
@@ -241,6 +315,9 @@ export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
 
   child.on('data', (chunk) => handleSessionOutput(session, chunk));
   child.on('exit', (code, signal) => handleSessionExit(session, code, signal));
+  session.readyTimer = setTimeout(() => {
+    markSessionReady(session);
+  }, 150);
 
   const created = usingTmux ? !tmuxSessionExists : true;
   return { session, created };
