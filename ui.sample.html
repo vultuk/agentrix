@@ -127,6 +127,31 @@
         const [sessionId, setSessionId] = useState(null);
         const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
         const [pendingWorktreeAction, setPendingWorktreeAction] = useState(null);
+        const [isAddingRepo, setIsAddingRepo] = useState(false);
+        const [isCreatingWorktree, setIsCreatingWorktree] = useState(false);
+
+        const renderSpinner = (colorClass = '') =>
+          h(
+            'svg',
+            {
+              className: ['h-4 w-4 animate-spin', colorClass].filter(Boolean).join(' '),
+              viewBox: '0 0 24 24',
+              fill: 'none'
+            },
+            h('circle', {
+              className: 'opacity-25',
+              cx: '12',
+              cy: '12',
+              r: '10',
+              stroke: 'currentColor',
+              strokeWidth: '4'
+            }),
+            h('path', {
+              className: 'opacity-75',
+              fill: 'currentColor',
+              d: 'M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z'
+            })
+          );
 
         const terminalContainerRef = useRef(null);
         const terminalRef = useRef(null);
@@ -547,11 +572,15 @@
         }, [connectSocket, disposeSocket, disposeTerminal, setupTerminal, getWorktreeKey]);
 
         const handleAddRepo = async () => {
+          if (isAddingRepo) {
+            return;
+          }
           const trimmed = repoUrl.trim();
           if (!trimmed) {
             window.alert('Please enter a repository URL.');
             return;
           }
+          setIsAddingRepo(true);
           try {
             const response = await fetch('/api/repos', {
               method: 'POST',
@@ -591,14 +620,20 @@
           } catch (error) {
             console.error('Failed to clone repository', error);
             window.alert('Failed to clone repository. Check server logs for details.');
+          } finally {
+            setIsAddingRepo(false);
           }
         };
 
         const handleCreateWorktree = async () => {
+          if (isCreatingWorktree) {
+            return;
+          }
           if (!selectedRepo) return;
           const trimmedBranch = branchName.trim();
           if (!trimmedBranch) return;
           const [org, repo] = selectedRepo;
+          setIsCreatingWorktree(true);
           try {
             const response = await fetch('/api/worktrees', {
               method: 'POST',
@@ -629,6 +664,8 @@
           } catch (error) {
             console.error('Failed to create worktree', error);
             window.alert('Failed to create worktree. Check server logs for details.');
+          } finally {
+            setIsCreatingWorktree(false);
           }
         };
 
@@ -1033,10 +1070,19 @@
                     {
                       type: 'button',
                       onClick: handleAddRepo,
+                      disabled: isAddingRepo,
+                      'aria-busy': isAddingRepo,
                       className:
-                        'px-3 py-2 text-sm bg-emerald-500/80 hover:bg-emerald-400 text-neutral-900 font-medium rounded-md transition-colors'
+                        'px-3 py-2 text-sm bg-emerald-500/80 hover:bg-emerald-400 text-neutral-900 font-medium rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-emerald-500/80'
                     },
-                    'Add repository'
+                    isAddingRepo
+                      ? h(
+                          'span',
+                          { className: 'inline-flex items-center gap-2' },
+                          renderSpinner('text-neutral-900'),
+                          'Adding…'
+                        )
+                      : 'Add repository'
                   )
                 )
               )
@@ -1081,10 +1127,19 @@
                     {
                       type: 'button',
                       onClick: handleCreateWorktree,
+                      disabled: isCreatingWorktree,
+                      'aria-busy': isCreatingWorktree,
                       className:
-                        'px-3 py-2 text-sm bg-emerald-500/80 hover:bg-emerald-400 text-neutral-900 font-medium rounded-md transition-colors'
+                        'px-3 py-2 text-sm bg-emerald-500/80 hover:bg-emerald-400 text-neutral-900 font-medium rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-emerald-500/80'
                     },
-                    'Create worktree'
+                    isCreatingWorktree
+                      ? h(
+                          'span',
+                          { className: 'inline-flex items-center gap-2' },
+                          renderSpinner('text-neutral-900'),
+                          'Creating…'
+                        )
+                      : 'Create worktree'
                   )
                 )
               )
