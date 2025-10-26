@@ -666,6 +666,29 @@ async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, w
         return;
       }
 
+      if (requestUrl.pathname === '/api/sessions') {
+        if (method !== 'GET' && method !== 'HEAD') {
+          res.setHeader('Allow', 'GET, HEAD');
+          res.statusCode = 405;
+          res.end('Method Not Allowed');
+          return;
+        }
+
+        const sessions = Array.from(terminalSessions.keys()).map((key) => {
+          const [org, repo, branch] = key.split('::');
+          return { org, repo, branch };
+        });
+
+        if (method === 'HEAD') {
+          res.statusCode = 200;
+          res.setHeader('Cache-Control', 'no-store');
+          res.end();
+        } else {
+          sendJson(res, 200, { sessions });
+        }
+        return;
+      }
+
       if (requestUrl.pathname === '/api/worktrees') {
         if (method !== 'POST' && method !== 'DELETE') {
           res.setHeader('Allow', 'POST, DELETE');
@@ -685,7 +708,6 @@ async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, w
         const org = typeof payload.org === 'string' ? payload.org.trim() : '';
         const repo = typeof payload.repo === 'string' ? payload.repo.trim() : '';
         const branch = typeof payload.branch === 'string' ? payload.branch.trim() : '';
-        const command = typeof payload.command === 'string' ? payload.command.trim() : '';
 
         if (!org || !repo || !branch) {
           sendJson(res, 400, { error: 'org, repo, and branch are required' });
@@ -725,6 +747,7 @@ async function startServer({ uiPath, port = DEFAULT_PORT, host = DEFAULT_HOST, w
         const org = typeof payload.org === 'string' ? payload.org.trim() : '';
         const repo = typeof payload.repo === 'string' ? payload.repo.trim() : '';
         const branch = typeof payload.branch === 'string' ? payload.branch.trim() : '';
+        const command = typeof payload.command === 'string' ? payload.command.trim() : '';
 
         if (!org || !repo || !branch) {
           sendJson(res, 400, { error: 'org, repo, and branch are required' });

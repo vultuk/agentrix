@@ -146,6 +146,7 @@
         const closedByProcessRef = useRef(false);
         const sessionMapRef = useRef(new Map());
         const sessionKeyByIdRef = useRef(new Map());
+        const knownSessionsRef = useRef(new Set());
         const getWorktreeKey = useCallback((org, repo, branch) => `${org}::${repo}::${branch}`, []);
 
         const applyDataUpdate = useCallback(payload => {
@@ -166,6 +167,7 @@
             if (!branches.includes(branchKey)) {
               sessionMapRef.current.delete(key);
               sessionKeyByIdRef.current.delete(session);
+              knownSessionsRef.current.delete(key);
             }
           });
         }, []);
@@ -198,6 +200,43 @@
         useEffect(() => {
           refreshRepositories();
         }, [refreshRepositories]);
+
+        const loadSessions = useCallback(async () => {
+          try {
+            const response = await fetch('/api/sessions');
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+            const body = await response.json();
+            const sessions = Array.isArray(body.sessions) ? body.sessions : [];
+            knownSessionsRef.current = new Set(
+              sessions
+                .map((item) => {
+                  if (item && typeof item === 'object') {
+                    const { org, repo, branch } = item;
+                    if (org && repo && branch) {
+                      return `${org}::${repo}::${branch}`;
+                    }
+                  }
+                  return null;
+                })
+                .filter(Boolean)
+            );
+          } catch (error) {
+            knownSessionsRef.current = new Set();
+          }
+        }, []);
+
+        useEffect(() => {
+          loadSessions();
+        }, [loadSessions]);
+
+        useEffect(() => {
+          const id = setInterval(() => {
+            loadSessions();
+          }, 15000);
+          return () => clearInterval(id);
+        }, [loadSessions]);
 
         const disposeSocket = useCallback(() => {
           if (socketRef.current) {
@@ -424,6 +463,12 @@
             } else if (payload.type === 'exit') {
               closedByProcessRef.current = true;
               setTerminalStatus('closed');
+              const key = sessionKeyByIdRef.current.get(newSessionId);
+              if (key) {
+                knownSessionsRef.current.delete(key);
+                sessionMapRef.current.delete(key);
+                sessionKeyByIdRef.current.delete(newSessionId);
+              }
             } else if (payload.type === 'init') {
               if (!initSuppressedRef.current && payload.log && terminalRef.current) {
                 terminalRef.current.write(payload.log);
@@ -436,6 +481,12 @@
             } else if (payload.type === 'error') {
               console.error(payload.message || 'Terminal connection error');
               setTerminalStatus('error');
+              const key = sessionKeyByIdRef.current.get(newSessionId);
+              if (key) {
+                knownSessionsRef.current.delete(key);
+                sessionMapRef.current.delete(key);
+                sessionKeyByIdRef.current.delete(newSessionId);
+              }
             }
           });
 
@@ -477,6 +528,7 @@
             }
             const body = await response.json();
             const session = body && body.sessionId ? body.sessionId : null;
+            const created = body && typeof body.created === 'boolean' ? body.created : false;
             if (!session) {
               throw new Error('Invalid session response');
             }
@@ -488,15 +540,18 @@
             }
             sessionMapRef.current.set(worktreeKey, session);
             sessionKeyByIdRef.current.set(session, worktreeKey);
+            knownSessionsRef.current.add(worktreeKey);
             const initialLog = body && typeof body.log === 'string' ? body.log : '';
             setupTerminal(initialLog);
             connectSocket(session);
             setIsMobileMenuOpen(false);
+            return { sessionId: session, created };
           } catch (error) {
             console.error('Failed to open terminal session', error);
             disposeTerminal();
             setSessionId(null);
             setTerminalStatus('error');
+            throw error;
           }
         }, [connectSocket, disposeSocket, disposeTerminal, setupTerminal, getWorktreeKey]);
 
@@ -523,7 +578,18 @@
               const branches = payload?.[info.org]?.[info.repo] || [];
               const firstNonMain = branches.find(branch => branch !== 'main');
               if (firstNonMain) {
-                setPendingWorktreeAction({ org: info.org, repo: info.repo, branch: firstNonMain });
+                const key = getWorktreeKey(info.org, info.repo, firstNonMain);
+                if (sessionMapRef.current.has(key) || knownSessionsRef.current.has(key)) {
+                  setActiveWorktree({ org: info.org, repo: info.repo, branch: firstNonMain });
+                  try {
+                    await openTerminalForWorktree({ org: info.org, repo: info.repo, branch: firstNonMain });
+                    setPendingWorktreeAction(null);
+                  } catch {
+                    window.alert('Failed to reconnect to the existing session.');
+                  }
+                } else {
+                  setPendingWorktreeAction({ org: info.org, repo: info.repo, branch: firstNonMain });
+                }
                 setIsMobileMenuOpen(false);
               } else {
                 setActiveWorktree(null);
@@ -554,7 +620,18 @@
             const body = await response.json();
             const payload = body && typeof body === 'object' && body.data ? body.data : {};
             applyDataUpdate(payload);
-            setPendingWorktreeAction({ org, repo, branch: trimmedBranch });
+            const key = getWorktreeKey(org, repo, trimmedBranch);
+            if (sessionMapRef.current.has(key) || knownSessionsRef.current.has(key)) {
+              setActiveWorktree({ org, repo, branch: trimmedBranch });
+              try {
+                await openTerminalForWorktree({ org, repo, branch: trimmedBranch });
+                setPendingWorktreeAction(null);
+              } catch {
+                window.alert('Failed to reconnect to the existing session.');
+              }
+            } else {
+              setPendingWorktreeAction({ org, repo, branch: trimmedBranch });
+            }
             setIsMobileMenuOpen(false);
             setBranchName('');
             setShowWorktreeModal(false);
@@ -585,6 +662,7 @@
               sessionMapRef.current.delete(key);
               sessionKeyByIdRef.current.delete(session);
             }
+            knownSessionsRef.current.delete(key);
             if (
               activeWorktree &&
               activeWorktree.org === org &&
@@ -600,22 +678,30 @@
           }
         };
 
-        const handleWorktreeSelection = useCallback((org, repo, branch) => {
+        const handleWorktreeSelection = useCallback(async (org, repo, branch) => {
           if (branch === 'main') {
             return;
           }
           const worktree = { org, repo, branch };
           const key = getWorktreeKey(org, repo, branch);
-          if (sessionMapRef.current.has(key)) {
+          if (!sessionMapRef.current.has(key) && !knownSessionsRef.current.has(key)) {
+            await loadSessions();
+          }
+          if (sessionMapRef.current.has(key) || knownSessionsRef.current.has(key)) {
             setActiveWorktree(worktree);
-            openTerminalForWorktree(worktree);
+            try {
+              await openTerminalForWorktree(worktree);
+              setPendingWorktreeAction(null);
+            } catch {
+              window.alert('Failed to reconnect to the existing session.');
+            }
           } else {
             setPendingWorktreeAction(worktree);
             setIsMobileMenuOpen(false);
           }
-        }, [getWorktreeKey, openTerminalForWorktree]);
+        }, [getWorktreeKey, openTerminalForWorktree, loadSessions]);
 
-        const handleWorktreeAction = useCallback((action) => {
+        const handleWorktreeAction = useCallback(async (action) => {
           if (!pendingWorktreeAction) {
             return;
           }
@@ -628,8 +714,13 @@
           };
           const command = commandMap[action];
           setActiveWorktree(worktree);
-          openTerminalForWorktree(worktree, command ? { command } : {});
-          setPendingWorktreeAction(null);
+          try {
+            await openTerminalForWorktree(worktree, command ? { command } : {});
+            setPendingWorktreeAction(null);
+          } catch (error) {
+            console.error('Failed to launch terminal action', error);
+            window.alert('Failed to launch the selected option. Check server logs for details.');
+          }
         }, [openTerminalForWorktree, pendingWorktreeAction]);
 
         const statusStyles = {
@@ -681,7 +772,7 @@
                           onClick: () => {
                             const firstNonMain = branches.find(branch => branch !== 'main');
                             if (firstNonMain) {
-                              handleWorktreeSelection(org, repo, firstNonMain);
+                              handleWorktreeSelection(org, repo, firstNonMain).catch(() => {});
                             }
                           }
                         },
@@ -731,7 +822,7 @@
                               {
                                 type: 'button',
                                 disabled: branch === 'main',
-                                onClick: () => handleWorktreeSelection(org, repo, branch),
+                                onClick: () => handleWorktreeSelection(org, repo, branch).catch(() => {}),
                                 className: `flex items-center gap-2 min-w-0 overflow-hidden text-left w-full ${
                                   branch === 'main' ? 'cursor-not-allowed' : 'cursor-pointer'
                                 }`
