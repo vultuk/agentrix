@@ -192,6 +192,8 @@ function LoginScreen({ onAuthenticated }) {
         const [isDeletingRepo, setIsDeletingRepo] = useState(false);
         const [pendingActionLoading, setPendingActionLoading] = useState(null);
 
+        const actionButtonClass = 'inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors';
+
         const notifyAuthExpired = useCallback(() => {
           if (typeof onAuthExpired === 'function') {
             onAuthExpired();
@@ -997,7 +999,7 @@ function LoginScreen({ onAuthenticated }) {
                               setSelectedRepo([org, repo]);
                               setShowWorktreeModal(true);
                             },
-                            className: 'text-neutral-400 hover:text-neutral-200 flex-shrink-0',
+                            className: `${actionButtonClass} text-neutral-400 hover:text-neutral-200`,
                             title: 'Create Worktree'
                           },
                           h(GitPullRequest, { size: 14 })
@@ -1006,8 +1008,7 @@ function LoginScreen({ onAuthenticated }) {
                           'button',
                           {
                             onClick: () => setConfirmDeleteRepo({ org, repo }),
-                            className:
-                              'text-neutral-500 hover:text-rose-400 flex-shrink-0 rounded-md p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-neutral-500',
+                            className: `${actionButtonClass} text-neutral-500 hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-neutral-500`,
                             title: 'Delete Repository',
                             disabled: Boolean(isDeletingRepo),
                             'aria-busy': isDeletingRepo ? 'true' : undefined
@@ -1064,7 +1065,7 @@ function LoginScreen({ onAuthenticated }) {
                                   setConfirmDelete({ org, repo, branch });
                                 },
                                 disabled: branch === 'main',
-                                className: `ml-2 rounded-md p-1 transition-colors ${
+                                className: `${actionButtonClass} disabled:cursor-not-allowed disabled:opacity-60 ${
                                   branch === 'main'
                                     ? 'text-neutral-700 cursor-not-allowed'
                                     : 'text-neutral-500 hover:text-red-400'
