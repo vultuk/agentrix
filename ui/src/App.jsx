@@ -947,133 +947,160 @@ function LoginScreen({ onAuthenticated }) {
         const statusClass = statusStyles[terminalStatus] || statusStyles.disconnected;
         const statusLabel = statusLabels[terminalStatus] || statusLabels.disconnected;
 
+        const logoutButton =
+          typeof onLogout === 'function'
+            ? h(
+                'button',
+                {
+                  type: 'button',
+                  onClick: onLogout,
+                  disabled: Boolean(isLoggingOut),
+                  'aria-busy': isLoggingOut ? 'true' : undefined,
+                  className:
+                    'inline-flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-900/90 px-3 py-2 text-xs font-medium text-neutral-200 shadow-sm transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-70'
+                },
+                isLoggingOut
+                  ? h(
+                      Fragment,
+                      null,
+                      renderSpinner('text-neutral-200'),
+                      h('span', null, 'Logging out…')
+                    )
+                  : h('span', null, 'Log out')
+              )
+            : null;
+
         const sidebarContent = h(
           'div',
-          { className: 'p-3 text-sm font-mono space-y-5 overflow-y-auto h-full pb-14' },
-          Object.entries(data).map(([org, repos]) =>
-            h(
-              'div',
-              { key: org },
+          { className: 'flex h-full flex-col text-sm font-mono' },
+          h(
+            'div',
+            { className: 'flex-1 min-h-0 overflow-y-auto p-3 space-y-5' },
+            Object.entries(data).map(([org, repos]) =>
               h(
                 'div',
-                { className: 'text-neutral-400 uppercase tracking-wider text-xs mb-1 pl-1' },
-                org
-              ),
-              h(
-                'ul',
-                { className: 'space-y-2' },
-                Object.entries(repos).map(([repo, branches]) =>
-                  h(
-                    'li',
-                    {
-                      key: repo,
-                      className: 'bg-neutral-900/60 hover:bg-neutral-900 transition-colors rounded-lg px-2 py-1.5'
-                    },
+                { key: org },
+                h(
+                  'div',
+                  { className: 'text-neutral-400 uppercase tracking-wider text-xs mb-1 pl-1' },
+                  org
+                ),
+                h(
+                  'ul',
+                  { className: 'space-y-2' },
+                  Object.entries(repos).map(([repo, branches]) =>
                     h(
-                      'div',
-                      { className: 'flex items-center justify-between gap-2' },
+                      'li',
+                      {
+                        key: repo,
+                        className: 'bg-neutral-900/60 hover:bg-neutral-900 transition-colors rounded-lg px-2 py-1.5'
+                      },
                       h(
                         'div',
-                        {
-                          className: 'flex items-center space-x-2 cursor-pointer min-w-0 overflow-hidden',
-                          onClick: () => {
-                            const firstNonMain = branches.find(branch => branch !== 'main');
-                            if (firstNonMain) {
-                              handleWorktreeSelection(org, repo, firstNonMain).catch(() => {});
-                            }
-                          }
-                        },
-                        h(Github, { size: 14, className: 'text-neutral-400 flex-shrink-0' }),
+                        { className: 'flex items-center justify-between gap-2' },
                         h(
-                          'span',
-                          { className: 'text-neutral-200 whitespace-nowrap overflow-hidden' },
-                          repo
+                          'div',
+                          {
+                            className: 'flex items-center space-x-2 cursor-pointer min-w-0 overflow-hidden',
+                            onClick: () => {
+                              const firstNonMain = branches.find(branch => branch !== 'main');
+                              if (firstNonMain) {
+                                handleWorktreeSelection(org, repo, firstNonMain).catch(() => {});
+                              }
+                            }
+                          },
+                          h(Github, { size: 14, className: 'text-neutral-400 flex-shrink-0' }),
+                          h(
+                            'span',
+                            { className: 'text-neutral-200 whitespace-nowrap overflow-hidden' },
+                            repo
+                          )
+                        ),
+                        h(
+                          'div',
+                          { className: 'flex items-center gap-1 flex-shrink-0' },
+                          h(
+                            'button',
+                            {
+                              onClick: () => {
+                                setSelectedRepo([org, repo]);
+                                setShowWorktreeModal(true);
+                              },
+                              className: `${actionButtonClass} text-neutral-400 hover:text-neutral-200`,
+                              title: 'Create Worktree'
+                            },
+                            h(GitPullRequest, { size: 14 })
+                          ),
+                          h(
+                            'button',
+                            {
+                              onClick: () => setConfirmDeleteRepo({ org, repo }),
+                              className: `${actionButtonClass} text-neutral-500 hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-neutral-500`,
+                              title: 'Delete Repository',
+                              disabled: Boolean(isDeletingRepo),
+                              'aria-busy': isDeletingRepo ? 'true' : undefined
+                            },
+                            h(Trash2, { size: 12 })
+                          )
                         )
                       ),
                       h(
-                        'div',
-                        { className: 'flex items-center gap-1 flex-shrink-0' },
-                        h(
-                          'button',
-                          {
-                            onClick: () => {
-                              setSelectedRepo([org, repo]);
-                              setShowWorktreeModal(true);
-                            },
-                            className: `${actionButtonClass} text-neutral-400 hover:text-neutral-200`,
-                            title: 'Create Worktree'
-                          },
-                          h(GitPullRequest, { size: 14 })
-                        ),
-                        h(
-                          'button',
-                          {
-                            onClick: () => setConfirmDeleteRepo({ org, repo }),
-                            className: `${actionButtonClass} text-neutral-500 hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-neutral-500`,
-                            title: 'Delete Repository',
-                            disabled: Boolean(isDeletingRepo),
-                            'aria-busy': isDeletingRepo ? 'true' : undefined
-                          },
-                          h(Trash2, { size: 12 })
-                        )
-                      )
-                    ),
-                    h(
-                      'ul',
-                      { className: 'ml-5 mt-1 space-y-[2px]' },
-                      branches.map(branch =>
-                        h(
-                          'li',
-                          { key: branch },
+                        'ul',
+                        { className: 'ml-5 mt-1 space-y-[2px]' },
+                        branches.map(branch =>
                           h(
-                            'div',
-                            {
-                              className: `flex items-center justify-between rounded-sm px-2 py-2 transition-colors ${
-                                activeWorktree &&
-                                activeWorktree.org === org &&
-                                activeWorktree.repo === repo &&
-                                activeWorktree.branch === branch
-                                  ? 'bg-neutral-800 text-neutral-100'
-                                  : branch === 'main'
-                                  ? 'text-neutral-600'
-                                  : 'text-neutral-500 hover:bg-neutral-800/70 hover:text-neutral-100'
-                              }`
-                            },
+                            'li',
+                            { key: branch },
                             h(
-                              'button',
+                              'div',
                               {
-                                type: 'button',
-                                disabled: branch === 'main',
-                                onClick: () => handleWorktreeSelection(org, repo, branch).catch(() => {}),
-                                className: `flex items-center gap-2 min-w-0 overflow-hidden text-left w-full ${
-                                  branch === 'main' ? 'cursor-not-allowed' : 'cursor-pointer'
+                                className: `flex items-center justify-between rounded-sm px-2 py-2 transition-colors ${
+                                  activeWorktree &&
+                                  activeWorktree.org === org &&
+                                  activeWorktree.repo === repo &&
+                                  activeWorktree.branch === branch
+                                    ? 'bg-neutral-800 text-neutral-100'
+                                    : branch === 'main'
+                                    ? 'text-neutral-600'
+                                    : 'text-neutral-500 hover:bg-neutral-800/70 hover:text-neutral-100'
                                 }`
                               },
-                              h(GitBranch, { size: 14, className: 'flex-shrink-0' }),
                               h(
-                                'span',
-                                { className: 'whitespace-nowrap overflow-hidden text-ellipsis text-sm' },
-                                branch
-                              )
-                            ),
-                            h(
-                              'button',
-                              {
-                                onClick: () => {
-                                  if (branch === 'main') {
-                                    return;
-                                  }
-                                  setConfirmDelete({ org, repo, branch });
+                                'button',
+                                {
+                                  type: 'button',
+                                  disabled: branch === 'main',
+                                  onClick: () => handleWorktreeSelection(org, repo, branch).catch(() => {}),
+                                  className: `flex items-center gap-2 min-w-0 overflow-hidden text-left w-full ${
+                                    branch === 'main' ? 'cursor-not-allowed' : 'cursor-pointer'
+                                  }`
                                 },
-                                disabled: branch === 'main',
-                                className: `${actionButtonClass} disabled:cursor-not-allowed disabled:opacity-60 ${
-                                  branch === 'main'
-                                    ? 'text-neutral-700 cursor-not-allowed'
-                                    : 'text-neutral-500 hover:text-red-400'
-                                }`,
-                                title: branch === 'main' ? 'Main branch cannot be removed' : 'Delete Worktree'
-                              },
-                              h(Trash2, { size: 12 })
+                                h(GitBranch, { size: 14, className: 'flex-shrink-0' }),
+                                h(
+                                  'span',
+                                  { className: 'whitespace-nowrap overflow-hidden text-ellipsis text-sm' },
+                                  branch
+                                )
+                              ),
+                              h(
+                                'button',
+                                {
+                                  onClick: () => {
+                                    if (branch === 'main') {
+                                      return;
+                                    }
+                                    setConfirmDelete({ org, repo, branch });
+                                  },
+                                  disabled: branch === 'main',
+                                  className: `${actionButtonClass} disabled:cursor-not-allowed disabled:opacity-60 ${
+                                    branch === 'main'
+                                      ? 'text-neutral-700 cursor-not-allowed'
+                                      : 'text-neutral-500 hover:text-red-400'
+                                  }`,
+                                  title: branch === 'main' ? 'Main branch cannot be removed' : 'Delete Worktree'
+                                },
+                                h(Trash2, { size: 12 })
+                              )
                             )
                           )
                         )
@@ -1085,14 +1112,23 @@ function LoginScreen({ onAuthenticated }) {
             )
           ),
           h(
-            'button',
-            {
-              onClick: () => setShowAddRepoModal(true),
-              className:
-                'absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center space-x-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-100 text-xs px-3 py-1.5 rounded-md transition-colors'
-            },
-            h(Plus, { size: 14 }),
-            h('span', null, 'Add Repo')
+            'div',
+            { className: 'border-t border-neutral-800 bg-neutral-925/80 px-3 py-3' },
+            h(
+              'div',
+              { className: 'flex items-center justify-between gap-3' },
+              h(
+                'button',
+                {
+                  onClick: () => setShowAddRepoModal(true),
+                  className:
+                    'inline-flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-medium text-neutral-100 transition-colors hover:bg-neutral-800'
+                },
+                h(Plus, { size: 14 }),
+                h('span', null, 'Add Repo')
+              ),
+              logoutButton
+            )
           )
         );
 
@@ -1132,7 +1168,7 @@ function LoginScreen({ onAuthenticated }) {
 
         const mainPane = h(
           'div',
-          { className: 'flex-1 bg-neutral-950 p-6 text-neutral-100 font-mono flex flex-col min-h-0' },
+          { className: 'flex-1 bg-neutral-950 text-neutral-100 font-mono flex flex-col min-h-0' },
           activeWorktree
             ? h(
                 'div',
@@ -1174,12 +1210,7 @@ function LoginScreen({ onAuthenticated }) {
                 h('div', {
                   ref: terminalContainerRef,
                   className: 'flex-1 bg-neutral-950 min-h-0 overflow-hidden relative'
-                }),
-                h(
-                  'div',
-                  { className: 'border-t border-neutral-800 px-4 py-2 text-xs text-neutral-500 bg-neutral-900/80' },
-                  sessionId ? `Session: ${sessionId}` : 'Interactive shell session'
-                )
+                })
             )
           : h(
                 'div',
@@ -1213,36 +1244,12 @@ function LoginScreen({ onAuthenticated }) {
             )
           );
 
-        const logoutButton =
-          typeof onLogout === 'function'
-            ? h(
-                'button',
-                {
-                  type: 'button',
-                  onClick: onLogout,
-                  disabled: Boolean(isLoggingOut),
-                  'aria-busy': isLoggingOut ? 'true' : undefined,
-                  className:
-                    'absolute top-4 right-4 z-30 inline-flex items-center gap-2 rounded-md border border-neutral-700 bg-neutral-900/90 px-3 py-2 text-xs font-medium text-neutral-200 shadow-sm transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-70'
-                },
-                isLoggingOut
-                  ? h(
-                      Fragment,
-                      null,
-                      renderSpinner('text-neutral-200'),
-                      h('span', null, 'Logging out…')
-                    )
-                  : h('span', null, 'Log out')
-              )
-            : null;
-
         return h(
           Fragment,
           null,
           h(
             'div',
             { className: 'flex h-screen bg-neutral-950 text-neutral-100 relative flex-col lg:flex-row min-h-0' },
-            logoutButton,
             desktopSidebar,
             mobileSidebar,
             h(
