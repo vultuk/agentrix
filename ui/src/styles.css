@@ -1,6 +1,8 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@theme default {
+  --color-neutral-925: #161616;
+}
 
 @layer base {
   html,
