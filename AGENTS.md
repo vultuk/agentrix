@@ -76,7 +76,7 @@ guarded against duplicate signals and cleans up HTTP, WebSocket, tmux, and PTY r
 - TailwindCSS + PostCSS deliver the utility classes formerly provided by `cdn.tailwindcss.com`.
 - `re-resizable` powers the sidebar resize on desktop; mobile view swaps to a hamburger drawer.
 - Modals cover Add Repo, Create Worktree, Delete Worktree, and “How do you want to open this
-  worktree?” action chooser (Terminal/Codex/Cursor/Claude auto-fill terminal input on first launch).
+  worktree?” action chooser (Terminal/VS Code/Codex/Cursor/Claude auto-fill terminal input on first launch).
 - xterm.js + fit addon render the terminal, preserve scrollback, and keep geometry synced via
   `ResizeObserver`.
 
