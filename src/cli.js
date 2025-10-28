@@ -22,7 +22,8 @@ Options:
   -P, --password <string>  Password for login (default: randomly generated)
       --codex-command <cmd>   Command executed when launching Codex (default: codex)
       --claude-command <cmd>  Command executed when launching Claude (default: claude)
-      --ide-command <cmd>     Command executed when launching the IDE option (default: cursor-agent)
+      --cursor-command <cmd>  Command executed when launching Cursor (default: cursor-agent)
+      --ide-command <cmd>     (deprecated) Alias for --cursor-command
       --vscode-command <cmd>  Command executed when launching VS Code (default: code .)
   -h, --help             Display this help message
   -v, --version          Output the version number
@@ -39,6 +40,7 @@ function parseArgs(argv) {
     password: null,
     codexCommand: null,
     claudeCommand: null,
+    cursorCommand: null,
     ideCommand: null,
     vscodeCommand: null,
     help: false,
@@ -118,6 +120,14 @@ function parseArgs(argv) {
         args.claudeCommand = value;
         break;
       }
+      case '--cursor-command': {
+        const value = argv[++i];
+        if (!value) {
+          throw new Error(`Expected command value after ${token}`);
+        }
+        args.cursorCommand = value;
+        break;
+      }
       case '--ide-command': {
         const value = argv[++i];
         if (!value) {
@@ -186,6 +196,7 @@ async function main(argv = process.argv.slice(2)) {
   const commandOverrides = {
     codex: args.codexCommand,
     claude: args.claudeCommand,
+    cursor: args.cursorCommand ?? args.ideCommand,
     ide: args.ideCommand,
     vscode: args.vscodeCommand,
   };

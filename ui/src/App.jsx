@@ -13,7 +13,7 @@ const DEFAULT_COMMAND_CONFIG = Object.freeze({
   codexDangerous: 'codex --dangerously-bypass-approvals-and-sandbox',
   claude: 'claude',
   claudeDangerous: 'claude --dangerously-skip-permissions',
-  ide: 'cursor-agent',
+  cursor: 'cursor-agent',
   vscode: 'code .'
 });
 
@@ -295,7 +295,10 @@ function LoginScreen({ onAuthenticated }) {
                   commands.claudeDangerous,
                   DEFAULT_COMMAND_CONFIG.claudeDangerous
                 ),
-                ide: parseCommand(commands.ide, DEFAULT_COMMAND_CONFIG.ide),
+                cursor: parseCommand(
+                  commands.cursor ?? commands.ide,
+                  DEFAULT_COMMAND_CONFIG.cursor
+                ),
                 vscode: parseCommand(commands.vscode, DEFAULT_COMMAND_CONFIG.vscode),
               };
               if (!cancelled) {
@@ -1025,7 +1028,8 @@ function LoginScreen({ onAuthenticated }) {
             terminal: undefined,
             codex: commandConfig.codex,
             'codex-dangerous': commandConfig.codexDangerous,
-            ide: commandConfig.ide,
+            cursor: commandConfig.cursor,
+            ide: commandConfig.cursor,
             claude: commandConfig.claude,
             'claude-dangerous': commandConfig.claudeDangerous,
             vscode: commandConfig.vscode,
@@ -1056,7 +1060,8 @@ function LoginScreen({ onAuthenticated }) {
           Boolean(pendingActionLoading && typeof pendingActionLoading === 'string' && pendingActionLoading.startsWith('codex'));
         const isClaudeLoading =
           Boolean(pendingActionLoading && typeof pendingActionLoading === 'string' && pendingActionLoading.startsWith('claude'));
-        const isIdeLoading = pendingActionLoading === 'ide';
+        const isCursorLoading =
+          pendingActionLoading === 'cursor' || pendingActionLoading === 'ide';
 
         const statusStyles = {
           connected: 'border border-emerald-500/40 text-emerald-300 bg-emerald-500/15',
@@ -1458,6 +1463,14 @@ function LoginScreen({ onAuthenticated }) {
                   h('input', {
                     value: branchName,
                     onChange: event => setBranchName(event.target.value),
+                    onKeyDown: event => {
+                      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+                        event.preventDefault();
+                        if (!isCreatingWorktree) {
+                          handleCreateWorktree();
+                        }
+                      }
+                    },
                     placeholder: 'feature/my-awesome-branch',
                     className:
                       'w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500/60'
@@ -1757,20 +1770,20 @@ function LoginScreen({ onAuthenticated }) {
                     h(
                       'button',
                       {
-                        onClick: () => handleWorktreeAction('ide'),
+                        onClick: () => handleWorktreeAction('cursor'),
                         disabled: Boolean(pendingActionLoading),
-                        'aria-busy': isIdeLoading,
+                        'aria-busy': isCursorLoading,
                         className:
                           'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-neutral-700 disabled:hover:bg-neutral-900'
                       },
-                      isIdeLoading
+                      isCursorLoading
                         ? h(
                             'span',
                             { className: 'inline-flex items-center gap-2' },
                             renderSpinner('text-neutral-100'),
                             'Launching…'
                           )
-                        : 'Launch IDE'
+                        : 'Launch Cursor'
                     ),
                     h(
                       'div',

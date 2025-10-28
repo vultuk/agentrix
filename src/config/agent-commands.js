@@ -2,7 +2,7 @@ const DEFAULT_CODEX_COMMAND = 'codex';
 const DEFAULT_CODEX_DANGEROUS_SUFFIX = '--dangerously-bypass-approvals-and-sandbox';
 const DEFAULT_CLAUDE_COMMAND = 'claude';
 const DEFAULT_CLAUDE_DANGEROUS_SUFFIX = '--dangerously-skip-permissions';
-const DEFAULT_IDE_COMMAND = 'cursor-agent';
+const DEFAULT_CURSOR_COMMAND = 'cursor-agent';
 const DEFAULT_VSCODE_COMMAND = 'code .';
 
 export const DEFAULT_AGENT_COMMANDS = {
@@ -10,7 +10,7 @@ export const DEFAULT_AGENT_COMMANDS = {
   codexDangerous: `${DEFAULT_CODEX_COMMAND} ${DEFAULT_CODEX_DANGEROUS_SUFFIX}`,
   claude: `${DEFAULT_CLAUDE_COMMAND}`,
   claudeDangerous: `${DEFAULT_CLAUDE_COMMAND} ${DEFAULT_CLAUDE_DANGEROUS_SUFFIX}`,
-  ide: `${DEFAULT_IDE_COMMAND}`,
+  cursor: `${DEFAULT_CURSOR_COMMAND}`,
   vscode: `${DEFAULT_VSCODE_COMMAND}`,
 };
 
@@ -31,10 +31,15 @@ export function createAgentCommands(overrides = {}) {
     typeof overrides.claude === 'string' && overrides.claude.trim()
       ? overrides.claude.trim()
       : DEFAULT_AGENT_COMMANDS.claude;
-  const ideCommand =
-    typeof overrides.ide === 'string' && overrides.ide.trim()
-      ? overrides.ide.trim()
-      : DEFAULT_AGENT_COMMANDS.ide;
+  const cursorCommand = (() => {
+    if (typeof overrides.cursor === 'string' && overrides.cursor.trim()) {
+      return overrides.cursor.trim();
+    }
+    if (typeof overrides.ide === 'string' && overrides.ide.trim()) {
+      return overrides.ide.trim();
+    }
+    return DEFAULT_AGENT_COMMANDS.cursor;
+  })();
   const vscodeCommand =
     typeof overrides.vscode === 'string' && overrides.vscode.trim()
       ? overrides.vscode.trim()
@@ -55,7 +60,7 @@ export function createAgentCommands(overrides = {}) {
     codexDangerous,
     claude: claudeBase,
     claudeDangerous,
-    ide: ideCommand,
+    cursor: cursorCommand,
     vscode: vscodeCommand,
   };
 }

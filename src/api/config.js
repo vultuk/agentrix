@@ -6,7 +6,7 @@ export function createConfigHandlers(agentCommands) {
     codexDangerous: agentCommands?.codexDangerous || '',
     claude: agentCommands?.claude || '',
     claudeDangerous: agentCommands?.claudeDangerous || '',
-    ide: agentCommands?.ide || '',
+    cursor: agentCommands?.cursor || '',
     vscode: agentCommands?.vscode || '',
   };
 
