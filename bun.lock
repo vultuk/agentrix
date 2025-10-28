@@ -4,6 +4,7 @@
     "": {
       "name": "terminal-worktree",
       "dependencies": {
+        "@ngrok/ngrok": "^1.5.2",
         "@tailwindcss/postcss": "^4.1.16",
         "@vitejs/plugin-react": "^5.1.0",
         "autoprefixer": "^10.4.21",
@@ -138,6 +139,34 @@
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
+
+    "@ngrok/ngrok": ["@ngrok/ngrok@1.5.2", "", { "optionalDependencies": { "@ngrok/ngrok-android-arm64": "1.5.2", "@ngrok/ngrok-darwin-arm64": "1.5.2", "@ngrok/ngrok-darwin-universal": "1.5.2", "@ngrok/ngrok-darwin-x64": "1.5.2", "@ngrok/ngrok-freebsd-x64": "1.5.2", "@ngrok/ngrok-linux-arm-gnueabihf": "1.5.2", "@ngrok/ngrok-linux-arm64-gnu": "1.5.2", "@ngrok/ngrok-linux-arm64-musl": "1.5.2", "@ngrok/ngrok-linux-x64-gnu": "1.5.2", "@ngrok/ngrok-linux-x64-musl": "1.5.2", "@ngrok/ngrok-win32-arm64-msvc": "1.5.2", "@ngrok/ngrok-win32-ia32-msvc": "1.5.2", "@ngrok/ngrok-win32-x64-msvc": "1.5.2" } }, "sha512-gN7KKdLTKer+wBSk9s9eDx53MUFdcnXNHsXxiC5sJLLD5HY9JRMSn6UzcCqnk7IgeIgCgw5h1k6YDqhjx6lmtg=="],
+
+    "@ngrok/ngrok-android-arm64": ["@ngrok/ngrok-android-arm64@1.5.2", "", { "os": "android", "cpu": "arm64" }, "sha512-v81VbxxAgg2W7jbjhEcn8K9R2aUf0h1AuTx+8tDlw3L4H1YEmbmllIpBAGgMjHRBxLZKOo5GBi0k7oS+VRM5TA=="],
+
+    "@ngrok/ngrok-darwin-arm64": ["@ngrok/ngrok-darwin-arm64@1.5.2", "", { "os": "darwin", "cpu": "arm64" }, "sha512-8CVzS9AveYpNhWbydm7cJ6XqmVg29/VRKF15l4kJ2djlNoJxuGSibgM9A627dWRdnJyj5uhmU3VzsgeU8t+/3g=="],
+
+    "@ngrok/ngrok-darwin-universal": ["@ngrok/ngrok-darwin-universal@1.5.2", "", { "os": "darwin" }, "sha512-mEMH1OxN6RxnqRSWb4xY9RqbtdlCpv+WlRKxq4lVy8JVsxEyFNnzVQ0jn+iuiy981jCXjokctzJeGMvECuSQBQ=="],
+
+    "@ngrok/ngrok-darwin-x64": ["@ngrok/ngrok-darwin-x64@1.5.2", "", { "os": "darwin", "cpu": "x64" }, "sha512-rGdcADw4NtMSU7SHUTly7uvMVYX6eMeMCppKyL5g3CSlEQntKf3AWs/89ah2TBWJA2WVl0UgGLkXp4xs1tg9eQ=="],
+
+    "@ngrok/ngrok-freebsd-x64": ["@ngrok/ngrok-freebsd-x64@1.5.2", "", { "os": "freebsd", "cpu": "x64" }, "sha512-WgY54qUekaUGa5+lFvzYUMjlzf22IEXuZHhxnzJM2/gMqa7gjU8N5W4U8XNDjVW/oz6DekrzIjuoAEPO+2icDg=="],
+
+    "@ngrok/ngrok-linux-arm-gnueabihf": ["@ngrok/ngrok-linux-arm-gnueabihf@1.5.2", "", { "os": "linux", "cpu": "arm" }, "sha512-azMxr/TGEeFU4JAUbSu5MO2aZEvdq+TzcxiLw6d+yhdEtNAjDW9TOyCczTrIZPOG5fP8G3lcCd8TP7mVIWdOnw=="],
+
+    "@ngrok/ngrok-linux-arm64-gnu": ["@ngrok/ngrok-linux-arm64-gnu@1.5.2", "", { "os": "linux", "cpu": "arm64" }, "sha512-79eFCxio4rM0ICRBXx/CVvbXDeWk1Jxr7szkezEYWtHaL+gXivrtS1QjtMnJpGY1GJlLTQL+49w2lGydqPOJQA=="],
+
+    "@ngrok/ngrok-linux-arm64-musl": ["@ngrok/ngrok-linux-arm64-musl@1.5.2", "", { "os": "linux", "cpu": "arm64" }, "sha512-ou9Z7iPQJIQ0RX5bdBhb3y7GwYRt+X0G9tenyRzKLXXvs0XfUUcg/23aBP61hmdRvBq7xpliV1PnvEVBgUIYMg=="],
+
+    "@ngrok/ngrok-linux-x64-gnu": ["@ngrok/ngrok-linux-x64-gnu@1.5.2", "", { "os": "linux", "cpu": "x64" }, "sha512-VI1mmtl3Ie5uXTVAR9thPiMNMsCWeqkjBUbHAyk2vZ2OXR4Vs2DGjOPXK+wTl/hjF29FXoxunjhMy6caF9ht0Q=="],
+
+    "@ngrok/ngrok-linux-x64-musl": ["@ngrok/ngrok-linux-x64-musl@1.5.2", "", { "os": "linux", "cpu": "x64" }, "sha512-F4j9EyC/0R3IgYSd+OER4bC8bxuBubvj33e24GvQnRF/IQaKhpybkvQbz54fnvsL7y0j2BB42NAIm2CFtk7tCw=="],
+
+    "@ngrok/ngrok-win32-arm64-msvc": ["@ngrok/ngrok-win32-arm64-msvc@1.5.2", "", { "os": "win32", "cpu": "arm64" }, "sha512-0OMXNjWElM1MQX7lMBnpRtafS9+3ybauqGD4m2dZcIm6hFvexsJFwNgx0mCa5aKxe2mQ4zNarEUd+SqG2Aa4/g=="],
+
+    "@ngrok/ngrok-win32-ia32-msvc": ["@ngrok/ngrok-win32-ia32-msvc@1.5.2", "", { "os": "win32", "cpu": "ia32" }, "sha512-hdvhnr7Br4XhUblpW67v5XP6FyoQwJ2xSbwas4KW4hZ3F4cw0m6sqXpssRfmqg3/5HJony1H5B2jLi0x4J7uOw=="],
+
+    "@ngrok/ngrok-win32-x64-msvc": ["@ngrok/ngrok-win32-x64-msvc@1.5.2", "", { "os": "win32", "cpu": "x64" }, "sha512-aHuMiRti9Taow9DlYLGVmu9CXtXD/v4CBQWpZlmt7VGuK1KsTWWLaGIBFVp6UXnyW87b0A+KC69Kn/Xjylw+sg=="],
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.0-beta.43", "", {}, "sha512-5Uxg7fQUCmfhax7FJke2+8B6cqgeUJUD9o2uXIKXhD+mG0mL6NObmVoi9wXEU1tY89mZKgAYA6fTbftx3q2ZPQ=="],
 

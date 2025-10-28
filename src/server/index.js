@@ -18,6 +18,7 @@ export async function startServer({
   workdir,
   password,
   commandOverrides,
+  ngrok: ngrokConfig,
 } = {}) {
   if (!uiPath) {
     throw new Error('Missing required option: uiPath');
@@ -66,6 +67,40 @@ export async function startServer({
     });
   });
 
+  let ngrokListener = null;
+  let ngrokUrl = null;
+
+  const shouldStartNgrok =
+    Boolean(ngrokConfig?.apiKey) && Boolean(ngrokConfig?.domain);
+
+  if (shouldStartNgrok) {
+    try {
+      const { forward } = await import('@ngrok/ngrok');
+      ngrokListener = await forward({
+        addr: port,
+        authtoken: ngrokConfig.apiKey,
+        domain: ngrokConfig.domain,
+      });
+      ngrokUrl = ngrokListener.url();
+    } catch (error) {
+      await disposeAllSessions().catch(() => {});
+      await closeWebSockets().catch(() => {});
+      try {
+        await new Promise((resolve) => {
+          server.close(() => resolve());
+        });
+      } catch {
+        // ignore errors during shutdown
+      }
+      authManager.clear();
+      throw new Error(
+        `Failed to establish ngrok tunnel: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
   let closing = false;
   async function closeAll() {
     if (closing) {
@@ -77,11 +112,22 @@ export async function startServer({
       server.close(() => resolve());
     });
 
-    await Promise.allSettled([
+    const closeTasks = [
       disposeAllSessions(),
       closeWebSockets(),
       serverClose,
-    ]);
+    ];
+    if (ngrokListener) {
+      closeTasks.push(
+        ngrokListener
+          .close()
+          .catch((err) =>
+            console.error('[terminal-worktree] Failed to close ngrok tunnel:', err),
+          ),
+      );
+    }
+
+    await Promise.allSettled(closeTasks);
 
     authManager.clear();
   }
@@ -95,6 +141,7 @@ export async function startServer({
     close: closeAll,
     password: resolvedPassword,
     commands: agentCommands,
+    publicUrl: ngrokUrl,
   };
 }
 
