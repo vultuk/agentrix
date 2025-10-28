@@ -4,10 +4,14 @@ import { createSessionHandlers } from '../api/sessions.js';
 import { createTerminalHandlers } from '../api/terminal.js';
 import { createWorktreeHandlers } from '../api/worktrees.js';
 import { sendJson, readJsonBody } from '../utils/http.js';
+import { createConfigHandlers } from '../api/config.js';
 
-export function createRouter({ authManager, workdir }) {
+export function createRouter({ authManager, workdir, agentCommands }) {
   if (!authManager) {
     throw new Error('authManager is required');
+  }
+  if (!agentCommands) {
+    throw new Error('agentCommands is required');
   }
 
   const authHandlers = createAuthHandlers(authManager);
@@ -15,6 +19,7 @@ export function createRouter({ authManager, workdir }) {
   const sessionHandlers = createSessionHandlers(workdir);
   const worktreeHandlers = createWorktreeHandlers(workdir);
   const terminalHandlers = createTerminalHandlers(workdir);
+  const configHandlers = createConfigHandlers(agentCommands);
 
   const routes = new Map([
     [
@@ -76,6 +81,13 @@ export function createRouter({ authManager, workdir }) {
       {
         requiresAuth: true,
         handlers: { POST: terminalHandlers.send },
+      },
+    ],
+    [
+      '/api/commands',
+      {
+        requiresAuth: true,
+        handlers: { GET: configHandlers.commands, HEAD: configHandlers.commands },
       },
     ],
   ]);
