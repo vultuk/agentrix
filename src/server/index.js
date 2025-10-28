@@ -19,6 +19,7 @@ export async function startServer({
   password,
   commandOverrides,
   ngrok: ngrokConfig,
+  automationApiKey,
 } = {}) {
   if (!uiPath) {
     throw new Error('Missing required option: uiPath');
@@ -30,7 +31,12 @@ export async function startServer({
     typeof password === 'string' && password.length > 0 ? password : generateRandomPassword();
   const authManager = createAuthManager(resolvedPassword);
   const agentCommands = createAgentCommands(commandOverrides);
-  const router = createRouter({ authManager, workdir: resolvedWorkdir, agentCommands });
+  const router = createRouter({
+    authManager,
+    workdir: resolvedWorkdir,
+    agentCommands,
+    automationApiKey,
+  });
 
   const server = http.createServer(async (req, res) => {
     try {
