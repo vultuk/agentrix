@@ -17,6 +17,8 @@ const DEFAULT_COMMAND_CONFIG = Object.freeze({
   vscode: 'code .'
 });
 
+const ORGANISATION_COLLAPSE_STORAGE_KEY = 'terminal-worktree:collapsed-organisations';
+
 function Modal({ title, onClose, children }) {
         const content = Array.isArray(children) ? children : [children];
         return h(
@@ -202,6 +204,26 @@ function LoginScreen({ onAuthenticated }) {
         const [pendingActionLoading, setPendingActionLoading] = useState(null);
         const [openActionMenu, setOpenActionMenu] = useState(null);
         const [commandConfig, setCommandConfig] = useState(DEFAULT_COMMAND_CONFIG);
+        const [collapsedOrganisations, setCollapsedOrganisations] = useState(() => {
+          if (typeof window === 'undefined') {
+            return {};
+          }
+          try {
+            const stored = window.localStorage.getItem(ORGANISATION_COLLAPSE_STORAGE_KEY);
+            if (!stored) {
+              return {};
+            }
+            const parsed = JSON.parse(stored);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              return Object.fromEntries(
+                Object.entries(parsed).map(([key, value]) => [key, Boolean(value)])
+              );
+            }
+          } catch (error) {
+            console.warn('Failed to restore organisation collapse state', error);
+          }
+          return {};
+        });
 
         const actionButtonClass = 'inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors';
         const actionMenuRefs = useRef(new Map());
@@ -219,6 +241,18 @@ function LoginScreen({ onAuthenticated }) {
 
         const toggleActionMenu = useCallback((action) => {
           setOpenActionMenu((current) => (current === action ? null : action));
+        }, []);
+
+        const toggleOrganisationCollapsed = useCallback((org) => {
+          setCollapsedOrganisations((current) => {
+            const next = { ...current };
+            if (next[org]) {
+              delete next[org];
+            } else {
+              next[org] = true;
+            }
+            return next;
+          });
         }, []);
 
         useEffect(() => {
@@ -243,6 +277,20 @@ function LoginScreen({ onAuthenticated }) {
             document.removeEventListener('keydown', handleEscape);
           };
         }, [openActionMenu]);
+
+        useEffect(() => {
+          if (typeof window === 'undefined') {
+            return;
+          }
+          try {
+            window.localStorage.setItem(
+              ORGANISATION_COLLAPSE_STORAGE_KEY,
+              JSON.stringify(collapsedOrganisations)
+            );
+          } catch (error) {
+            console.warn('Failed to persist organisation collapse state', error);
+          }
+        }, [collapsedOrganisations]);
 
         useEffect(() => {
           if (!pendingWorktreeAction) {
@@ -1109,19 +1157,43 @@ function LoginScreen({ onAuthenticated }) {
           h(
             'div',
             { className: 'flex-1 min-h-0 overflow-y-auto p-3 space-y-5' },
-            Object.entries(data).map(([org, repos]) =>
-              h(
+            Object.entries(data).map(([org, repos]) => {
+              const isOrganisationCollapsed = Boolean(collapsedOrganisations[org]);
+              return h(
                 'div',
                 { key: org },
                 h(
                   'div',
-                  { className: 'text-neutral-400 uppercase tracking-wider text-xs mb-1 pl-1' },
-                  org
+                  {
+                    className:
+                      'flex items-center justify-between text-neutral-400 uppercase tracking-wider text-xs mb-1 pl-1'
+                  },
+                  h('span', { className: 'truncate pr-2' }, org),
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: () => toggleOrganisationCollapsed(org),
+                      className:
+                        'inline-flex h-6 w-6 items-center justify-center rounded-md text-neutral-500 transition-colors hover:text-neutral-200',
+                      'aria-label': isOrganisationCollapsed
+                        ? 'Expand organisation'
+                        : 'Collapse organisation',
+                      'aria-expanded': isOrganisationCollapsed ? 'false' : 'true'
+                    },
+                    h(ChevronDown, {
+                      size: 14,
+                      className: `transition-transform duration-200 ${
+                        isOrganisationCollapsed ? '-rotate-90' : 'rotate-0'
+                      }`
+                    })
+                  )
                 ),
-                h(
-                  'ul',
-                  { className: 'space-y-2' },
-                  Object.entries(repos).map(([repo, branches]) =>
+                !isOrganisationCollapsed &&
+                  h(
+                    'ul',
+                    { className: 'space-y-2' },
+                    Object.entries(repos).map(([repo, branches]) =>
                     h(
                       'li',
                       {
@@ -1241,8 +1313,8 @@ function LoginScreen({ onAuthenticated }) {
                     )
                   )
                 )
-              )
-            )
+              );
+            })
           ),
           h(
             'div',
