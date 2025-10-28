@@ -20,6 +20,10 @@ Options:
   -u, --ui <path>        Path to the UI directory or entry file (default: bundled build)
   -w, --workdir <path>   Working directory root (default: current directory)
   -P, --password <string>  Password for login (default: randomly generated)
+      --codex-command <cmd>   Command executed when launching Codex (default: codex)
+      --claude-command <cmd>  Command executed when launching Claude (default: claude)
+      --ide-command <cmd>     Command executed when launching the IDE option (default: cursor-agent)
+      --vscode-command <cmd>  Command executed when launching VS Code (default: code .)
   -h, --help             Display this help message
   -v, --version          Output the version number
 `;
@@ -33,6 +37,10 @@ function parseArgs(argv) {
     ui: null,
     workdir: null,
     password: null,
+    codexCommand: null,
+    claudeCommand: null,
+    ideCommand: null,
+    vscodeCommand: null,
     help: false,
     version: false,
   };
@@ -94,6 +102,38 @@ function parseArgs(argv) {
         args.password = trimmed;
         break;
       }
+      case '--codex-command': {
+        const value = argv[++i];
+        if (!value) {
+          throw new Error(`Expected command value after ${token}`);
+        }
+        args.codexCommand = value;
+        break;
+      }
+      case '--claude-command': {
+        const value = argv[++i];
+        if (!value) {
+          throw new Error(`Expected command value after ${token}`);
+        }
+        args.claudeCommand = value;
+        break;
+      }
+      case '--ide-command': {
+        const value = argv[++i];
+        if (!value) {
+          throw new Error(`Expected command value after ${token}`);
+        }
+        args.ideCommand = value;
+        break;
+      }
+      case '--vscode-command': {
+        const value = argv[++i];
+        if (!value) {
+          throw new Error(`Expected command value after ${token}`);
+        }
+        args.vscodeCommand = value;
+        break;
+      }
       case '--help':
       case '-h':
         args.help = true;
@@ -143,14 +183,28 @@ async function main(argv = process.argv.slice(2)) {
   const resolvedUiPath = args.ui
     ? path.resolve(process.cwd(), args.ui)
     : BUNDLED_UI_PATH;
+  const commandOverrides = {
+    codex: args.codexCommand,
+    claude: args.claudeCommand,
+    ide: args.ideCommand,
+    vscode: args.vscodeCommand,
+  };
 
   try {
-    const { server, host, port, uiPath: resolvedUi, close, password: serverPassword } = await startServer({
+    const {
+      server,
+      host,
+      port,
+      uiPath: resolvedUi,
+      close,
+      password: serverPassword,
+    } = await startServer({
       uiPath: resolvedUiPath,
       port: args.port,
       host: args.host,
       workdir: workingDir,
       password: chosenPassword,
+      commandOverrides,
     });
 
     const localAddress = host === '0.0.0.0' ? 'localhost' : host;

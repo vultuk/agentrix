@@ -9,6 +9,7 @@ import { sendJson } from '../utils/http.js';
 import { createRouter } from './router.js';
 import { attachTerminalWebSockets } from './websocket.js';
 import { createUiProvider } from './ui.js';
+import { createAgentCommands } from '../config/agent-commands.js';
 
 export async function startServer({
   uiPath,
@@ -16,6 +17,7 @@ export async function startServer({
   host = DEFAULT_HOST,
   workdir,
   password,
+  commandOverrides,
 } = {}) {
   if (!uiPath) {
     throw new Error('Missing required option: uiPath');
@@ -26,7 +28,8 @@ export async function startServer({
   const resolvedPassword =
     typeof password === 'string' && password.length > 0 ? password : generateRandomPassword();
   const authManager = createAuthManager(resolvedPassword);
-  const router = createRouter({ authManager, workdir: resolvedWorkdir });
+  const agentCommands = createAgentCommands(commandOverrides);
+  const router = createRouter({ authManager, workdir: resolvedWorkdir, agentCommands });
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -91,6 +94,7 @@ export async function startServer({
     workdir: resolvedWorkdir,
     close: closeAll,
     password: resolvedPassword,
+    commands: agentCommands,
   };
 }
 

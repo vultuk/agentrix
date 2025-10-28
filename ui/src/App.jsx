@@ -2,11 +2,20 @@ import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react
 import { Resizable } from 're-resizable';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
-import { Github, GitBranch, GitPullRequest, Menu, Plus, Trash2, X } from 'lucide-react';
+import { ChevronDown, Github, GitBranch, GitPullRequest, Menu, Plus, Trash2, X } from 'lucide-react';
 
 import 'xterm/css/xterm.css';
 
 const { createElement: h } = React;
+
+const DEFAULT_COMMAND_CONFIG = Object.freeze({
+  codex: 'codex',
+  codexDangerous: 'codex --dangerously-bypass-approvals-and-sandbox',
+  claude: 'claude',
+  claudeDangerous: 'claude --dangerously-skip-permissions',
+  ide: 'cursor-agent',
+  vscode: 'code .'
+});
 
 function Modal({ title, onClose, children }) {
         const content = Array.isArray(children) ? children : [children];
@@ -191,14 +200,118 @@ function LoginScreen({ onAuthenticated }) {
         const [isDeletingWorktree, setIsDeletingWorktree] = useState(false);
         const [isDeletingRepo, setIsDeletingRepo] = useState(false);
         const [pendingActionLoading, setPendingActionLoading] = useState(null);
+        const [openActionMenu, setOpenActionMenu] = useState(null);
+        const [commandConfig, setCommandConfig] = useState(DEFAULT_COMMAND_CONFIG);
 
         const actionButtonClass = 'inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors';
+        const actionMenuRefs = useRef(new Map());
+
+        const getActionMenuRef = useCallback(
+          (action) => (node) => {
+            if (node) {
+              actionMenuRefs.current.set(action, node);
+            } else {
+              actionMenuRefs.current.delete(action);
+            }
+          },
+          []
+        );
+
+        const toggleActionMenu = useCallback((action) => {
+          setOpenActionMenu((current) => (current === action ? null : action));
+        }, []);
+
+        useEffect(() => {
+          if (!openActionMenu) {
+            return;
+          }
+          const handleDocumentClick = (event) => {
+            const menuNode = actionMenuRefs.current.get(openActionMenu);
+            if (menuNode && !menuNode.contains(event.target)) {
+              setOpenActionMenu(null);
+            }
+          };
+          const handleEscape = (event) => {
+            if (event.key === 'Escape') {
+              setOpenActionMenu(null);
+            }
+          };
+          document.addEventListener('mousedown', handleDocumentClick);
+          document.addEventListener('keydown', handleEscape);
+          return () => {
+            document.removeEventListener('mousedown', handleDocumentClick);
+            document.removeEventListener('keydown', handleEscape);
+          };
+        }, [openActionMenu]);
+
+        useEffect(() => {
+          if (!pendingWorktreeAction) {
+            setOpenActionMenu(null);
+          }
+        }, [pendingWorktreeAction]);
 
         const notifyAuthExpired = useCallback(() => {
           if (typeof onAuthExpired === 'function') {
             onAuthExpired();
           }
         }, [onAuthExpired]);
+
+        useEffect(() => {
+          let cancelled = false;
+
+          const parseCommand = (value, fallback) => {
+            if (typeof value === 'string') {
+              const trimmed = value.trim();
+              if (trimmed) {
+                return trimmed;
+              }
+            }
+            return fallback;
+          };
+
+          const loadCommands = async () => {
+            try {
+              const response = await fetch('/api/commands', { credentials: 'include' });
+              if (response.status === 401) {
+                notifyAuthExpired();
+                return;
+              }
+              if (!response.ok) {
+                throw new Error(`Request failed with status ${response.status}`);
+              }
+              const body = await response.json();
+              const commands = body && typeof body === 'object' ? body.commands : null;
+              if (!commands || typeof commands !== 'object') {
+                return;
+              }
+              const nextConfig = {
+                codex: parseCommand(commands.codex, DEFAULT_COMMAND_CONFIG.codex),
+                codexDangerous: parseCommand(
+                  commands.codexDangerous,
+                  DEFAULT_COMMAND_CONFIG.codexDangerous
+                ),
+                claude: parseCommand(commands.claude, DEFAULT_COMMAND_CONFIG.claude),
+                claudeDangerous: parseCommand(
+                  commands.claudeDangerous,
+                  DEFAULT_COMMAND_CONFIG.claudeDangerous
+                ),
+                ide: parseCommand(commands.ide, DEFAULT_COMMAND_CONFIG.ide),
+                vscode: parseCommand(commands.vscode, DEFAULT_COMMAND_CONFIG.vscode),
+              };
+              if (!cancelled) {
+                setCommandConfig(nextConfig);
+              }
+            } catch (error) {
+              console.error('Failed to load command configuration', error);
+            }
+          };
+
+          loadCommands();
+
+          return () => {
+            cancelled = true;
+          };
+        }, [notifyAuthExpired]);
 
         const renderSpinner = (colorClass = '') =>
           h(
@@ -905,14 +1018,17 @@ function LoginScreen({ onAuthenticated }) {
           if (!pendingWorktreeAction || pendingActionLoading) {
             return;
           }
+          setOpenActionMenu(null);
           setPendingActionLoading(action);
           const worktree = pendingWorktreeAction;
           const commandMap = {
             terminal: undefined,
-            codex: 'codex',
-            cursor: 'cursor-agent',
-            claude: 'claude',
-            vscode: 'code .'
+            codex: commandConfig.codex,
+            'codex-dangerous': commandConfig.codexDangerous,
+            ide: commandConfig.ide,
+            claude: commandConfig.claude,
+            'claude-dangerous': commandConfig.claudeDangerous,
+            vscode: commandConfig.vscode,
           };
           const command = commandMap[action];
           setActiveWorktree(worktree);
@@ -928,7 +1044,19 @@ function LoginScreen({ onAuthenticated }) {
           } finally {
             setPendingActionLoading(null);
           }
-        }, [openTerminalForWorktree, pendingWorktreeAction, pendingActionLoading]);
+        }, [
+          openTerminalForWorktree,
+          pendingWorktreeAction,
+          pendingActionLoading,
+          setOpenActionMenu,
+          commandConfig,
+        ]);
+
+        const isCodexLoading =
+          Boolean(pendingActionLoading && typeof pendingActionLoading === 'string' && pendingActionLoading.startsWith('codex'));
+        const isClaudeLoading =
+          Boolean(pendingActionLoading && typeof pendingActionLoading === 'string' && pendingActionLoading.startsWith('claude'));
+        const isIdeLoading = pendingActionLoading === 'ide';
 
         const statusStyles = {
           connected: 'border border-emerald-500/40 text-emerald-300 bg-emerald-500/15',
@@ -1558,58 +1686,160 @@ function LoginScreen({ onAuthenticated }) {
                         : 'Open in VS Code'
                     ),
                     h(
-                      'button',
+                      'div',
                       {
-                        onClick: () => handleWorktreeAction('codex'),
-                        disabled: Boolean(pendingActionLoading),
-                        'aria-busy': pendingActionLoading === 'codex',
-                        className:
-                          'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-neutral-700 disabled:hover:bg-neutral-900'
+                        className: 'flex items-stretch gap-2',
+                        ref: getActionMenuRef('codex')
                       },
-                      pendingActionLoading === 'codex'
-                        ? h(
-                            'span',
-                            { className: 'inline-flex items-center gap-2' },
-                            renderSpinner('text-neutral-100'),
-                            'Opening…'
-                          )
-                        : 'Open Codex'
+                      h(
+                        'button',
+                        {
+                          onClick: () => handleWorktreeAction('codex'),
+                          disabled: Boolean(pendingActionLoading),
+                          'aria-busy': isCodexLoading,
+                          className:
+                            'flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-neutral-700 disabled:hover:bg-neutral-900'
+                        },
+                        isCodexLoading
+                          ? h(
+                              'span',
+                              { className: 'inline-flex items-center gap-2' },
+                              renderSpinner('text-neutral-100'),
+                              'Opening…'
+                            )
+                          : 'Open Codex'
+                      ),
+                      h(
+                        'div',
+                        { className: 'relative' },
+                        h(
+                          'button',
+                          {
+                            type: 'button',
+                            onClick: (event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              toggleActionMenu('codex');
+                            },
+                            disabled: Boolean(pendingActionLoading),
+                            'aria-label': 'Open Codex options',
+                            'aria-haspopup': 'menu',
+                            'aria-expanded': openActionMenu === 'codex',
+                            className:
+                              'h-full rounded-md border border-neutral-700 bg-neutral-900 px-2 text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-neutral-700 disabled:hover:bg-neutral-900 flex items-center justify-center'
+                          },
+                          h(ChevronDown, { size: 14 })
+                        ),
+                        openActionMenu === 'codex'
+                          ? h(
+                              'div',
+                              {
+                                role: 'menu',
+                                className:
+                                  'absolute right-0 mt-2 w-48 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 py-1 text-sm shadow-lg z-10'
+                              },
+                              h(
+                                'button',
+                                {
+                                  type: 'button',
+                                  role: 'menuitem',
+                                  onClick: () => handleWorktreeAction('codex-dangerous'),
+                                  className:
+                                    'block w-full px-3 py-2 text-left text-neutral-100 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60',
+                                  disabled: Boolean(pendingActionLoading)
+                                },
+                                'Dangerous Mode'
+                              )
+                            )
+                          : null
+                      )
                     ),
                     h(
                       'button',
                       {
-                        onClick: () => handleWorktreeAction('cursor'),
+                        onClick: () => handleWorktreeAction('ide'),
                         disabled: Boolean(pendingActionLoading),
-                        'aria-busy': pendingActionLoading === 'cursor',
+                        'aria-busy': isIdeLoading,
                         className:
                           'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-neutral-700 disabled:hover:bg-neutral-900'
                       },
-                      pendingActionLoading === 'cursor'
+                      isIdeLoading
                         ? h(
                             'span',
                             { className: 'inline-flex items-center gap-2' },
                             renderSpinner('text-neutral-100'),
-                            'Opening…'
+                            'Launching…'
                           )
-                        : 'Open Cursor'
+                        : 'Launch IDE'
                     ),
                     h(
-                      'button',
+                      'div',
                       {
-                        onClick: () => handleWorktreeAction('claude'),
-                        disabled: Boolean(pendingActionLoading),
-                        'aria-busy': pendingActionLoading === 'claude',
-                        className:
-                          'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-neutral-700 disabled:hover:bg-neutral-900'
+                        className: 'flex items-stretch gap-2',
+                        ref: getActionMenuRef('claude')
                       },
-                      pendingActionLoading === 'claude'
-                        ? h(
-                            'span',
-                            { className: 'inline-flex items-center gap-2' },
-                            renderSpinner('text-neutral-100'),
-                            'Opening…'
-                          )
-                        : 'Open Claude'
+                      h(
+                        'button',
+                        {
+                          onClick: () => handleWorktreeAction('claude'),
+                          disabled: Boolean(pendingActionLoading),
+                          'aria-busy': isClaudeLoading,
+                          className:
+                            'flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-neutral-700 disabled:hover:bg-neutral-900'
+                        },
+                        isClaudeLoading
+                          ? h(
+                              'span',
+                              { className: 'inline-flex items-center gap-2' },
+                              renderSpinner('text-neutral-100'),
+                              'Opening…'
+                            )
+                          : 'Open Claude'
+                      ),
+                      h(
+                        'div',
+                        { className: 'relative' },
+                        h(
+                          'button',
+                          {
+                            type: 'button',
+                            onClick: (event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              toggleActionMenu('claude');
+                            },
+                            disabled: Boolean(pendingActionLoading),
+                            'aria-label': 'Open Claude options',
+                            'aria-haspopup': 'menu',
+                            'aria-expanded': openActionMenu === 'claude',
+                            className:
+                              'h-full rounded-md border border-neutral-700 bg-neutral-900 px-2 text-neutral-100 hover:border-neutral-500 hover:bg-neutral-850 transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-neutral-700 disabled:hover:bg-neutral-900 flex items-center justify-center'
+                          },
+                          h(ChevronDown, { size: 14 })
+                        ),
+                        openActionMenu === 'claude'
+                          ? h(
+                              'div',
+                              {
+                                role: 'menu',
+                                className:
+                                  'absolute right-0 mt-2 w-48 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 py-1 text-sm shadow-lg z-10'
+                              },
+                              h(
+                                'button',
+                                {
+                                  type: 'button',
+                                  role: 'menuitem',
+                                  onClick: () => handleWorktreeAction('claude-dangerous'),
+                                  className:
+                                    'block w-full px-3 py-2 text-left text-neutral-100 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60',
+                                  disabled: Boolean(pendingActionLoading)
+                                },
+                                'Dangerous Mode'
+                              )
+                            )
+                          : null
+                      )
                     )
                   )
                 )
