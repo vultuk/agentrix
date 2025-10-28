@@ -68,8 +68,47 @@ node bin/terminal-worktree.js \
 - `-u, --ui <path>` – Directory or entry file for the built UI (default: `ui/dist`)
 - `-w, --workdir <path>` – Root directory that holds `org/repo` folders (default: process CWD)
 - `-P, --password <string>` – UI password (default: secure random string printed at startup)
+- `--ngrok-api-key <token>` – Authtoken used to establish a public ngrok tunnel
+- `--ngrok-domain <domain>` – Reserved ngrok domain exposed when tunnelling (requires `--ngrok-api-key`)
+- `--save` – Persist the effective configuration to `~/.terminal-worktree/config.json` and exit
 - `-h, --help` – Print usage
 - `-v, --version` – Show package version
+
+When both ngrok flags are supplied the CLI will establish a tunnel after the HTTP server boots and
+print the public URL. If either flag is omitted the service remains reachable only via the bound host
+and port.
+
+### Configuration File
+
+At startup the CLI also reads `~/.terminal-worktree/config.json` if it exists. Any values in that file
+fill in defaults for matching CLI options, while explicit command-line arguments always win. A simple
+configuration might look like:
+
+```json
+{
+  "port": 4001,
+  "host": "127.0.0.1",
+  "ui": "./ui/dist",
+  "workdir": "/srv/worktrees",
+  "password": "s3cr3t",
+  "commands": {
+    "codex": "codex",
+    "cursor": "cursor-agent",
+    "vscode": "code ."
+  },
+  "ngrok": {
+    "apiKey": "NGROK_AUTHTOKEN",
+    "domain": "example.ngrok.app"
+  }
+}
+```
+
+Supported keys mirror the CLI flags (`port`, `host`, `ui`, `workdir`, `password`, individual
+`*Command` entries, plus `ngrokApiKey`/`ngrokDomain` or `ngrok.apiKey` / `ngrok.domain`). Leave the
+file absent to continue using only CLI arguments.
+
+Run `terminal-worktree --port 4001 --workdir /srv/worktrees --save` to save the provided values into
+the config file without starting the server.
 
 ### Authentication
 

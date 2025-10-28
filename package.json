@@ -49,6 +49,7 @@
   },
   "type": "module",
   "dependencies": {
+    "@ngrok/ngrok": "^1.5.2",
     "@tailwindcss/postcss": "^4.1.16",
     "@vitejs/plugin-react": "^5.1.0",
     "autoprefixer": "^10.4.21",
