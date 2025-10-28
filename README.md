@@ -141,11 +141,13 @@ for provisioning worktrees and launching agents.
 
 The server uses `codex`, `cursor`, or `claude` agent commands configured via `config.json`, cloning
 `git@github.com:org/repository.git` if necessary, creating (or reusing) the specified worktree, and
-then starting the agent inside that directory. The request responds with `202 Accepted` once the
-agent process spawns and returns metadata (including whether the repository was cloned, whether the
-worktree was created, and the agent process `pid`). The prompt is written to the agent stdin and
-also exported via the `TERMINAL_WORKTREE_PROMPT` environment variable for tooling that prefers env
-based inputs.
+then launching the agent inside the same tmux-backed terminal session that the UI attaches to. The
+request responds with `202 Accepted` once the terminal session is ready and includes metadata about
+the repository, worktree, agent command, process `pid`, and terminal identifiers (`terminalSessionId`,
+`terminalSessionCreated`, `terminalUsingTmux`, and when applicable `tmuxSessionName`). Automated
+launches therefore appear immediately inside the UI terminal. The supplied prompt is exported to the
+session as `TERMINAL_WORKTREE_PROMPT` and also queued on the terminal input stream so agents that
+expect stdin receive it straight away.
 
 ### Repository Layout & Worktrees
 

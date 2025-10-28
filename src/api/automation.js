@@ -188,9 +188,18 @@ export function createAutomationHandlers({ workdir, agentCommands, apiKey }) {
       const { repositoryPath, cloned } = await ensureRepositoryExists(workdir, org, repo);
       const { worktreePath, created } = await ensureWorktreeExists(workdir, org, repo, branch);
 
-      const { pid } = await launchAgentProcess({
+      const {
+        pid,
+        sessionId,
+        tmuxSessionName,
+        usingTmux,
+        createdSession,
+      } = await launchAgentProcess({
         command: agent.command,
-        cwd: worktreePath,
+        workdir,
+        org,
+        repo,
+        branch,
         prompt,
       });
 
@@ -206,6 +215,10 @@ export function createAutomationHandlers({ workdir, agentCommands, apiKey }) {
           agent: agent.key,
           agentCommand: agent.command,
           pid,
+          terminalSessionId: sessionId,
+          terminalSessionCreated: createdSession,
+          tmuxSessionName,
+          terminalUsingTmux: usingTmux,
         },
       });
     } catch (error) {
