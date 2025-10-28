@@ -96,6 +96,10 @@ function normalizeConfig(rawConfig, configPath) {
     rawConfig.commands && typeof rawConfig.commands === 'object'
       ? rawConfig.commands
       : null;
+  const automation =
+    rawConfig.automation && typeof rawConfig.automation === 'object'
+      ? rawConfig.automation
+      : null;
   const ngrok =
     rawConfig.ngrok && typeof rawConfig.ngrok === 'object'
       ? rawConfig.ngrok
@@ -215,6 +219,18 @@ function normalizeConfig(rawConfig, configPath) {
   );
   if (ngrokDomain !== undefined) {
     normalized.ngrokDomain = ngrokDomain;
+  }
+
+  const automationApiKey = pickString(
+    [
+      { value: rawConfig.automationApiKey, name: 'automationApiKey' },
+      { value: rawConfig.apiKey, name: 'apiKey' },
+      { value: automation?.apiKey, name: 'automation.apiKey' },
+    ],
+    configPath,
+  );
+  if (automationApiKey !== undefined) {
+    normalized.automationApiKey = automationApiKey;
   }
 
   return normalized;
@@ -538,6 +554,7 @@ async function main(argv = process.argv.slice(2)) {
   const finalNgrokDomain = provided.ngrokDomain
     ? args.ngrokDomain
     : fileConfig.ngrokDomain ?? null;
+  const finalAutomationApiKey = fileConfig.automationApiKey ?? null;
 
   if ((finalNgrokApiKey && !finalNgrokDomain) || (finalNgrokDomain && !finalNgrokApiKey)) {
     process.stderr.write(
@@ -611,6 +628,12 @@ async function main(argv = process.argv.slice(2)) {
       };
     }
 
+    if (finalAutomationApiKey) {
+      configToSave.automation = {
+        apiKey: finalAutomationApiKey,
+      };
+    }
+
     try {
       const savedPath = await saveConfigFile(configToSave);
       process.stdout.write(`Config saved to ${savedPath}\n`);
@@ -638,6 +661,7 @@ async function main(argv = process.argv.slice(2)) {
       password: chosenPassword,
       commandOverrides,
       ngrok: ngrokOptions,
+      automationApiKey: finalAutomationApiKey,
     });
 
     const localAddress = host === '0.0.0.0' ? 'localhost' : host;

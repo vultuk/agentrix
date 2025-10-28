@@ -99,13 +99,17 @@ configuration might look like:
   "ngrok": {
     "apiKey": "NGROK_AUTHTOKEN",
     "domain": "example.ngrok.app"
+  },
+  "automation": {
+    "apiKey": "AUTOMATION_API_KEY"
   }
 }
 ```
 
 Supported keys mirror the CLI flags (`port`, `host`, `ui`, `workdir`, `password`, individual
-`*Command` entries, plus `ngrokApiKey`/`ngrokDomain` or `ngrok.apiKey` / `ngrok.domain`). Leave the
-file absent to continue using only CLI arguments.
+`*Command` entries, plus `ngrokApiKey`/`ngrokDomain` or `ngrok.apiKey` / `ngrok.domain`). The
+automation API key can be supplied as `automation.apiKey`, `automationApiKey`, or `apiKey`. Leave
+the file absent to continue using only CLI arguments.
 
 Run `terminal-worktree --port 4001 --workdir /srv/worktrees --save` to save the provided values into
 the config file without starting the server.
@@ -116,6 +120,32 @@ Every server boot prints the UI password. Clients must authenticate before calli
 Successful logins receive an HTTP-only session cookie; log out via the UI or `POST
 /api/auth/logout`. On shutdown the backend cleans up shell sessions, tmux attachments, and WebSocket
 clients.
+
+### Automation API
+
+When `config.json` includes an automation API key the backend exposes a machine-consumable endpoint
+for provisioning worktrees and launching agents.
+
+- Endpoint: `POST /api/automation/launch`
+- Headers: `X-API-Key: <key>` (alternatively `Authorization: Bearer <key>`)
+- Body shape:
+
+  ```json
+  {
+    "repo": "org/repository",
+    "worktree": "type/title",
+    "command": "codex",
+    "prompt": "Kick off the task at hand"
+  }
+  ```
+
+The server uses `codex`, `cursor`, or `claude` agent commands configured via `config.json`, cloning
+`git@github.com:org/repository.git` if necessary, creating (or reusing) the specified worktree, and
+then starting the agent inside that directory. The request responds with `202 Accepted` once the
+agent process spawns and returns metadata (including whether the repository was cloned, whether the
+worktree was created, and the agent process `pid`). The prompt is written to the agent stdin and
+also exported via the `TERMINAL_WORKTREE_PROMPT` environment variable for tooling that prefers env
+based inputs.
 
 ### Repository Layout & Worktrees
 

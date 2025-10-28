@@ -1,4 +1,5 @@
 import { createAuthHandlers } from '../api/auth.js';
+import { createAutomationHandlers } from '../api/automation.js';
 import { createRepoHandlers } from '../api/repos.js';
 import { createSessionHandlers } from '../api/sessions.js';
 import { createTerminalHandlers } from '../api/terminal.js';
@@ -6,7 +7,7 @@ import { createWorktreeHandlers } from '../api/worktrees.js';
 import { sendJson, readJsonBody } from '../utils/http.js';
 import { createConfigHandlers } from '../api/config.js';
 
-export function createRouter({ authManager, workdir, agentCommands }) {
+export function createRouter({ authManager, workdir, agentCommands, automationApiKey }) {
   if (!authManager) {
     throw new Error('authManager is required');
   }
@@ -15,6 +16,11 @@ export function createRouter({ authManager, workdir, agentCommands }) {
   }
 
   const authHandlers = createAuthHandlers(authManager);
+  const automationHandlers = createAutomationHandlers({
+    workdir,
+    agentCommands,
+    apiKey: automationApiKey,
+  });
   const repoHandlers = createRepoHandlers(workdir);
   const sessionHandlers = createSessionHandlers(workdir);
   const worktreeHandlers = createWorktreeHandlers(workdir);
@@ -88,6 +94,13 @@ export function createRouter({ authManager, workdir, agentCommands }) {
       {
         requiresAuth: true,
         handlers: { GET: configHandlers.commands, HEAD: configHandlers.commands },
+      },
+    ],
+    [
+      '/api/automation/launch',
+      {
+        requiresAuth: false,
+        handlers: { POST: automationHandlers.launch },
       },
     ],
   ]);
