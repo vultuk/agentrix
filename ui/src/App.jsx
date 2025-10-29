@@ -1,4 +1,5 @@
 import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Resizable } from 're-resizable';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -1133,7 +1134,7 @@ function LoginScreen({ onAuthenticated }) {
           }
         };
 
-        const handleCreatePlan = async () => {
+        const handleCreatePlan = () => {
           if (isCreatingPlan) {
             return;
           }
@@ -1142,119 +1143,141 @@ function LoginScreen({ onAuthenticated }) {
             return;
           }
 
-          const originalPrompt = promptText;
+          const promptPayload = promptText;
+          const originalPrompt = promptPayload;
           let hasStreamingContent = false;
 
           setIsCreatingPlan(true);
-          try {
-            // Ask the backend to draft a structured plan via the OpenAI proxy.
-            const response = await fetch('/api/create-plan', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({ prompt: promptText })
-            });
-            if (response.status === 401) {
-              notifyAuthExpired();
-              return;
-            }
-            if (!response.ok) {
-              throw new Error(`Request failed with status ${response.status}`);
-            }
-            if (!response.body) {
-              throw new Error('Server returned an empty response body.');
-            }
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let receivedDoneSignal = false;
-
-            setPromptText('');
-
-            while (!receivedDoneSignal) {
-              const { value, done } = await reader.read();
-              if (done) {
-                buffer += decoder.decode();
-              } else {
-                buffer += decoder.decode(value, { stream: true });
+          void (async () => {
+            try {
+              // Ask the backend to draft a structured plan via the OpenAI proxy.
+              const response = await fetch('/api/create-plan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ prompt: promptPayload })
+              });
+              if (response.status === 401) {
+                notifyAuthExpired();
+                return;
+              }
+              if (!response.ok) {
+                throw new Error(`Request failed with status ${response.status}`);
+              }
+              if (!response.body) {
+                throw new Error('Server returned an empty response body.');
               }
 
-              let frameEnd;
-              while ((frameEnd = buffer.indexOf('\n\n')) !== -1) {
-                const frame = buffer.slice(0, frameEnd);
-                buffer = buffer.slice(frameEnd + 2);
+              const reader = response.body.getReader();
+              const decoder = new TextDecoder();
+              let buffer = '';
+              let receivedDoneSignal = false;
 
-                if (!frame.trim()) {
-                  continue;
+              flushSync(() => {
+                setPromptText('');
+              });
+
+              while (!receivedDoneSignal) {
+                const { value, done } = await reader.read();
+                if (done) {
+                  buffer += decoder.decode();
+                } else {
+                  buffer += decoder.decode(value, { stream: true });
                 }
 
-                const lines = frame.split('\n');
-                let eventType = 'message';
-                const dataLines = [];
+                let frameEnd;
+                while ((frameEnd = buffer.indexOf('\n\n')) !== -1) {
+                  const frame = buffer.slice(0, frameEnd);
+                  buffer = buffer.slice(frameEnd + 2);
 
-                for (const rawLine of lines) {
-                  const line = rawLine.trimEnd();
-                  if (!line) {
+                  if (!frame.trim()) {
                     continue;
                   }
-                  if (line.startsWith('event:')) {
-                    eventType = line.slice(6).trim();
-                    continue;
-                  }
-                  if (line.startsWith('data:')) {
-                    let valueSegment = line.slice(5);
-                    if (valueSegment.startsWith(' ')) {
-                      valueSegment = valueSegment.slice(1);
+
+                  const lines = frame.split('\n');
+                  let eventType = 'message';
+                  const dataLines = [];
+
+                  for (const rawLine of lines) {
+                    const line = rawLine.trimEnd();
+                    if (!line) {
+                      continue;
                     }
-                    dataLines.push(valueSegment);
+                    if (line.startsWith('event:')) {
+                      eventType = line.slice(6).trim();
+                      continue;
+                    }
+                    if (line.startsWith('data:')) {
+                      let valueSegment = line.slice(5);
+                      if (valueSegment.startsWith(' ')) {
+                        valueSegment = valueSegment.slice(1);
+                      }
+                      dataLines.push(valueSegment);
+                    }
                   }
-                }
 
-                if (dataLines.length === 0) {
-                  continue;
-                }
+                  if (dataLines.length === 0) {
+                    continue;
+                  }
 
-                const data = dataLines.join('\n');
-                if (eventType === 'error') {
-                  let message = data;
+                  const data = dataLines.join('\n');
+                  if (eventType === 'error') {
+                    let message = data;
+                    try {
+                      const parsed = JSON.parse(data);
+                      if (parsed && typeof parsed === 'object' && typeof parsed.message === 'string') {
+                        message = parsed.message;
+                      }
+                    } catch {
+                      // Ignore JSON parse errors from error events.
+                    }
+                    throw new Error(message || 'Stream error');
+                  }
+
+                  if (data === '[DONE]') {
+                    receivedDoneSignal = true;
+                    break;
+                  }
+
+                  let contentSegment = data;
                   try {
                     const parsed = JSON.parse(data);
-                    if (parsed && typeof parsed === 'object' && typeof parsed.message === 'string') {
-                      message = parsed.message;
+                    if (parsed && typeof parsed === 'object' && typeof parsed.content === 'string') {
+                      contentSegment = parsed.content;
                     }
                   } catch {
-                    // Ignore JSON parse errors from error events.
+                    // Ignore JSON parse errors if the payload is plain text.
                   }
-                  throw new Error(message || 'Stream error');
+
+                  if (contentSegment) {
+                    hasStreamingContent = true;
+                    flushSync(() => {
+                      setPromptText(current => current + contentSegment);
+                    });
+                  }
                 }
 
-                if (data === '[DONE]') {
+                if (done) {
                   receivedDoneSignal = true;
-                  break;
                 }
-
-                hasStreamingContent = true;
-                setPromptText(current => current + data);
               }
 
-              if (done) {
-                receivedDoneSignal = true;
+              if (!hasStreamingContent) {
+                throw new Error('Server returned an empty plan. Check server logs for details.');
               }
+            } catch (error) {
+              console.error('Failed to create plan', error);
+              if (!hasStreamingContent) {
+                flushSync(() => {
+                  setPromptText(originalPrompt);
+                });
+              }
+              window.alert('Failed to create plan. Check server logs for details.');
+            } finally {
+              setIsCreatingPlan(false);
             }
-
-            if (!hasStreamingContent) {
-              throw new Error('Server returned an empty plan. Check server logs for details.');
-            }
-          } catch (error) {
-            console.error('Failed to create plan', error);
-            if (!hasStreamingContent) {
-              setPromptText(originalPrompt);
-            }
-            window.alert('Failed to create plan. Check server logs for details.');
-          } finally {
-            setIsCreatingPlan(false);
-          }
+          })();
         };
 
         const handleCreateWorktreeFromPrompt = async () => {
