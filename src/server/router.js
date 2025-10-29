@@ -7,6 +7,7 @@ import { createWorktreeHandlers } from '../api/worktrees.js';
 import { sendJson, readJsonBody } from '../utils/http.js';
 import { createConfigHandlers } from '../api/config.js';
 import { createPlanHandlers } from '../api/create-plan.js';
+import { createPlanService } from '../core/plan.js';
 
 export function createRouter({
   authManager,
@@ -24,18 +25,20 @@ export function createRouter({
   }
 
   const authHandlers = createAuthHandlers(authManager);
+  const planService = createPlanService({ apiKey: openaiApiKey });
   const automationHandlers = createAutomationHandlers({
     workdir,
     agentCommands,
     apiKey: automationApiKey,
     branchNameGenerator,
+    planService,
   });
   const repoHandlers = createRepoHandlers(workdir);
   const sessionHandlers = createSessionHandlers(workdir);
   const worktreeHandlers = createWorktreeHandlers(workdir, branchNameGenerator);
   const terminalHandlers = createTerminalHandlers(workdir);
   const configHandlers = createConfigHandlers(agentCommands);
-  const planHandlers = createPlanHandlers({ openaiApiKey });
+  const planHandlers = createPlanHandlers({ planService });
 
   const routes = new Map([
     [
