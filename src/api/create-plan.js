@@ -63,11 +63,9 @@ export function createPlanHandlers({ openaiApiKey } = {}) {
         body: JSON.stringify({
           model: 'gpt-5',
           messages: [
-            { role: 'developer', content: DEVELOPER_MESSAGE },
+            { role: 'system', content: DEVELOPER_MESSAGE },
             { role: 'user', content: prompt },
           ],
-          reasoning: { effort: 'medium' },
-          verbosity: 'low',
         }),
       });
     } catch (error) {
