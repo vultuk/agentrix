@@ -1,17 +1,11 @@
 import OpenAI from 'openai';
+import { loadDeveloperMessage } from '../config/developer-messages.js';
 import { normaliseBranchName } from './git.js';
 
 const DEFAULT_MODEL = 'gpt-5-mini';
 
-const developerMessage = {
-  role: 'developer',
-  content: [
-    {
-      type: 'text',
-      text: 'Generate a branch name in the format <type>/<description> with no preamble or postamble, and no code blocks. The <type> must be one of: feature, enhancement, fix, chore, or another appropriate status. The <description> should be concise (max 7 words), using dashes to separate words. Example: feature/create-calendar-page.',
-    },
-  ],
-};
+const DEFAULT_DEVELOPER_MESSAGE =
+  'Generate a branch name in the format <type>/<description> with no preamble or postamble, and no code blocks. The <type> must be one of: feature, enhancement, fix, chore, or another appropriate status. The <description> should be concise (max 7 words), using dashes to separate words. Example: feature/create-calendar-page.';
 
 function slugifySegment(value) {
   if (typeof value !== 'string') {
@@ -93,13 +87,17 @@ export function createBranchNameGenerator({ apiKey, model = DEFAULT_MODEL } = {}
 
   async function generateBranchName(context = {}) {
     const userPrompt = buildUserPrompt(context);
+    const developerMessage = await loadDeveloperMessage('branch-name', DEFAULT_DEVELOPER_MESSAGE);
 
     let response;
     try {
       response = await openai.chat.completions.create({
         model,
         messages: [
-          developerMessage,
+          {
+            role: 'developer',
+            content: [{ type: 'text', text: developerMessage }],
+          },
           {
             role: 'user',
             content: [{ type: 'text', text: userPrompt }],
