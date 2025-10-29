@@ -73,6 +73,14 @@ export function createPlanHandlers({ openaiApiKey } = {}) {
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.shouldKeepAlive = true;
+
+    const socket = res.socket;
+    if (socket) {
+      socket.setKeepAlive(true, 0);
+      socket.setNoDelay(true);
+    }
 
     if (typeof res.flushHeaders === 'function') {
       res.flushHeaders();
@@ -95,12 +103,51 @@ export function createPlanHandlers({ openaiApiKey } = {}) {
       res.write(chunk);
     };
 
-    const sendData = (text) => {
-      const lines = text.split(/\r?\n/);
-      for (const line of lines) {
-        writeIfPossible(`data: ${line}\n`);
+    const writeEvent = (data, eventType = 'message') => {
+      if (clientClosed || res.writableEnded) {
+        return;
+      }
+      if (eventType && eventType !== 'message') {
+        writeIfPossible(`event: ${eventType}\n`);
+      }
+      if (typeof data === 'string') {
+        const segments = data.split(/\r?\n/);
+        for (const segment of segments) {
+          writeIfPossible(`data: ${segment}\n`);
+        }
+      } else {
+        writeIfPossible(`data: ${JSON.stringify(data)}\n`);
       }
       writeIfPossible('\n');
+    };
+
+    const normaliseContent = (delta) => {
+      if (!delta) {
+        return '';
+      }
+
+      if (typeof delta.content === 'string') {
+        return delta.content;
+      }
+
+      if (Array.isArray(delta.content)) {
+        return delta.content
+          .map((part) => {
+            if (!part) {
+              return '';
+            }
+            if (typeof part === 'string') {
+              return part;
+            }
+            if (typeof part.text === 'string') {
+              return part.text;
+            }
+            return '';
+          })
+          .join('');
+      }
+
+      return '';
     };
 
     try {
@@ -109,12 +156,12 @@ export function createPlanHandlers({ openaiApiKey } = {}) {
           break;
         }
         const delta = chunk?.choices?.[0]?.delta;
-        const content = delta?.content;
+        const content = normaliseContent(delta);
         if (typeof content !== 'string' || content.length === 0) {
           continue;
         }
         hasContent = true;
-        sendData(content);
+        writeEvent({ content });
       }
     } catch (error) {
       streamErrorMessage = `Streaming error: ${error instanceof Error ? error.message : String(error)}`;
@@ -124,10 +171,9 @@ export function createPlanHandlers({ openaiApiKey } = {}) {
           streamErrorMessage = 'OpenAI response did not include a plan.';
         }
         if (streamErrorMessage) {
-          const payload = JSON.stringify({ message: streamErrorMessage });
-          writeIfPossible(`event: error\ndata: ${payload}\n\n`);
+          writeEvent({ message: streamErrorMessage }, 'error');
         }
-        writeIfPossible('data: [DONE]\n\n');
+        writeEvent('[DONE]');
         if (!res.writableEnded) {
           res.end();
         }
