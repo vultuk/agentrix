@@ -1142,6 +1142,9 @@ function LoginScreen({ onAuthenticated }) {
             return;
           }
 
+          const originalPrompt = promptText;
+          let hasStreamingContent = false;
+
           setIsCreatingPlan(true);
           try {
             // Ask the backend to draft a structured plan via the OpenAI proxy.
@@ -1158,22 +1161,96 @@ function LoginScreen({ onAuthenticated }) {
             if (!response.ok) {
               throw new Error(`Request failed with status ${response.status}`);
             }
-            const body = await response.json();
-            const planText =
-              body && typeof body === 'object'
-                ? typeof body.plan === 'string'
-                  ? body.plan
-                  : typeof body.content === 'string'
-                  ? body.content
-                  : ''
-                : '';
-            if (!planText.trim()) {
-              window.alert('Server returned an empty plan. Check server logs for details.');
-              return;
+            if (!response.body) {
+              throw new Error('Server returned an empty response body.');
             }
-            setPromptText(planText);
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let receivedDoneSignal = false;
+
+            setPromptText('');
+
+            while (!receivedDoneSignal) {
+              const { value, done } = await reader.read();
+              if (done) {
+                buffer += decoder.decode();
+              } else {
+                buffer += decoder.decode(value, { stream: true });
+              }
+
+              let frameEnd;
+              while ((frameEnd = buffer.indexOf('\n\n')) !== -1) {
+                const frame = buffer.slice(0, frameEnd);
+                buffer = buffer.slice(frameEnd + 2);
+
+                if (!frame.trim()) {
+                  continue;
+                }
+
+                const lines = frame.split('\n');
+                let eventType = 'message';
+                const dataLines = [];
+
+                for (const rawLine of lines) {
+                  const line = rawLine.trimEnd();
+                  if (!line) {
+                    continue;
+                  }
+                  if (line.startsWith('event:')) {
+                    eventType = line.slice(6).trim();
+                    continue;
+                  }
+                  if (line.startsWith('data:')) {
+                    let valueSegment = line.slice(5);
+                    if (valueSegment.startsWith(' ')) {
+                      valueSegment = valueSegment.slice(1);
+                    }
+                    dataLines.push(valueSegment);
+                  }
+                }
+
+                if (dataLines.length === 0) {
+                  continue;
+                }
+
+                const data = dataLines.join('\n');
+                if (eventType === 'error') {
+                  let message = data;
+                  try {
+                    const parsed = JSON.parse(data);
+                    if (parsed && typeof parsed === 'object' && typeof parsed.message === 'string') {
+                      message = parsed.message;
+                    }
+                  } catch {
+                    // Ignore JSON parse errors from error events.
+                  }
+                  throw new Error(message || 'Stream error');
+                }
+
+                if (data === '[DONE]') {
+                  receivedDoneSignal = true;
+                  break;
+                }
+
+                hasStreamingContent = true;
+                setPromptText(current => current + data);
+              }
+
+              if (done) {
+                receivedDoneSignal = true;
+              }
+            }
+
+            if (!hasStreamingContent) {
+              throw new Error('Server returned an empty plan. Check server logs for details.');
+            }
           } catch (error) {
             console.error('Failed to create plan', error);
+            if (!hasStreamingContent) {
+              setPromptText(originalPrompt);
+            }
             window.alert('Failed to create plan. Check server logs for details.');
           } finally {
             setIsCreatingPlan(false);

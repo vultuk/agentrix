@@ -1,6 +1,5 @@
+import OpenAI from 'openai';
 import { sendJson } from '../utils/http.js';
-
-const OPENAI_CHAT_COMPLETIONS_URL = 'https://api.openai.com/v1/chat/completions';
 
 const DEVELOPER_MESSAGE = `\`\`\`
 Transform any user message describing a feature request, enhancement, or bug fix into a structured PTCGO-style prompt for Codex. The resulting prompt should instruct Codex to directly implement the described change in code provided or in the target repository context.
@@ -28,6 +27,9 @@ Format Output: Provide only the final prompt Codex should act on — no extra co
 \`\`\``;
 
 export function createPlanHandlers({ openaiApiKey } = {}) {
+  const trimmedKey = typeof openaiApiKey === 'string' ? openaiApiKey.trim() : '';
+  const openaiClient = trimmedKey ? new OpenAI({ apiKey: trimmedKey }) : null;
+
   async function create(context) {
     let payload;
     try {
@@ -43,77 +45,95 @@ export function createPlanHandlers({ openaiApiKey } = {}) {
       return;
     }
 
-    const apiKey = typeof openaiApiKey === 'string' && openaiApiKey.trim()
-      ? openaiApiKey.trim()
-      : null;
-    if (!apiKey) {
+    if (!openaiClient) {
       sendJson(context.res, 500, { error: 'OpenAI API key is not configured (set openaiApiKey in config.json).' });
       return;
     }
 
-    let response;
+    let stream;
     try {
-      // Invoke the OpenAI chat completions endpoint with the mandated system context.
-      response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-5',
-          messages: [
-            { role: 'system', content: DEVELOPER_MESSAGE },
-            { role: 'user', content: prompt },
-          ],
-        }),
+      stream = await openaiClient.chat.completions.create({
+        model: 'gpt-5',
+        messages: [
+          { role: 'system', content: DEVELOPER_MESSAGE },
+          { role: 'user', content: prompt },
+        ],
+        stream: true,
       });
     } catch (error) {
-      sendJson(context.res, 500, {
+      sendJson(context.res, 502, {
         error: `Failed to reach OpenAI: ${error instanceof Error ? error.message : String(error)}`,
       });
       return;
     }
 
-    if (!response.ok) {
-      let detail = `OpenAI request failed with status ${response.status}`;
-      try {
-        const errorBody = await response.json();
-        if (errorBody && typeof errorBody === 'object') {
-          const message =
-            typeof errorBody.error === 'string'
-              ? errorBody.error
-              : typeof errorBody.message === 'string'
-              ? errorBody.message
-              : null;
-          if (message) {
-            detail = message;
-          }
-        }
-      } catch {
-        // Ignore JSON parse errors for OpenAI error responses.
+    const { req, res } = context;
+
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+
+    if (typeof res.flushHeaders === 'function') {
+      res.flushHeaders();
+    }
+
+    let clientClosed = false;
+    let hasContent = false;
+    let streamErrorMessage = null;
+
+    const handleClose = () => {
+      clientClosed = true;
+    };
+
+    req.on('close', handleClose);
+
+    const writeIfPossible = (chunk) => {
+      if (clientClosed || res.writableEnded) {
+        return;
       }
-      sendJson(context.res, 502, { error: detail });
-      return;
-    }
+      res.write(chunk);
+    };
 
-    let data;
+    const sendData = (text) => {
+      const lines = text.split(/\r?\n/);
+      for (const line of lines) {
+        writeIfPossible(`data: ${line}\n`);
+      }
+      writeIfPossible('\n');
+    };
+
     try {
-      data = await response.json();
+      for await (const chunk of stream) {
+        if (clientClosed) {
+          break;
+        }
+        const delta = chunk?.choices?.[0]?.delta;
+        const content = delta?.content;
+        if (typeof content !== 'string' || content.length === 0) {
+          continue;
+        }
+        hasContent = true;
+        sendData(content);
+      }
     } catch (error) {
-      sendJson(context.res, 502, {
-        error: `Failed to parse OpenAI response: ${error instanceof Error ? error.message : String(error)}`,
-      });
-      return;
+      streamErrorMessage = `Streaming error: ${error instanceof Error ? error.message : String(error)}`;
+    } finally {
+      if (!clientClosed) {
+        if (!hasContent && !streamErrorMessage) {
+          streamErrorMessage = 'OpenAI response did not include a plan.';
+        }
+        if (streamErrorMessage) {
+          const payload = JSON.stringify({ message: streamErrorMessage });
+          writeIfPossible(`event: error\ndata: ${payload}\n\n`);
+        }
+        writeIfPossible('data: [DONE]\n\n');
+        if (!res.writableEnded) {
+          res.end();
+        }
+      }
+      req.removeListener('close', handleClose);
     }
-
-    const plan = data?.choices?.[0]?.message?.content;
-    if (typeof plan !== 'string' || !plan.trim()) {
-      sendJson(context.res, 502, { error: 'OpenAI response did not include a plan.' });
-      return;
-    }
-
-    sendJson(context.res, 200, { plan });
   }
 
   return { create };
