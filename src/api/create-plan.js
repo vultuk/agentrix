@@ -1,7 +1,8 @@
 import OpenAI from 'openai';
+import { loadDeveloperMessage } from '../config/developer-messages.js';
 import { sendJson } from '../utils/http.js';
 
-const DEVELOPER_MESSAGE = `\`\`\`
+const DEFAULT_DEVELOPER_MESSAGE = `\`\`\`
 Transform any user message describing a feature request, enhancement, or bug fix into a structured PTCGO-style prompt for Codex. The resulting prompt should instruct Codex to directly implement the described change in code provided or in the target repository context.
 
 Follow this structure strictly:
@@ -50,12 +51,14 @@ export function createPlanHandlers({ openaiApiKey } = {}) {
       return;
     }
 
+    const developerMessage = await loadDeveloperMessage('create-plan', DEFAULT_DEVELOPER_MESSAGE);
+
     let stream;
     try {
       stream = await openaiClient.chat.completions.create({
         model: 'gpt-5',
         messages: [
-          { role: 'system', content: DEVELOPER_MESSAGE },
+          { role: 'system', content: developerMessage },
           { role: 'user', content: prompt },
         ],
         stream: true,
