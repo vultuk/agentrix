@@ -1,35 +1,8 @@
-import OpenAI from 'openai';
-import { loadDeveloperMessage } from '../config/developer-messages.js';
+import { createPlanService } from '../core/plan.js';
 import { sendJson } from '../utils/http.js';
 
-const DEFAULT_DEVELOPER_MESSAGE = `\`\`\`
-Transform any user message describing a feature request, enhancement, or bug fix into a structured PTCGO-style prompt for Codex. The resulting prompt should instruct Codex to directly implement the described change in code provided or in the target repository context.
-
-Follow this structure strictly:
-
-Persona: Assume the role of a senior full-stack developer working with modern frameworks. You write clean, maintainable code and follow SOLID, DRY, and YAGNI principles.
-
-Task: Implement the feature request, enhancement, or bug fix described by the user.
-
-Steps to Complete Task:
-1. Analyse the user’s description to determine what part of the codebase is affected and what needs to change.
-2. If code is provided, use it as the working context. Otherwise, infer where changes belong.
-3. Write complete, correct, and self-contained code implementing the change.
-4. Include inline documentation and clear commit-style explanations if relevant.
-
-Context / Constraints:
-- Do not add boilerplate or unrelated refactors.
-- Maintain existing coding conventions, folder structure, and architectural boundaries.
-- Use concise, idiomatic, production-grade TypeScript or the language of the provided code.
-
-Goal: Produce the minimal and correct code modification that fulfils the request as described. The result must be ready to paste or commit directly.
-
-Format Output: Provide only the final prompt Codex should act on — no extra commentary or metadata. The output must be plain text starting with 'Implement the following change:' followed by the fully structured Codex instruction.
-\`\`\``;
-
-export function createPlanHandlers({ openaiApiKey } = {}) {
-  const trimmedKey = typeof openaiApiKey === 'string' ? openaiApiKey.trim() : '';
-  const openaiClient = trimmedKey ? new OpenAI({ apiKey: trimmedKey }) : null;
+export function createPlanHandlers({ openaiApiKey, planService: providedPlanService } = {}) {
+  const planService = providedPlanService ?? createPlanService({ apiKey: openaiApiKey });
 
   async function create(context) {
     let payload;
@@ -46,26 +19,29 @@ export function createPlanHandlers({ openaiApiKey } = {}) {
       return;
     }
 
-    if (!openaiClient) {
+    if (!planService || !planService.isConfigured) {
       sendJson(context.res, 500, { error: 'OpenAI API key is not configured (set openaiApiKey in config.json).' });
       return;
     }
 
-    const developerMessage = await loadDeveloperMessage('create-plan', DEFAULT_DEVELOPER_MESSAGE);
-
     let stream;
     try {
-      stream = await openaiClient.chat.completions.create({
-        model: 'gpt-5',
-        messages: [
-          { role: 'system', content: developerMessage },
-          { role: 'user', content: prompt },
-        ],
-        stream: true,
-      });
+      stream = await planService.createPlanStream({ prompt });
     } catch (error) {
+      if (error?.code === 'OPENAI_NOT_CONFIGURED') {
+        sendJson(context.res, 500, { error: error.message });
+        return;
+      }
+      if (error instanceof Error && error.message === 'prompt is required') {
+        sendJson(context.res, 400, { error: error.message });
+        return;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      const errorMessage = message.startsWith('Failed to reach OpenAI:')
+        ? message
+        : `Failed to reach OpenAI: ${message}`;
       sendJson(context.res, 502, {
-        error: `Failed to reach OpenAI: ${error instanceof Error ? error.message : String(error)}`,
+        error: errorMessage,
       });
       return;
     }

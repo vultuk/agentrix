@@ -135,19 +135,23 @@ for provisioning worktrees and launching agents.
     "repo": "org/repository",
     "worktree": "type/title",
     "command": "codex",
-    "prompt": "Kick off the task at hand"
+    "prompt": "Kick off the task at hand",
+    "plan": true
   }
   ```
 
 The server uses `codex`, `cursor`, or `claude` agent commands configured via `config.json`, cloning
 `git@github.com:org/repository.git` if necessary, creating (or reusing) the specified worktree, and
-then launching the agent inside the same tmux-backed terminal session that the UI attaches to. The
-request responds with `202 Accepted` once the terminal session is ready and includes metadata about
-the repository, worktree, agent command, process `pid`, and terminal identifiers (`terminalSessionId`,
-`terminalSessionCreated`, `terminalUsingTmux`, and when applicable `tmuxSessionName`). Automated
-launches therefore appear immediately inside the UI terminal. The supplied prompt is exported to the
-session as `TERMINAL_WORKTREE_PROMPT` and appended to the initial agent command so automation
-invocations receive it straight away.
+then launching the agent inside the same tmux-backed terminal session that the UI attaches to. When
+`plan` is omitted or set to `true` the submitted prompt is first transformed via the **Create Plan**
+pipeline (requires an `openaiApiKey`); set `"plan": false` to preserve the original prompt and bypass
+planning. The request responds with `202 Accepted` once the terminal session is ready and includes
+metadata about the repository, worktree, agent command, process `pid`, terminal identifiers
+(`terminalSessionId`, `terminalSessionCreated`, `terminalUsingTmux`, `tmuxSessionName` when
+applicable), plus the automation metadata `plan`, `promptRoute`, and `automationRequestId`. Automated
+launches therefore appear immediately inside the UI terminal. The effective prompt (planned or
+passthrough) is exported to the session as `TERMINAL_WORKTREE_PROMPT` and appended to the initial
+agent command so automation invocations receive it straight away.
 
 ### Repository Layout & Worktrees
 

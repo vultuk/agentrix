@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   cloneRepository,
   createWorktree,
@@ -129,7 +130,86 @@ function resolveAgentCommand(agentCommands, requested) {
   return { key, command };
 }
 
-export function createAutomationHandlers({ workdir, agentCommands, apiKey, branchNameGenerator }) {
+function parsePlanFlag(value) {
+  if (value === undefined) {
+    return true;
+  }
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  throw new Error('plan must be a boolean');
+}
+
+export const automationPlanMetrics = {
+  planTrue: {
+    requests: 0,
+    successes: 0,
+    failures: 0,
+    totalLatencyMs: 0,
+  },
+  planFalse: {
+    requests: 0,
+    successes: 0,
+    failures: 0,
+    totalLatencyMs: 0,
+  },
+};
+
+export function resetAutomationPlanMetrics() {
+  for (const bucket of Object.values(automationPlanMetrics)) {
+    bucket.requests = 0;
+    bucket.successes = 0;
+    bucket.failures = 0;
+    bucket.totalLatencyMs = 0;
+  }
+}
+
+function finishMetrics(key, success, durationMs) {
+  const bucket = automationPlanMetrics[key];
+  if (!bucket) {
+    return;
+  }
+  if (success) {
+    bucket.successes += 1;
+  } else {
+    bucket.failures += 1;
+  }
+  bucket.totalLatencyMs += durationMs;
+}
+
+export function createAutomationHandlers(
+  {
+    workdir,
+    agentCommands,
+    apiKey,
+    branchNameGenerator,
+    planService,
+    logger,
+  },
+  {
+    ensureRepositoryExists: ensureRepoExists = ensureRepositoryExists,
+    ensureWorktreeExists: ensureWorktree = ensureWorktreeExists,
+    launchAgentProcess: launchAgent = launchAgentProcess,
+    now = () => Date.now(),
+    createRequestId = () => randomUUID(),
+  } = {},
+) {
+  const logInfo = (...args) => {
+    if (logger && typeof logger.info === 'function') {
+      logger.info(...args);
+    } else {
+      console.info(...args);
+    }
+  };
+
+  const logError = (...args) => {
+    if (logger && typeof logger.error === 'function') {
+      logger.error(...args);
+    } else {
+      console.error(...args);
+    }
+  };
+
   async function launch(context) {
     if (!apiKey) {
       sendJson(context.res, 503, { error: 'Automation API is not configured (missing API key)' });
@@ -150,12 +230,72 @@ export function createAutomationHandlers({ workdir, agentCommands, apiKey, branc
       return;
     }
 
+    let planEnabled;
+    try {
+      planEnabled = parsePlanFlag(payload.plan);
+    } catch (error) {
+      sendJson(context.res, 400, { error: error.message });
+      return;
+    }
+
+    const metricsKey = planEnabled ? 'planTrue' : 'planFalse';
+    const routeLabel = planEnabled ? 'create-plan' : 'passthrough';
+    automationPlanMetrics[metricsKey].requests += 1;
+
+    const requestId = createRequestId();
+    const startedAt = now();
+
+    const elapsedMs = () => {
+      const value = now() - startedAt;
+      return Number.isFinite(value) ? value : 0;
+    };
+
+    const finishSuccess = (detail) => {
+      const durationMs = elapsedMs();
+      finishMetrics(metricsKey, true, durationMs);
+      const suffix = detail ? `: ${detail}` : '';
+      logInfo(
+        `[terminal-worktree] Automation request ${requestId} (${routeLabel}) completed in ${durationMs}ms${suffix}`,
+      );
+    };
+
+    const finishFailure = (message, error) => {
+      const durationMs = elapsedMs();
+      finishMetrics(metricsKey, false, durationMs);
+      if (error) {
+        logError(
+          `[terminal-worktree] Automation request ${requestId} (${routeLabel}) failed after ${durationMs}ms: ${message}`,
+          error,
+        );
+      } else {
+        logError(
+          `[terminal-worktree] Automation request ${requestId} (${routeLabel}) failed after ${durationMs}ms: ${message}`,
+        );
+      }
+    };
+
+    const fail = (status, message, error) => {
+      finishFailure(message, error);
+      sendJson(context.res, status, { error: message });
+    };
+
+    logInfo(`[terminal-worktree] Automation request ${requestId} (${routeLabel}) received.`);
+
+    let userPrompt = '';
+    if (payload.prompt !== undefined) {
+      if (typeof payload.prompt !== 'string') {
+        fail(400, 'prompt must be a string');
+        return;
+      }
+      userPrompt = payload.prompt;
+    }
+
     let org;
     let repo;
     try {
       ({ org, repo } = parseRepoIdentifier(payload.repo));
     } catch (error) {
-      sendJson(context.res, 400, { error: error.message });
+      fail(400, error.message, error);
       return;
     }
 
@@ -166,53 +306,77 @@ export function createAutomationHandlers({ workdir, agentCommands, apiKey, branc
       try {
         branch = sanitiseBranch(providedWorktree);
       } catch (error) {
-        sendJson(context.res, 400, { error: error.message });
+        fail(400, error.message, error);
         return;
       }
     } else {
       if (!branchNameGenerator || !branchNameGenerator.isConfigured) {
-        sendJson(context.res, 503, {
-          error: 'Branch name generation is not configured. Provide a worktree name or configure an OpenAI API key.',
-        });
+        fail(
+          503,
+          'Branch name generation is not configured. Provide a worktree name or configure an OpenAI API key.',
+        );
         return;
       }
       try {
         branch = await branchNameGenerator.generateBranchName({
-          prompt: typeof payload.prompt === 'string' ? payload.prompt : '',
+          prompt: userPrompt,
           org,
           repo,
         });
       } catch (error) {
-        sendJson(context.res, 500, { error: error.message });
+        fail(500, error.message, error);
         return;
       }
     }
 
     if (!branch) {
-      sendJson(context.res, 500, { error: 'Failed to determine branch name.' });
+      fail(500, 'Failed to determine branch name.');
       return;
     }
 
-    let prompt = '';
-    if (payload.prompt !== undefined) {
-      if (typeof payload.prompt !== 'string') {
-        sendJson(context.res, 400, { error: 'prompt must be a string' });
+    if (planEnabled && !userPrompt.trim()) {
+      fail(400, 'prompt is required when plan is true');
+      return;
+    }
+
+    let effectivePrompt = userPrompt;
+    if (planEnabled) {
+      if (!planService || !planService.isConfigured) {
+        fail(503, 'Plan generation is not configured. Provide an OpenAI API key.');
         return;
       }
-      prompt = payload.prompt;
+      try {
+        effectivePrompt = await planService.createPlanText({ prompt: userPrompt });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (error?.code === 'OPENAI_NOT_CONFIGURED') {
+          fail(503, message, error);
+        } else if (message === 'prompt is required') {
+          fail(400, message, error);
+        } else if (message.startsWith('Failed to reach OpenAI:')) {
+          fail(502, message, error);
+        } else {
+          fail(502, message, error);
+        }
+        return;
+      }
     }
 
     let agent;
     try {
       agent = resolveAgentCommand(agentCommands, payload.command);
     } catch (error) {
-      sendJson(context.res, 400, { error: error.message });
+      fail(400, error.message, error);
       return;
     }
 
+    logInfo(
+      `[terminal-worktree] Automation request ${requestId} (${routeLabel}) targeting ${org}/${repo}#${branch}.`,
+    );
+
     try {
-      const { repositoryPath, cloned } = await ensureRepositoryExists(workdir, org, repo);
-      const { worktreePath, created } = await ensureWorktreeExists(workdir, org, repo, branch);
+      const { repositoryPath, cloned } = await ensureRepoExists(workdir, org, repo);
+      const { worktreePath, created } = await ensureWorktree(workdir, org, repo, branch);
 
       const {
         pid,
@@ -220,14 +384,16 @@ export function createAutomationHandlers({ workdir, agentCommands, apiKey, branc
         tmuxSessionName,
         usingTmux,
         createdSession,
-      } = await launchAgentProcess({
+      } = await launchAgent({
         command: agent.command,
         workdir,
         org,
         repo,
         branch,
-        prompt,
+        prompt: effectivePrompt,
       });
+
+      finishSuccess(`${org}/${repo}#${branch}`);
 
       sendJson(context.res, 202, {
         data: {
@@ -245,10 +411,15 @@ export function createAutomationHandlers({ workdir, agentCommands, apiKey, branc
           terminalSessionCreated: createdSession,
           tmuxSessionName,
           terminalUsingTmux: usingTmux,
+          plan: planEnabled,
+          promptRoute: routeLabel,
+          automationRequestId: requestId,
         },
       });
     } catch (error) {
-      sendJson(context.res, 500, { error: error.message });
+      const message = error instanceof Error ? error.message : String(error);
+      finishFailure(message, error);
+      sendJson(context.res, 500, { error: message });
     }
   }
 
