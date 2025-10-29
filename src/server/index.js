@@ -10,6 +10,7 @@ import { createRouter } from './router.js';
 import { attachTerminalWebSockets } from './websocket.js';
 import { createUiProvider } from './ui.js';
 import { createAgentCommands } from '../config/agent-commands.js';
+import { createBranchNameGenerator } from '../core/branch-name.js';
 
 export async function startServer({
   uiPath,
@@ -20,6 +21,7 @@ export async function startServer({
   commandOverrides,
   ngrok: ngrokConfig,
   automationApiKey,
+  openaiApiKey,
 } = {}) {
   if (!uiPath) {
     throw new Error('Missing required option: uiPath');
@@ -31,11 +33,17 @@ export async function startServer({
     typeof password === 'string' && password.length > 0 ? password : generateRandomPassword();
   const authManager = createAuthManager(resolvedPassword);
   const agentCommands = createAgentCommands(commandOverrides);
+  const resolvedOpenAiKey = openaiApiKey ?? process.env.OPENAI_API_KEY ?? undefined;
+  if (resolvedOpenAiKey && !process.env.OPENAI_API_KEY) {
+    process.env.OPENAI_API_KEY = resolvedOpenAiKey;
+  }
+  const branchNameGenerator = createBranchNameGenerator({ apiKey: resolvedOpenAiKey });
   const router = createRouter({
     authManager,
     workdir: resolvedWorkdir,
     agentCommands,
     automationApiKey,
+    branchNameGenerator,
   });
 
   const server = http.createServer(async (req, res) => {

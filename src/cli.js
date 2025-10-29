@@ -96,6 +96,10 @@ function normalizeConfig(rawConfig, configPath) {
     rawConfig.commands && typeof rawConfig.commands === 'object'
       ? rawConfig.commands
       : null;
+  const openai =
+    rawConfig.openai && typeof rawConfig.openai === 'object'
+      ? rawConfig.openai
+      : null;
   const automation =
     rawConfig.automation && typeof rawConfig.automation === 'object'
       ? rawConfig.automation
@@ -233,6 +237,17 @@ function normalizeConfig(rawConfig, configPath) {
     normalized.automationApiKey = automationApiKey;
   }
 
+  const openaiApiKey = pickString(
+    [
+      { value: rawConfig.openaiApiKey, name: 'openaiApiKey' },
+      { value: openai?.apiKey, name: 'openai.apiKey' },
+    ],
+    configPath,
+  );
+  if (openaiApiKey !== undefined) {
+    normalized.openaiApiKey = openaiApiKey;
+  }
+
   return normalized;
 }
 
@@ -294,6 +309,7 @@ Options:
       --vscode-command <cmd>  Command executed when launching VS Code (default: code .)
       --ngrok-api-key <token> Authtoken used when establishing an ngrok tunnel
       --ngrok-domain <domain> Reserved ngrok domain to expose the server publicly
+      --openai-api-key <token> OpenAI API key used for automatic branch naming
       --save               Persist the effective configuration and exit
   -h, --help             Display this help message
   -v, --version          Output the version number
@@ -315,6 +331,7 @@ function parseArgs(argv) {
     vscodeCommand: false,
     ngrokApiKey: false,
     ngrokDomain: false,
+    openaiApiKey: false,
     save: false,
   };
 
@@ -331,6 +348,7 @@ function parseArgs(argv) {
     vscodeCommand: null,
     ngrokApiKey: null,
     ngrokDomain: null,
+    openaiApiKey: null,
     save: false,
     help: false,
     version: false,
@@ -474,6 +492,19 @@ function parseArgs(argv) {
         provided.ngrokDomain = true;
         break;
       }
+      case '--openai-api-key': {
+        const value = argv[++i];
+        if (!value) {
+          throw new Error(`Expected OpenAI API key after ${token}`);
+        }
+        const trimmed = value.trim();
+        if (!trimmed) {
+          throw new Error('OpenAI API key cannot be empty');
+        }
+        args.openaiApiKey = trimmed;
+        provided.openaiApiKey = true;
+        break;
+      }
       case '--save': {
         args.save = true;
         provided.save = true;
@@ -555,6 +586,9 @@ async function main(argv = process.argv.slice(2)) {
     ? args.ngrokDomain
     : fileConfig.ngrokDomain ?? null;
   const finalAutomationApiKey = fileConfig.automationApiKey ?? null;
+  const finalOpenAiApiKey = provided.openaiApiKey
+    ? args.openaiApiKey
+    : fileConfig.openaiApiKey ?? null;
 
   if ((finalNgrokApiKey && !finalNgrokDomain) || (finalNgrokDomain && !finalNgrokApiKey)) {
     process.stderr.write(
@@ -634,6 +668,10 @@ async function main(argv = process.argv.slice(2)) {
       };
     }
 
+    if (finalOpenAiApiKey) {
+      configToSave.openaiApiKey = finalOpenAiApiKey;
+    }
+
     try {
       const savedPath = await saveConfigFile(configToSave);
       process.stdout.write(`Config saved to ${savedPath}\n`);
@@ -662,6 +700,7 @@ async function main(argv = process.argv.slice(2)) {
       commandOverrides,
       ngrok: ngrokOptions,
       automationApiKey: finalAutomationApiKey,
+      openaiApiKey: finalOpenAiApiKey ?? undefined,
     });
 
     const localAddress = host === '0.0.0.0' ? 'localhost' : host;

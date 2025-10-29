@@ -7,7 +7,13 @@ import { createWorktreeHandlers } from '../api/worktrees.js';
 import { sendJson, readJsonBody } from '../utils/http.js';
 import { createConfigHandlers } from '../api/config.js';
 
-export function createRouter({ authManager, workdir, agentCommands, automationApiKey }) {
+export function createRouter({
+  authManager,
+  workdir,
+  agentCommands,
+  automationApiKey,
+  branchNameGenerator,
+}) {
   if (!authManager) {
     throw new Error('authManager is required');
   }
@@ -20,10 +26,11 @@ export function createRouter({ authManager, workdir, agentCommands, automationAp
     workdir,
     agentCommands,
     apiKey: automationApiKey,
+    branchNameGenerator,
   });
   const repoHandlers = createRepoHandlers(workdir);
   const sessionHandlers = createSessionHandlers(workdir);
-  const worktreeHandlers = createWorktreeHandlers(workdir);
+  const worktreeHandlers = createWorktreeHandlers(workdir, branchNameGenerator);
   const terminalHandlers = createTerminalHandlers(workdir);
   const configHandlers = createConfigHandlers(agentCommands);
 

@@ -240,7 +240,6 @@ function LoginScreen({ onAuthenticated }) {
         const [promptText, setPromptText] = useState('');
         const [promptAgent, setPromptAgent] = useState('codex');
         const [promptDangerousMode, setPromptDangerousMode] = useState(false);
-        const [promptBranchName, setPromptBranchName] = useState('');
         const [promptInputMode, setPromptInputMode] = useState('edit');
         const [activeWorktree, setActiveWorktree] = useState(null);
         const [confirmDelete, setConfirmDelete] = useState(null);
@@ -1140,10 +1139,6 @@ function LoginScreen({ onAuthenticated }) {
           if (!selectedRepo) {
             return;
           }
-          const trimmedBranch = promptBranchName.trim();
-          if (!trimmedBranch) {
-            return;
-          }
           if (!promptText.trim()) {
             window.alert('Please enter a prompt.');
             return;
@@ -1163,7 +1158,7 @@ function LoginScreen({ onAuthenticated }) {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               credentials: 'include',
-              body: JSON.stringify({ org, repo, branch: trimmedBranch })
+              body: JSON.stringify({ org, repo, prompt: promptValue })
             });
             if (response.status === 401) {
               notifyAuthExpired();
@@ -1175,8 +1170,15 @@ function LoginScreen({ onAuthenticated }) {
             const body = await response.json();
             const payload = body && typeof body === 'object' && body.data ? body.data : {};
             applyDataUpdate(payload);
-            const worktree = { org, repo, branch: trimmedBranch };
-            const key = getWorktreeKey(org, repo, trimmedBranch);
+            const generatedBranch =
+              body && typeof body === 'object' && typeof body.branch === 'string'
+                ? body.branch.trim()
+                : '';
+            if (!generatedBranch) {
+              window.alert('Server did not return a branch name. Check server logs for details.');
+              return;
+            }
+            const worktree = { org, repo, branch: generatedBranch };
             const previousActiveWorktree = activeWorktree;
             setActiveWorktree(worktree);
             try {
@@ -1197,7 +1199,6 @@ function LoginScreen({ onAuthenticated }) {
             }
             setIsMobileMenuOpen(false);
             setPromptText('');
-            setPromptBranchName('');
             setPromptAgent('codex');
             setPromptDangerousMode(false);
             setPromptInputMode('edit');
@@ -1328,7 +1329,7 @@ function LoginScreen({ onAuthenticated }) {
         const promptPreviewHtml = useMemo(() => renderMarkdown(promptText), [promptText]);
         const promptPreviewIsEmpty = !promptPreviewHtml.trim();
         const showPromptDangerousModeOption = promptAgent === 'codex' || promptAgent === 'claude';
-        const isPromptLaunchOptionDisabled = !promptBranchName.trim() || !promptText.trim();
+        const isPromptLaunchOptionDisabled = !promptText.trim();
 
         const statusStyles = {
           connected: 'border border-emerald-500/40 text-emerald-300 bg-emerald-500/15',
@@ -1463,7 +1464,6 @@ function LoginScreen({ onAuthenticated }) {
                               onClick: () => {
                                 setSelectedRepo([org, repo]);
                                 setPromptText('');
-                                setPromptBranchName('');
                                 setPromptAgent('codex');
                                 setPromptDangerousMode(false);
                                 setPromptInputMode('edit');
@@ -1892,28 +1892,9 @@ function LoginScreen({ onAuthenticated }) {
                       )
                     : null,
                   h(
-                    'div',
-                    { className: 'space-y-2' },
-                    h(
-                      'label',
-                      { className: 'block text-xs uppercase tracking-wide text-neutral-400' },
-                      'Branch name'
-                    ),
-                    h('input', {
-                      value: promptBranchName,
-                      onChange: event => setPromptBranchName(event.target.value),
-                      onKeyDown: event => {
-                        if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
-                          event.preventDefault();
-                          if (!isCreatingPromptWorktree && !isPromptLaunchOptionDisabled) {
-                            handleCreateWorktreeFromPrompt();
-                          }
-                        }
-                      },
-                      placeholder: 'feature/automated-change',
-                      className:
-                        'w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500/60'
-                    })
+                    'p',
+                    { className: 'text-xs text-neutral-400' },
+                    'Branch name will be generated automatically based on your prompt.'
                   )
                 ),
                 h(

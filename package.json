@@ -55,6 +55,7 @@
     "autoprefixer": "^10.4.21",
     "mime-types": "^2.1.35",
     "node-pty": "^1.0.0",
+    "openai": "^4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwindcss": "^4.1.16",
