@@ -253,6 +253,7 @@ function LoginScreen({ onAuthenticated }) {
         const [isDeletingWorktree, setIsDeletingWorktree] = useState(false);
         const [isDeletingRepo, setIsDeletingRepo] = useState(false);
         const [isCreatingPromptWorktree, setIsCreatingPromptWorktree] = useState(false);
+        const [isCreatingPlan, setIsCreatingPlan] = useState(false);
         const [pendingActionLoading, setPendingActionLoading] = useState(null);
         const [openActionMenu, setOpenActionMenu] = useState(null);
         const [commandConfig, setCommandConfig] = useState(DEFAULT_COMMAND_CONFIG);
@@ -1132,6 +1133,53 @@ function LoginScreen({ onAuthenticated }) {
           }
         };
 
+        const handleCreatePlan = async () => {
+          if (isCreatingPlan) {
+            return;
+          }
+          const hasPrompt = typeof promptText === 'string' && promptText.trim();
+          if (!hasPrompt) {
+            return;
+          }
+
+          setIsCreatingPlan(true);
+          try {
+            // Ask the backend to draft a structured plan via the OpenAI proxy.
+            const response = await fetch('/api/create-plan', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ prompt: promptText })
+            });
+            if (response.status === 401) {
+              notifyAuthExpired();
+              return;
+            }
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+            const body = await response.json();
+            const planText =
+              body && typeof body === 'object'
+                ? typeof body.plan === 'string'
+                  ? body.plan
+                  : typeof body.content === 'string'
+                  ? body.content
+                  : ''
+                : '';
+            if (!planText.trim()) {
+              window.alert('Server returned an empty plan. Check server logs for details.');
+              return;
+            }
+            setPromptText(planText);
+          } catch (error) {
+            console.error('Failed to create plan', error);
+            window.alert('Failed to create plan. Check server logs for details.');
+          } finally {
+            setIsCreatingPlan(false);
+          }
+        };
+
         const handleCreateWorktreeFromPrompt = async () => {
           if (isCreatingPromptWorktree) {
             return;
@@ -1811,14 +1859,38 @@ function LoginScreen({ onAuthenticated }) {
                       )
                     ),
                     promptInputMode === 'edit'
-                      ? h('textarea', {
-                          value: promptText,
-                          onChange: event => setPromptText(event.target.value),
-                          placeholder: 'Describe the changes you need…',
-                          rows: 8,
-                          className:
-                            'w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500/60 resize-y min-h-[200px]'
-                        })
+                      ? h(
+                          Fragment,
+                          null,
+                          h('textarea', {
+                            value: promptText,
+                            onChange: event => setPromptText(event.target.value),
+                            placeholder: 'Describe the changes you need…',
+                            rows: 8,
+                            className:
+                              'w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500/60 resize-y min-h-[200px]'
+                          }),
+                          // Let users pre-generate a plan before opening the agent workspace.
+                          h(
+                            'button',
+                            {
+                              type: 'button',
+                              onClick: handleCreatePlan,
+                              disabled: isCreatingPlan || !promptText.trim(),
+                              'aria-busy': isCreatingPlan,
+                              className:
+                                'mt-2 inline-flex w-full items-center justify-center gap-2 rounded-md border border-neutral-700 bg-neutral-925 px-3 py-2 text-sm text-neutral-200 transition-colors hover:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-neutral-925'
+                            },
+                            isCreatingPlan
+                              ? h(
+                                  'span',
+                                  { className: 'inline-flex items-center gap-2' },
+                                  renderSpinner('text-neutral-200'),
+                                  'Creating…'
+                                )
+                              : 'Create Plan'
+                          )
+                        )
                       : h(
                           'div',
                           {

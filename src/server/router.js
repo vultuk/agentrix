@@ -6,6 +6,7 @@ import { createTerminalHandlers } from '../api/terminal.js';
 import { createWorktreeHandlers } from '../api/worktrees.js';
 import { sendJson, readJsonBody } from '../utils/http.js';
 import { createConfigHandlers } from '../api/config.js';
+import { createPlanHandlers } from '../api/create-plan.js';
 
 export function createRouter({
   authManager,
@@ -13,6 +14,7 @@ export function createRouter({
   agentCommands,
   automationApiKey,
   branchNameGenerator,
+  openaiApiKey,
 }) {
   if (!authManager) {
     throw new Error('authManager is required');
@@ -33,6 +35,7 @@ export function createRouter({
   const worktreeHandlers = createWorktreeHandlers(workdir, branchNameGenerator);
   const terminalHandlers = createTerminalHandlers(workdir);
   const configHandlers = createConfigHandlers(agentCommands);
+  const planHandlers = createPlanHandlers({ openaiApiKey });
 
   const routes = new Map([
     [
@@ -108,6 +111,13 @@ export function createRouter({
       {
         requiresAuth: false,
         handlers: { POST: automationHandlers.launch },
+      },
+    ],
+    [
+      '/api/create-plan',
+      {
+        requiresAuth: true,
+        handlers: { POST: planHandlers.create },
       },
     ],
   ]);
