@@ -17,6 +17,14 @@ const DEFAULT_COMMAND_CONFIG = Object.freeze({
   vscode: 'code .'
 });
 
+const WORKTREE_LAUNCH_OPTIONS = Object.freeze([
+  { value: 'terminal', label: 'Terminal' },
+  { value: 'vscode', label: 'VS Code' },
+  { value: 'codex', label: 'Codex' },
+  { value: 'claude', label: 'Claude' },
+  { value: 'cursor', label: 'Cursor' }
+]);
+
 const ORGANISATION_COLLAPSE_STORAGE_KEY = 'terminal-worktree:collapsed-organisations';
 
 function Modal({ title, onClose, children }) {
@@ -190,6 +198,8 @@ function LoginScreen({ onAuthenticated }) {
         const [showWorktreeModal, setShowWorktreeModal] = useState(false);
         const [selectedRepo, setSelectedRepo] = useState(null);
         const [branchName, setBranchName] = useState('');
+        const [worktreeLaunchOption, setWorktreeLaunchOption] = useState('terminal');
+        const [launchDangerousMode, setLaunchDangerousMode] = useState(false);
         const [activeWorktree, setActiveWorktree] = useState(null);
         const [confirmDelete, setConfirmDelete] = useState(null);
         const [confirmDeleteRepo, setConfirmDeleteRepo] = useState(null);
@@ -237,6 +247,25 @@ function LoginScreen({ onAuthenticated }) {
             }
           },
           []
+        );
+
+        const getCommandForLaunch = useCallback(
+          (action, dangerousMode = false) => {
+            switch (action) {
+              case 'codex':
+                return dangerousMode ? commandConfig.codexDangerous : commandConfig.codex;
+              case 'claude':
+                return dangerousMode ? commandConfig.claudeDangerous : commandConfig.claude;
+              case 'ide':
+              case 'cursor':
+                return commandConfig.cursor;
+              case 'vscode':
+                return commandConfig.vscode;
+              default:
+                return undefined;
+            }
+          },
+          [commandConfig]
         );
 
         const toggleActionMenu = useCallback((action) => {
@@ -966,23 +995,40 @@ function LoginScreen({ onAuthenticated }) {
             const body = await response.json();
             const payload = body && typeof body === 'object' && body.data ? body.data : {};
             applyDataUpdate(payload);
+            const worktree = { org, repo, branch: trimmedBranch };
             const key = getWorktreeKey(org, repo, trimmedBranch);
-            if (sessionMapRef.current.has(key) || knownSessionsRef.current.has(key)) {
-              setActiveWorktree({ org, repo, branch: trimmedBranch });
-            try {
-              await openTerminalForWorktree({ org, repo, branch: trimmedBranch });
-              setPendingWorktreeAction(null);
-            } catch (error) {
-              if (error && error.message === 'AUTH_REQUIRED') {
-                return;
+            const hasKnownSession =
+              sessionMapRef.current.has(key) || knownSessionsRef.current.has(key);
+            if (hasKnownSession) {
+              try {
+                await openTerminalForWorktree(worktree);
+                setActiveWorktree(worktree);
+                setPendingWorktreeAction(null);
+              } catch (error) {
+                if (error && error.message === 'AUTH_REQUIRED') {
+                  return;
+                }
+                window.alert('Failed to reconnect to the existing session.');
               }
-              window.alert('Failed to reconnect to the existing session.');
-            }
             } else {
-              setPendingWorktreeAction({ org, repo, branch: trimmedBranch });
+              const command = getCommandForLaunch(worktreeLaunchOption, launchDangerousMode);
+              try {
+                await openTerminalForWorktree(worktree, command ? { command } : {});
+                setActiveWorktree(worktree);
+                setPendingWorktreeAction(null);
+              } catch (error) {
+                if (error && error.message === 'AUTH_REQUIRED') {
+                  return;
+                }
+                console.error('Failed to launch the selected option', error);
+                window.alert('Failed to launch the selected option. Check server logs for details.');
+                setPendingWorktreeAction(worktree);
+              }
             }
             setIsMobileMenuOpen(false);
             setBranchName('');
+            setWorktreeLaunchOption('terminal');
+            setLaunchDangerousMode(false);
             setShowWorktreeModal(false);
           } catch (error) {
             console.error('Failed to create worktree', error);
@@ -1072,17 +1118,9 @@ function LoginScreen({ onAuthenticated }) {
           setOpenActionMenu(null);
           setPendingActionLoading(action);
           const worktree = pendingWorktreeAction;
-          const commandMap = {
-            terminal: undefined,
-            codex: commandConfig.codex,
-            'codex-dangerous': commandConfig.codexDangerous,
-            cursor: commandConfig.cursor,
-            ide: commandConfig.cursor,
-            claude: commandConfig.claude,
-            'claude-dangerous': commandConfig.claudeDangerous,
-            vscode: commandConfig.vscode,
-          };
-          const command = commandMap[action];
+          const isDangerous = action.endsWith('-dangerous');
+          const resolvedAction = isDangerous ? action.replace(/-dangerous$/, '') : action;
+          const command = getCommandForLaunch(resolvedAction, isDangerous);
           setActiveWorktree(worktree);
           try {
             await openTerminalForWorktree(worktree, command ? { command } : {});
@@ -1101,7 +1139,7 @@ function LoginScreen({ onAuthenticated }) {
           pendingWorktreeAction,
           pendingActionLoading,
           setOpenActionMenu,
-          commandConfig,
+          getCommandForLaunch,
         ]);
 
         const isCodexLoading =
@@ -1110,6 +1148,10 @@ function LoginScreen({ onAuthenticated }) {
           Boolean(pendingActionLoading && typeof pendingActionLoading === 'string' && pendingActionLoading.startsWith('claude'));
         const isCursorLoading =
           pendingActionLoading === 'cursor' || pendingActionLoading === 'ide';
+        const showDangerousModeOption =
+          worktreeLaunchOption === 'codex' || worktreeLaunchOption === 'claude';
+        const isLaunchOptionDisabled = !branchName.trim();
+        const dangerousModeCheckboxId = 'worktree-dangerous-mode';
 
         const statusStyles = {
           connected: 'border border-emerald-500/40 text-emerald-300 bg-emerald-500/15',
@@ -1229,6 +1271,8 @@ function LoginScreen({ onAuthenticated }) {
                             {
                               onClick: () => {
                                 setSelectedRepo([org, repo]);
+                                setWorktreeLaunchOption('terminal');
+                                setLaunchDangerousMode(false);
                                 setShowWorktreeModal(true);
                               },
                               className: `${actionButtonClass} text-neutral-400 hover:text-neutral-200`,
@@ -1522,11 +1566,15 @@ function LoginScreen({ onAuthenticated }) {
                 Modal,
                 {
                   title: `Create worktree for ${selectedRepo[1]}`,
-                  onClose: () => setShowWorktreeModal(false)
+                  onClose: () => {
+                    setShowWorktreeModal(false);
+                    setWorktreeLaunchOption('terminal');
+                    setLaunchDangerousMode(false);
+                  }
                 },
                 h(
                   'div',
-                  { className: 'space-y-2' },
+                  { className: 'space-y-3' },
                   h(
                     'label',
                     { className: 'block text-xs uppercase tracking-wide text-neutral-400' },
@@ -1546,7 +1594,56 @@ function LoginScreen({ onAuthenticated }) {
                     placeholder: 'feature/my-awesome-branch',
                     className:
                       'w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500/60'
-                  })
+                  }),
+                  h(
+                    Fragment,
+                    null,
+                    h(
+                      'label',
+                      { className: 'block text-xs uppercase tracking-wide text-neutral-400' },
+                      'Launch option'
+                    ),
+                    h(
+                      'select',
+                      {
+                        value: worktreeLaunchOption,
+                        onChange: event => {
+                          setWorktreeLaunchOption(event.target.value);
+                          setLaunchDangerousMode(false);
+                        },
+                        disabled: isLaunchOptionDisabled,
+                        className:
+                          'w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500/60 disabled:cursor-not-allowed disabled:opacity-60'
+                      },
+                      WORKTREE_LAUNCH_OPTIONS.map(option =>
+                        h(
+                          'option',
+                          { key: option.value, value: option.value },
+                          option.label
+                        )
+                      )
+                    )
+                  ),
+                  showDangerousModeOption
+                    ? h(
+                        'label',
+                        {
+                          className:
+                            'inline-flex items-center gap-2 text-xs text-neutral-300',
+                          htmlFor: dangerousModeCheckboxId
+                        },
+                        h('input', {
+                          id: dangerousModeCheckboxId,
+                          type: 'checkbox',
+                          checked: launchDangerousMode,
+                          onChange: event => setLaunchDangerousMode(event.target.checked),
+                          disabled: isLaunchOptionDisabled,
+                          className:
+                            'h-4 w-4 rounded border border-neutral-700 bg-neutral-950 text-neutral-100 focus:ring-1 focus:ring-neutral-500 disabled:cursor-not-allowed disabled:opacity-60'
+                        }),
+                        'Start in Dangerous Mode'
+                      )
+                    : null
                 ),
                 h(
                   'div',
@@ -1555,7 +1652,11 @@ function LoginScreen({ onAuthenticated }) {
                     'button',
                     {
                       type: 'button',
-                      onClick: () => setShowWorktreeModal(false),
+                      onClick: () => {
+                        setShowWorktreeModal(false);
+                        setWorktreeLaunchOption('terminal');
+                        setLaunchDangerousMode(false);
+                      },
                       className: 'px-3 py-2 text-sm text-neutral-400 hover:text-neutral-200'
                     },
                     'Cancel'
@@ -1565,7 +1666,7 @@ function LoginScreen({ onAuthenticated }) {
                     {
                       type: 'button',
                       onClick: handleCreateWorktree,
-                      disabled: isCreatingWorktree,
+                      disabled: isCreatingWorktree || !branchName.trim(),
                       'aria-busy': isCreatingWorktree,
                       className:
                         'px-3 py-2 text-sm bg-emerald-500/80 hover:bg-emerald-400 text-neutral-900 font-medium rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-emerald-500/80'
