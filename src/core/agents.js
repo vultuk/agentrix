@@ -59,9 +59,10 @@ export async function launchAgentProcess({ command, workdir, org, repo, branch, 
   }
 
   const executable = command.trim();
+  const promptValue = typeof prompt === 'string' ? prompt : '';
   const { session, created } = await getOrCreateTerminalSession(workdir, org, repo, branch);
 
-  const envPreparation = await preparePromptEnvironment(session, prompt);
+  const envPreparation = await preparePromptEnvironment(session, promptValue);
   if (envPreparation) {
     const envInput = normaliseTerminalInput(envPreparation);
     if (envInput) {
@@ -69,11 +70,11 @@ export async function launchAgentProcess({ command, workdir, org, repo, branch, 
     }
   }
 
-  queueSessionInput(session, normaliseTerminalInput(executable));
+  const commandWithPrompt = promptValue.length > 0
+    ? `${executable} ${shellQuote(promptValue)}`
+    : executable;
 
-  if (typeof prompt === 'string' && prompt.length > 0) {
-    queueSessionInput(session, normaliseTerminalInput(prompt));
-  }
+  queueSessionInput(session, normaliseTerminalInput(commandWithPrompt));
 
   const pid = session?.process?.pid ?? null;
   return {

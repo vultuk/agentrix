@@ -21,3 +21,96 @@
 .xterm .xterm-viewport {
   background-color: #0a0a0a;
 }
+
+.markdown-preview__content {
+  color: inherit;
+  font-family: inherit;
+}
+
+.markdown-preview__content > * {
+  margin: 0;
+}
+
+.markdown-preview__content > * + * {
+  margin-top: 0.75rem;
+}
+
+.markdown-preview__content h1,
+.markdown-preview__content h2,
+.markdown-preview__content h3,
+.markdown-preview__content h4,
+.markdown-preview__content h5,
+.markdown-preview__content h6 {
+  font-weight: 600;
+  color: #f5f5f5;
+}
+
+.markdown-preview__content h1 {
+  font-size: 1.25rem;
+}
+
+.markdown-preview__content h2 {
+  font-size: 1.125rem;
+}
+
+.markdown-preview__content h3 {
+  font-size: 1rem;
+}
+
+.markdown-preview__content p,
+.markdown-preview__content li {
+  color: #e5e7eb;
+}
+
+.markdown-preview__content a {
+  color: #34d399;
+  text-decoration: none;
+}
+
+.markdown-preview__content a:hover {
+  text-decoration: underline;
+}
+
+.markdown-preview__content ul,
+.markdown-preview__content ol {
+  padding-left: 1.25rem;
+}
+
+.markdown-preview__content li + li {
+  margin-top: 0.35rem;
+}
+
+.markdown-preview__content blockquote {
+  margin: 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid #52525b;
+  color: #d1d5db;
+  font-style: italic;
+}
+
+.markdown-preview__content code {
+  background-color: rgba(82, 82, 91, 0.4);
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.875em;
+  padding: 0.15rem 0.35rem;
+}
+
+.markdown-preview__content pre {
+  background-color: #111827;
+  border-radius: 8px;
+  padding: 0.75rem;
+  overflow-x: auto;
+  font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.85rem;
+}
+
+.markdown-preview__content pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.markdown-preview__content hr {
+  border: none;
+  border-top: 1px solid #27272a;
+}

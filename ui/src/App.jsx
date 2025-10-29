@@ -1,10 +1,21 @@
-import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Resizable } from 're-resizable';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
-import { ChevronDown, Github, GitBranch, GitPullRequest, Menu, Plus, Trash2, X } from 'lucide-react';
+import {
+  ChevronDown,
+  Github,
+  GitBranch,
+  GitPullRequest,
+  Menu,
+  Plus,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react';
 
 import 'xterm/css/xterm.css';
+import { renderMarkdown } from './utils/markdown';
 
 const { createElement: h } = React;
 
@@ -25,22 +36,47 @@ const WORKTREE_LAUNCH_OPTIONS = Object.freeze([
   { value: 'cursor', label: 'Cursor' }
 ]);
 
+const PROMPT_AGENT_OPTIONS = Object.freeze([
+  { value: 'codex', label: 'Codex' },
+  { value: 'claude', label: 'Claude' },
+  { value: 'cursor', label: 'Cursor' }
+]);
+
+const PROMPT_EDITOR_TABS = Object.freeze([
+  { value: 'edit', label: 'Edit' },
+  { value: 'preview', label: 'Preview' }
+]);
+
+const REPOSITORY_POLL_INTERVAL_MS = 5000;
+
 const ORGANISATION_COLLAPSE_STORAGE_KEY = 'terminal-worktree:collapsed-organisations';
 
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, size = 'md', position = 'center' }) {
         const content = Array.isArray(children) ? children : [children];
+        const alignmentClass = position === 'top' ? 'items-start' : 'items-center';
+        const wrapperSpacingClass = position === 'top' ? 'mt-10' : '';
+        const maxWidthClass = size === 'lg' ? 'max-w-3xl' : 'max-w-md';
         return h(
           'div',
           {
-            className:
-              'fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4',
+            className: [
+              'fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center z-50 p-4',
+              alignmentClass
+            ]
+              .filter(Boolean)
+              .join(' '),
             onClick: onClose
           },
           h(
             'div',
             {
-              className:
-                'bg-neutral-900 border border-neutral-700 rounded-lg w-full max-w-md shadow-xl',
+              className: [
+                'bg-neutral-900 border border-neutral-700 rounded-lg w-full shadow-xl',
+                maxWidthClass,
+                wrapperSpacingClass
+              ]
+                .filter(Boolean)
+                .join(' '),
               onClick: event => event.stopPropagation()
             },
             h(
@@ -200,6 +236,12 @@ function LoginScreen({ onAuthenticated }) {
         const [branchName, setBranchName] = useState('');
         const [worktreeLaunchOption, setWorktreeLaunchOption] = useState('terminal');
         const [launchDangerousMode, setLaunchDangerousMode] = useState(false);
+        const [showPromptWorktreeModal, setShowPromptWorktreeModal] = useState(false);
+        const [promptText, setPromptText] = useState('');
+        const [promptAgent, setPromptAgent] = useState('codex');
+        const [promptDangerousMode, setPromptDangerousMode] = useState(false);
+        const [promptBranchName, setPromptBranchName] = useState('');
+        const [promptInputMode, setPromptInputMode] = useState('edit');
         const [activeWorktree, setActiveWorktree] = useState(null);
         const [confirmDelete, setConfirmDelete] = useState(null);
         const [confirmDeleteRepo, setConfirmDeleteRepo] = useState(null);
@@ -211,6 +253,7 @@ function LoginScreen({ onAuthenticated }) {
         const [isCreatingWorktree, setIsCreatingWorktree] = useState(false);
         const [isDeletingWorktree, setIsDeletingWorktree] = useState(false);
         const [isDeletingRepo, setIsDeletingRepo] = useState(false);
+        const [isCreatingPromptWorktree, setIsCreatingPromptWorktree] = useState(false);
         const [pendingActionLoading, setPendingActionLoading] = useState(null);
         const [openActionMenu, setOpenActionMenu] = useState(null);
         const [commandConfig, setCommandConfig] = useState(DEFAULT_COMMAND_CONFIG);
@@ -482,6 +525,53 @@ function LoginScreen({ onAuthenticated }) {
 
         useEffect(() => {
           refreshRepositories();
+        }, [refreshRepositories]);
+
+        useEffect(() => {
+          if (!REPOSITORY_POLL_INTERVAL_MS || Number.isNaN(REPOSITORY_POLL_INTERVAL_MS)) {
+            return () => {};
+          }
+
+          let timerId = null;
+          let cancelled = false;
+          let inFlight = false;
+
+          const isDocumentVisible = () =>
+            typeof document === 'undefined' || document.visibilityState !== 'hidden';
+
+          const tick = () => {
+            if (cancelled || inFlight || !isDocumentVisible()) {
+              return;
+            }
+            inFlight = true;
+            refreshRepositories()
+              .catch(() => {})
+              .finally(() => {
+                inFlight = false;
+              });
+          };
+
+          timerId = window.setInterval(tick, REPOSITORY_POLL_INTERVAL_MS);
+
+          const handleVisibilityChange = () => {
+            if (isDocumentVisible()) {
+              tick();
+            }
+          };
+
+          if (typeof document !== 'undefined') {
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+          }
+
+          return () => {
+            cancelled = true;
+            if (timerId !== null) {
+              window.clearInterval(timerId);
+            }
+            if (typeof document !== 'undefined') {
+              document.removeEventListener('visibilitychange', handleVisibilityChange);
+            }
+          };
         }, [refreshRepositories]);
 
         const loadSessions = useCallback(async () => {
@@ -791,7 +881,7 @@ function LoginScreen({ onAuthenticated }) {
         }, [sendResize]);
 
         const openTerminalForWorktree = useCallback(async (worktree, options = {}) => {
-          const { command } = options;
+          const { command, prompt } = options;
           disposeSocket();
           if (!worktree) {
             disposeTerminal();
@@ -803,13 +893,18 @@ function LoginScreen({ onAuthenticated }) {
           closedByProcessRef.current = false;
           initSuppressedRef.current = true;
           try {
+            const payload = { ...worktree };
+            if (command) {
+              payload.command = command;
+            }
+            if (prompt !== undefined) {
+              payload.prompt = prompt;
+            }
             const response = await fetch('/api/terminal/open', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               credentials: 'include',
-              body: JSON.stringify(
-                command ? { ...worktree, command } : worktree
-              )
+              body: JSON.stringify(payload)
             });
             if (response.status === 401) {
               notifyAuthExpired();
@@ -999,31 +1094,31 @@ function LoginScreen({ onAuthenticated }) {
             const key = getWorktreeKey(org, repo, trimmedBranch);
             const hasKnownSession =
               sessionMapRef.current.has(key) || knownSessionsRef.current.has(key);
-            if (hasKnownSession) {
-              try {
+            const previousActiveWorktree = activeWorktree;
+            setActiveWorktree(worktree);
+            const command = !hasKnownSession
+              ? getCommandForLaunch(worktreeLaunchOption, launchDangerousMode)
+              : null;
+            try {
+              if (command) {
+                await openTerminalForWorktree(worktree, { command });
+              } else {
                 await openTerminalForWorktree(worktree);
-                setActiveWorktree(worktree);
-                setPendingWorktreeAction(null);
-              } catch (error) {
-                if (error && error.message === 'AUTH_REQUIRED') {
-                  return;
-                }
-                window.alert('Failed to reconnect to the existing session.');
               }
-            } else {
-              const command = getCommandForLaunch(worktreeLaunchOption, launchDangerousMode);
-              try {
-                await openTerminalForWorktree(worktree, command ? { command } : {});
-                setActiveWorktree(worktree);
-                setPendingWorktreeAction(null);
-              } catch (error) {
-                if (error && error.message === 'AUTH_REQUIRED') {
-                  return;
-                }
+              setPendingWorktreeAction(null);
+            } catch (error) {
+              if (error && error.message === 'AUTH_REQUIRED') {
+                setActiveWorktree(previousActiveWorktree || null);
+                return;
+              }
+              if (hasKnownSession) {
+                window.alert('Failed to reconnect to the existing session.');
+              } else {
                 console.error('Failed to launch the selected option', error);
                 window.alert('Failed to launch the selected option. Check server logs for details.');
                 setPendingWorktreeAction(worktree);
               }
+              setActiveWorktree(previousActiveWorktree || null);
             }
             setIsMobileMenuOpen(false);
             setBranchName('');
@@ -1035,6 +1130,83 @@ function LoginScreen({ onAuthenticated }) {
             window.alert('Failed to create worktree. Check server logs for details.');
           } finally {
             setIsCreatingWorktree(false);
+          }
+        };
+
+        const handleCreateWorktreeFromPrompt = async () => {
+          if (isCreatingPromptWorktree) {
+            return;
+          }
+          if (!selectedRepo) {
+            return;
+          }
+          const trimmedBranch = promptBranchName.trim();
+          if (!trimmedBranch) {
+            return;
+          }
+          if (!promptText.trim()) {
+            window.alert('Please enter a prompt.');
+            return;
+          }
+
+          const command = getCommandForLaunch(promptAgent, promptDangerousMode);
+          if (!command) {
+            window.alert('Selected agent command is not configured.');
+            return;
+          }
+
+          const [org, repo] = selectedRepo;
+          const promptValue = promptText;
+          setIsCreatingPromptWorktree(true);
+          try {
+            const response = await fetch('/api/worktrees', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ org, repo, branch: trimmedBranch })
+            });
+            if (response.status === 401) {
+              notifyAuthExpired();
+              return;
+            }
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+            const body = await response.json();
+            const payload = body && typeof body === 'object' && body.data ? body.data : {};
+            applyDataUpdate(payload);
+            const worktree = { org, repo, branch: trimmedBranch };
+            const key = getWorktreeKey(org, repo, trimmedBranch);
+            const previousActiveWorktree = activeWorktree;
+            setActiveWorktree(worktree);
+            try {
+              await openTerminalForWorktree(worktree, {
+                command,
+                prompt: promptValue,
+              });
+              setPendingWorktreeAction(null);
+            } catch (error) {
+              if (error && error.message === 'AUTH_REQUIRED') {
+                setActiveWorktree(previousActiveWorktree || null);
+                return;
+              }
+              console.error('Failed to launch prompt workspace', error);
+              window.alert('Failed to launch the selected agent. Check server logs for details.');
+              setActiveWorktree(previousActiveWorktree || null);
+              setPendingWorktreeAction(worktree);
+            }
+            setIsMobileMenuOpen(false);
+            setPromptText('');
+            setPromptBranchName('');
+            setPromptAgent('codex');
+            setPromptDangerousMode(false);
+            setPromptInputMode('edit');
+            setShowPromptWorktreeModal(false);
+          } catch (error) {
+            console.error('Failed to create worktree from prompt', error);
+            window.alert('Failed to create worktree. Check server logs for details.');
+          } finally {
+            setIsCreatingPromptWorktree(false);
           }
         };
 
@@ -1152,6 +1324,11 @@ function LoginScreen({ onAuthenticated }) {
           worktreeLaunchOption === 'codex' || worktreeLaunchOption === 'claude';
         const isLaunchOptionDisabled = !branchName.trim();
         const dangerousModeCheckboxId = 'worktree-dangerous-mode';
+        const promptDangerousModeCheckboxId = 'prompt-worktree-dangerous-mode';
+        const promptPreviewHtml = useMemo(() => renderMarkdown(promptText), [promptText]);
+        const promptPreviewIsEmpty = !promptPreviewHtml.trim();
+        const showPromptDangerousModeOption = promptAgent === 'codex' || promptAgent === 'claude';
+        const isPromptLaunchOptionDisabled = !promptBranchName.trim() || !promptText.trim();
 
         const statusStyles = {
           connected: 'border border-emerald-500/40 text-emerald-300 bg-emerald-500/15',
@@ -1279,6 +1456,23 @@ function LoginScreen({ onAuthenticated }) {
                               title: 'Create Worktree'
                             },
                             h(GitPullRequest, { size: 14 })
+                          ),
+                          h(
+                            'button',
+                            {
+                              onClick: () => {
+                                setSelectedRepo([org, repo]);
+                                setPromptText('');
+                                setPromptBranchName('');
+                                setPromptAgent('codex');
+                                setPromptDangerousMode(false);
+                                setPromptInputMode('edit');
+                                setShowPromptWorktreeModal(true);
+                              },
+                              className: `${actionButtonClass} text-neutral-400 hover:text-emerald-300`,
+                              title: 'Create Worktree From Prompt'
+                            },
+                            h(Sparkles, { size: 14 })
                           ),
                           h(
                             'button',
@@ -1557,6 +1751,208 @@ function LoginScreen({ onAuthenticated }) {
                           'Adding…'
                         )
                       : 'Add repository'
+                  )
+                )
+              )
+            : null,
+          showPromptWorktreeModal && selectedRepo
+            ? h(
+                Modal,
+                {
+                  title: `Create worktree from prompt for ${selectedRepo[1]}`,
+                  onClose: () => {
+                    if (!isCreatingPromptWorktree) {
+                      setShowPromptWorktreeModal(false);
+                      setPromptInputMode('edit');
+                    }
+                  },
+                  size: 'lg',
+                  position: 'top'
+                },
+                h(
+                  'div',
+                  { className: 'space-y-4' },
+                  h(
+                    'div',
+                    { className: 'space-y-3' },
+                    h(
+                      'div',
+                      { className: 'flex items-center justify-between gap-3' },
+                      h(
+                        'label',
+                        { className: 'block text-xs uppercase tracking-wide text-neutral-400' },
+                        'Prompt'
+                      ),
+                      h(
+                        'div',
+                        {
+                          className:
+                            'inline-flex items-center gap-1 rounded-md border border-neutral-700 bg-neutral-950 p-0.5'
+                        },
+                        PROMPT_EDITOR_TABS.map(tab => {
+                          const isActive = promptInputMode === tab.value;
+                          return h(
+                            'button',
+                            {
+                              key: tab.value,
+                              type: 'button',
+                              onClick: () => setPromptInputMode(tab.value),
+                              className: [
+                                'rounded-md px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500/70',
+                                isActive
+                                  ? 'bg-neutral-800 text-neutral-100 shadow-inner'
+                                  : 'text-neutral-400 hover:text-neutral-200'
+                              ].join(' '),
+                              'aria-pressed': isActive
+                            },
+                            tab.label
+                          );
+                        })
+                      )
+                    ),
+                    promptInputMode === 'edit'
+                      ? h('textarea', {
+                          value: promptText,
+                          onChange: event => setPromptText(event.target.value),
+                          placeholder: 'Describe the changes you need…',
+                          rows: 8,
+                          className:
+                            'w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500/60 resize-y min-h-[200px]'
+                        })
+                      : h(
+                          'div',
+                          {
+                            className:
+                              'markdown-preview min-h-[200px] max-h-[400px] w-full overflow-y-auto rounded-md border border-neutral-700 bg-neutral-950 px-3 py-3 text-sm text-neutral-100 leading-relaxed'
+                          },
+                          promptPreviewIsEmpty
+                            ? h(
+                                'p',
+                                { className: 'text-sm text-neutral-500 italic' },
+                                'Nothing to preview yet.'
+                              )
+                            : h('div', {
+                                className: 'markdown-preview__content space-y-3',
+                                dangerouslySetInnerHTML: { __html: promptPreviewHtml }
+                              })
+                        )
+                  ),
+                  h(
+                    'div',
+                    { className: 'space-y-2' },
+                    h(
+                      'label',
+                      { className: 'block text-xs uppercase tracking-wide text-neutral-400' },
+                      'Agent'
+                    ),
+                    h(
+                      'div',
+                      { className: 'grid grid-cols-3 gap-2' },
+                      PROMPT_AGENT_OPTIONS.map(option => {
+                        const isActive = promptAgent === option.value;
+                        return h(
+                          'button',
+                          {
+                            key: option.value,
+                            type: 'button',
+                            onClick: () => {
+                              setPromptAgent(option.value);
+                              if (option.value === 'cursor') {
+                                setPromptDangerousMode(false);
+                              }
+                            },
+                            className: [
+                              'rounded-md border px-3 py-2 text-sm font-medium transition-colors',
+                              isActive
+                                ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200'
+                                : 'border-neutral-700 bg-neutral-950 text-neutral-300 hover:bg-neutral-900'
+                            ].join(' ')
+                          },
+                          option.label
+                        );
+                      })
+                    )
+                  ),
+                  showPromptDangerousModeOption
+                    ? h(
+                        'label',
+                        {
+                          className: 'inline-flex items-center gap-2 text-xs text-neutral-300',
+                          htmlFor: promptDangerousModeCheckboxId
+                        },
+                        h('input', {
+                          id: promptDangerousModeCheckboxId,
+                          type: 'checkbox',
+                          checked: promptDangerousMode,
+                          onChange: event => setPromptDangerousMode(event.target.checked),
+                          className:
+                            'h-4 w-4 rounded border border-neutral-700 bg-neutral-950 text-neutral-100 focus:ring-1 focus:ring-neutral-500'
+                        }),
+                        'Start in Dangerous Mode'
+                      )
+                    : null,
+                  h(
+                    'div',
+                    { className: 'space-y-2' },
+                    h(
+                      'label',
+                      { className: 'block text-xs uppercase tracking-wide text-neutral-400' },
+                      'Branch name'
+                    ),
+                    h('input', {
+                      value: promptBranchName,
+                      onChange: event => setPromptBranchName(event.target.value),
+                      onKeyDown: event => {
+                        if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+                          event.preventDefault();
+                          if (!isCreatingPromptWorktree && !isPromptLaunchOptionDisabled) {
+                            handleCreateWorktreeFromPrompt();
+                          }
+                        }
+                      },
+                      placeholder: 'feature/automated-change',
+                      className:
+                        'w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500/60'
+                    })
+                  )
+                ),
+                h(
+                  'div',
+                  { className: 'flex justify-end gap-2 pt-4' },
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: () => {
+                        if (!isCreatingPromptWorktree) {
+                          setShowPromptWorktreeModal(false);
+                          setPromptInputMode('edit');
+                        }
+                      },
+                      disabled: isCreatingPromptWorktree,
+                      className:
+                        'px-3 py-2 text-sm text-neutral-400 hover:text-neutral-200 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-neutral-400'
+                    },
+                    'Cancel'
+                  ),
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: handleCreateWorktreeFromPrompt,
+                      disabled: isCreatingPromptWorktree || isPromptLaunchOptionDisabled,
+                      'aria-busy': isCreatingPromptWorktree,
+                      className:
+                        'px-3 py-2 text-sm bg-emerald-500/80 hover:bg-emerald-400 text-neutral-900 font-medium rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-emerald-500/80'
+                    },
+                    isCreatingPromptWorktree
+                      ? h(
+                          'span',
+                          { className: 'inline-flex items-center gap-2' },
+                          renderSpinner('text-neutral-900'),
+                          'Launching…'
+                        )
+                      : 'Create workspace'
                   )
                 )
               )

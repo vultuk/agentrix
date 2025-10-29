@@ -3,6 +3,7 @@ import {
   getSessionById,
   queueSessionInput,
 } from '../core/terminal-sessions.js';
+import { launchAgentProcess } from '../core/agents.js';
 import { sendJson } from '../utils/http.js';
 
 export function createTerminalHandlers(workdir) {
@@ -19,6 +20,8 @@ export function createTerminalHandlers(workdir) {
     const repo = typeof payload.repo === 'string' ? payload.repo.trim() : '';
     const branch = typeof payload.branch === 'string' ? payload.branch.trim() : '';
     const command = typeof payload.command === 'string' ? payload.command.trim() : '';
+    const hasPrompt = Object.prototype.hasOwnProperty.call(payload, 'prompt');
+    const prompt = hasPrompt ? payload.prompt : undefined;
 
     if (!org || !repo || !branch) {
       sendJson(context.res, 400, { error: 'org, repo, and branch are required' });
@@ -29,7 +32,43 @@ export function createTerminalHandlers(workdir) {
       return;
     }
 
+    if (hasPrompt && typeof prompt !== 'string') {
+      sendJson(context.res, 400, { error: 'prompt must be a string' });
+      return;
+    }
+
     try {
+      if (hasPrompt) {
+        if (!command) {
+          sendJson(context.res, 400, {
+            error: 'command must be provided when prompt is included',
+          });
+          return;
+        }
+
+        const { sessionId, createdSession } = await launchAgentProcess({
+          command,
+          workdir,
+          org,
+          repo,
+          branch,
+          prompt: prompt ?? '',
+        });
+
+        const session = getSessionById(sessionId);
+        if (!session) {
+          throw new Error('Terminal session not found after launch');
+        }
+
+        sendJson(context.res, 200, {
+          sessionId,
+          log: session.log || '',
+          closed: Boolean(session.closed),
+          created: Boolean(createdSession),
+        });
+        return;
+      }
+
       const { session, created } = await getOrCreateTerminalSession(workdir, org, repo, branch);
       if (command) {
         const commandInput = /[\r\n]$/.test(command) ? command : `${command}\r`;

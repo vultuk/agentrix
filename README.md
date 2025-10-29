@@ -146,8 +146,8 @@ request responds with `202 Accepted` once the terminal session is ready and incl
 the repository, worktree, agent command, process `pid`, and terminal identifiers (`terminalSessionId`,
 `terminalSessionCreated`, `terminalUsingTmux`, and when applicable `tmuxSessionName`). Automated
 launches therefore appear immediately inside the UI terminal. The supplied prompt is exported to the
-session as `TERMINAL_WORKTREE_PROMPT` and also queued on the terminal input stream so agents that
-expect stdin receive it straight away.
+session as `TERMINAL_WORKTREE_PROMPT` and appended to the initial agent command so automation
+invocations receive it straight away.
 
 ### Repository Layout & Worktrees
 

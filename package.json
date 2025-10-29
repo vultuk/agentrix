@@ -1,6 +1,6 @@
 {
   "name": "terminal-worktree",
-  "version": "0.6.0",
+  "version": "0.10.2",
   "description": "CLI utility for serving the terminal-worktree UI",
   "license": "MIT",
   "author": "Simon Skinner (vultuk) <talkto@simonskinner.me>",
