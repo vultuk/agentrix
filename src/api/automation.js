@@ -116,9 +116,9 @@ function resolveAgentCommand(agentCommands, requested) {
   }
 
   const mapping = {
-    codex: agentCommands?.codex,
+    codex: agentCommands?.codexDangerous || agentCommands?.codex,
     cursor: agentCommands?.cursor,
-    claude: agentCommands?.claude,
+    claude: agentCommands?.claudeDangerous || agentCommands?.claude,
   };
 
   const command = mapping[key];
