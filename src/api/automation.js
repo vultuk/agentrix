@@ -129,7 +129,7 @@ function resolveAgentCommand(agentCommands, requested) {
   return { key, command };
 }
 
-export function createAutomationHandlers({ workdir, agentCommands, apiKey }) {
+export function createAutomationHandlers({ workdir, agentCommands, apiKey, branchNameGenerator }) {
   async function launch(context) {
     if (!apiKey) {
       sendJson(context.res, 503, { error: 'Automation API is not configured (missing API key)' });
@@ -159,11 +159,37 @@ export function createAutomationHandlers({ workdir, agentCommands, apiKey }) {
       return;
     }
 
-    let branch;
-    try {
-      branch = sanitiseBranch(payload.worktree);
-    } catch (error) {
-      sendJson(context.res, 400, { error: error.message });
+    const providedWorktree = typeof payload.worktree === 'string' ? payload.worktree.trim() : '';
+    let branch = '';
+
+    if (providedWorktree) {
+      try {
+        branch = sanitiseBranch(providedWorktree);
+      } catch (error) {
+        sendJson(context.res, 400, { error: error.message });
+        return;
+      }
+    } else {
+      if (!branchNameGenerator || !branchNameGenerator.isConfigured) {
+        sendJson(context.res, 503, {
+          error: 'Branch name generation is not configured. Provide a worktree name or configure an OpenAI API key.',
+        });
+        return;
+      }
+      try {
+        branch = await branchNameGenerator.generateBranchName({
+          prompt: typeof payload.prompt === 'string' ? payload.prompt : '',
+          org,
+          repo,
+        });
+      } catch (error) {
+        sendJson(context.res, 500, { error: error.message });
+        return;
+      }
+    }
+
+    if (!branch) {
+      sendJson(context.res, 500, { error: 'Failed to determine branch name.' });
       return;
     }
 
