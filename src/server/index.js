@@ -44,6 +44,7 @@ export async function startServer({
     agentCommands,
     automationApiKey,
     branchNameGenerator,
+    openaiApiKey: resolvedOpenAiKey,
   });
 
   const server = http.createServer(async (req, res) => {
