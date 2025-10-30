@@ -1,5 +1,6 @@
 import { getOrCreateTerminalSession, queueSessionInput } from './terminal-sessions.js';
 import { runTmux } from './tmux.js';
+import { savePlanToWorktree } from './plan-storage.js';
 
 function normaliseTerminalInput(value) {
   if (!value) {
@@ -61,6 +62,21 @@ export async function launchAgentProcess({ command, workdir, org, repo, branch, 
   const executable = command.trim();
   const promptValue = typeof prompt === 'string' ? prompt : '';
   const { session, created } = await getOrCreateTerminalSession(workdir, org, repo, branch);
+
+  if (session?.worktreePath) {
+    try {
+      await savePlanToWorktree({
+        worktreePath: session.worktreePath,
+        branch,
+        planText: promptValue,
+      });
+    } catch (error) {
+      console.warn(
+        '[terminal-worktree] Failed to persist automation plan:',
+        error?.message || error,
+      );
+    }
+  }
 
   const envPreparation = await preparePromptEnvironment(session, promptValue);
   if (envPreparation) {
