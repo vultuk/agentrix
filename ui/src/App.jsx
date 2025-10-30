@@ -9,6 +9,8 @@ import {
   GitBranch,
   GitPullRequest,
   Menu,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
   Sparkles,
   Trash2,
@@ -17,6 +19,7 @@ import {
 
 import 'xterm/css/xterm.css';
 import { renderMarkdown } from './utils/markdown';
+import GitStatusSidebar from './components/GitStatusSidebar.jsx';
 
 const { createElement: h } = React;
 
@@ -278,6 +281,7 @@ function LoginScreen({ onAuthenticated }) {
           }
           return {};
         });
+        const [gitSidebarState, setGitSidebarState] = useState({});
 
         const actionButtonClass = 'inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors';
         const actionMenuRefs = useRef(new Map());
@@ -471,6 +475,87 @@ function LoginScreen({ onAuthenticated }) {
         const sessionKeyByIdRef = useRef(new Map());
         const knownSessionsRef = useRef(new Set());
         const getWorktreeKey = useCallback((org, repo, branch) => `${org}::${repo}::${branch}`, []);
+
+        const gitSidebarKey = activeWorktree
+          ? getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch)
+          : null;
+        const gitSidebarEntry = gitSidebarKey ? gitSidebarState[gitSidebarKey] : null;
+        const isGitSidebarOpen = Boolean(gitSidebarEntry?.open);
+        const gitSidebarSnapshot = gitSidebarEntry?.snapshot || null;
+
+        useEffect(() => {
+          if (!activeWorktree) {
+            return;
+          }
+          const key = getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch);
+          setGitSidebarState(current => {
+            if (current[key]) {
+              return current;
+            }
+            return { ...current, [key]: { open: false, snapshot: null } };
+          });
+        }, [activeWorktree, getWorktreeKey]);
+
+        const handleGitStatusUpdate = useCallback(
+          (snapshot) => {
+            if (!gitSidebarKey) {
+              return;
+            }
+            setGitSidebarState((current) => {
+              const previous = current[gitSidebarKey] || { open: false, snapshot: null };
+              if (previous.snapshot && snapshot && previous.snapshot.fetchedAt === snapshot.fetchedAt) {
+                return current;
+              }
+              return {
+                ...current,
+                [gitSidebarKey]: { ...previous, snapshot },
+              };
+            });
+          },
+          [gitSidebarKey],
+        );
+
+        const toggleGitSidebar = useCallback(() => {
+          if (!gitSidebarKey) {
+            return;
+          }
+          let nextOpen = false;
+          setGitSidebarState((current) => {
+            const previous = current[gitSidebarKey] || { open: false, snapshot: null };
+            nextOpen = !previous.open;
+            return {
+              ...current,
+              [gitSidebarKey]: { ...previous, open: nextOpen },
+            };
+          });
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('terminal-worktree:git-sidebar-toggle', {
+                detail: {
+                  worktree: gitSidebarKey,
+                  open: nextOpen,
+                  timestamp: Date.now()
+                }
+              })
+            );
+          }
+        }, [gitSidebarKey]);
+
+        const closeGitSidebar = useCallback(() => {
+          if (!gitSidebarKey) {
+            return;
+          }
+          setGitSidebarState((current) => {
+            const previous = current[gitSidebarKey] || { open: false, snapshot: null };
+            if (!previous.open) {
+              return current;
+            }
+            return {
+              ...current,
+              [gitSidebarKey]: { ...previous, open: false },
+            };
+          });
+        }, [gitSidebarKey]);
 
         const applyDataUpdate = useCallback(payload => {
           setData(payload);
@@ -1519,6 +1604,69 @@ function LoginScreen({ onAuthenticated }) {
               )
             : null;
 
+        const gitSidebarTotals = gitSidebarSnapshot?.totals || {};
+        const gitSidebarOperations = gitSidebarSnapshot?.operations || {};
+        const gitSidebarChangeCount =
+          (gitSidebarTotals.staged || 0) +
+          (gitSidebarTotals.unstaged || 0) +
+          (gitSidebarTotals.untracked || 0) +
+          (gitSidebarTotals.conflicts || 0);
+        const gitSidebarBadgeLabel = gitSidebarChangeCount > 999 ? '999+' : String(gitSidebarChangeCount);
+        const gitSidebarHasConflicts = (gitSidebarTotals.conflicts || 0) > 0;
+        const gitSidebarHasOperations = Boolean(
+          gitSidebarOperations.merge?.inProgress ||
+            gitSidebarOperations.rebase?.inProgress ||
+            gitSidebarOperations.cherryPick?.inProgress ||
+            gitSidebarOperations.revert?.inProgress ||
+            gitSidebarOperations.bisect?.inProgress
+        );
+
+        let gitSidebarButtonTone = 'border-neutral-800 bg-neutral-925 hover:bg-neutral-800/80 text-neutral-300';
+        if (isGitSidebarOpen) {
+          gitSidebarButtonTone = 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15';
+        } else if (gitSidebarHasConflicts) {
+          gitSidebarButtonTone = 'border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/15';
+        } else if (gitSidebarChangeCount > 0) {
+          gitSidebarButtonTone = 'border-amber-500/60 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15';
+        } else if (gitSidebarHasOperations) {
+          gitSidebarButtonTone = 'border-sky-500/60 bg-sky-500/10 text-sky-200 hover:bg-sky-500/15';
+        }
+
+        const gitSidebarButton = activeWorktree
+          ? h(
+              'button',
+              {
+                type: 'button',
+                onClick: toggleGitSidebar,
+                className: `inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${gitSidebarButtonTone}`,
+                'aria-pressed': isGitSidebarOpen ? 'true' : 'false',
+                'aria-expanded': isGitSidebarOpen ? 'true' : 'false',
+                title: isGitSidebarOpen ? 'Hide Git status sidebar' : 'Show Git status sidebar'
+              },
+              h(isGitSidebarOpen ? PanelRightClose : PanelRightOpen, { size: 14 }),
+              h('span', null, 'Git status'),
+              gitSidebarChangeCount > 0
+                ? h(
+                    'span',
+                    {
+                      className:
+                        'inline-flex items-center justify-center rounded-full bg-neutral-950/80 px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-current'
+                    },
+                    gitSidebarBadgeLabel
+                  )
+                : gitSidebarHasOperations
+                ? h(
+                    'span',
+                    {
+                      className:
+                        'inline-flex items-center justify-center rounded-full border border-current/60 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-current'
+                    },
+                    'OPS'
+                  )
+                : null
+            )
+          : null;
+
         const sidebarContent = h(
           'div',
           { className: 'flex h-full flex-col text-sm font-mono' },
@@ -1763,7 +1911,10 @@ function LoginScreen({ onAuthenticated }) {
           activeWorktree
             ? h(
                 'div',
-                { className: 'bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0' },
+                {
+                  className:
+                    'bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0 flex-1'
+                },
                 h(
                   'div',
                   { className: 'flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
@@ -1787,21 +1938,40 @@ function LoginScreen({ onAuthenticated }) {
                     )
                   ),
                   h(
-                    'button',
-                    {
-                      type: 'button',
-                      onClick: () => setIsMobileMenuOpen(true),
-                      className:
-                        'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]'
-                    },
-                    h(Menu, { size: 18 }),
-                    h('span', { className: 'sr-only' }, 'Open sidebar')
+                    'div',
+                    { className: 'flex items-center gap-2' },
+                    gitSidebarButton,
+                    h(
+                      'button',
+                      {
+                        type: 'button',
+                        onClick: () => setIsMobileMenuOpen(true),
+                        className:
+                          'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]'
+                      },
+                      h(Menu, { size: 18 }),
+                      h('span', { className: 'sr-only' }, 'Open sidebar')
+                    )
                   )
                 ),
-                h('div', {
-                  ref: terminalContainerRef,
-                  className: 'flex-1 bg-neutral-950 min-h-0 overflow-hidden relative'
-                })
+                h(
+                  'div',
+                  { className: 'flex-1 min-h-0 flex flex-col lg:flex-row lg:min-w-0' },
+                  h('div', {
+                    ref: terminalContainerRef,
+                    className: 'flex-1 bg-neutral-950 min-h-0 min-w-0 overflow-hidden relative'
+                  }),
+                  h(GitStatusSidebar, {
+                    isOpen: isGitSidebarOpen,
+                    worktree: activeWorktree,
+                    onClose: closeGitSidebar,
+                    onAuthExpired: notifyAuthExpired,
+                    onStatusUpdate: handleGitStatusUpdate,
+                    entryLimit: 250,
+                    commitLimit: 20,
+                    pollInterval: REPOSITORY_POLL_INTERVAL_MS
+                  })
+                )
             )
           : h(
                 'div',
