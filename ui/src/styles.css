@@ -15,6 +15,7 @@
     margin: 0;
     background-color: #0a0a0a;
     color: #f5f5f5;
+    font-family: 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   }
 }
 
@@ -91,7 +92,7 @@
 .markdown-preview__content code {
   background-color: rgba(82, 82, 91, 0.4);
   border-radius: 4px;
-  font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-family: inherit;
   font-size: 0.875em;
   padding: 0.15rem 0.35rem;
 }
@@ -101,7 +102,7 @@
   border-radius: 8px;
   padding: 0.75rem;
   overflow-x: auto;
-  font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-family: inherit;
   font-size: 0.85rem;
 }
 
@@ -127,7 +128,7 @@
 .diff-viewer .d2h-wrapper {
   background-color: transparent;
   color: inherit;
-  font-family: 'JetBrains Mono', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-family: 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   border: none;
   color-scheme: dark;
   --d2h-bg-color: rgba(24, 24, 27, 0.85);

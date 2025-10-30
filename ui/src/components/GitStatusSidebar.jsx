@@ -122,11 +122,6 @@ function ChangeList({ items, emptyLabel, onSelect }) {
                     from {item.previousPath}
                   </p>
                 ) : null}
-                {item.description ? (
-                  <p className="text-[11px] uppercase tracking-wide text-neutral-500/80">
-                    {item.description}
-                  </p>
-                ) : null}
               </div>
             </button>
           </li>
@@ -375,11 +370,14 @@ export default function GitStatusSidebar({
     [onOpenDiff],
   );
 
+  const desktopWidth = isOpen ? 360 : 0;
+
   const desktopPanel = (
     <div
       className={`hidden h-full flex-col border-l border-neutral-800 bg-neutral-900/95 text-neutral-100 shadow-lg transition-[width,opacity] duration-200 ease-out lg:flex lg:flex-shrink-0 lg:overflow-hidden font-sans ${
-        isOpen ? 'lg:w-[360px] opacity-100' : 'pointer-events-none lg:w-0 opacity-0'
+        isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
       }`}
+      style={{ width: `${desktopWidth}px` }}
       aria-hidden={isOpen ? 'false' : 'true'}
     >
       <aside className="flex h-full min-h-0 flex-col">

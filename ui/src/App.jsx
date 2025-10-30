@@ -896,7 +896,7 @@ function LoginScreen({ onAuthenticated }) {
             sendResize();
           }, 200);
           return () => clearTimeout(timeout);
-        }, [width, isMobileMenuOpen, sessionId, sendResize]);
+        }, [width, isMobileMenuOpen, sessionId, isGitSidebarOpen, sendResize]);
 
         useEffect(() => {
           const handler = () => {
@@ -1760,7 +1760,7 @@ function LoginScreen({ onAuthenticated }) {
 
         const sidebarContent = h(
           'div',
-          { className: 'flex h-full flex-col text-sm font-mono' },
+          { className: 'flex h-full flex-col text-sm font-sans' },
           h(
             'div',
             { className: 'flex-1 min-h-0 overflow-y-auto p-3 space-y-5' },
@@ -1998,7 +1998,7 @@ function LoginScreen({ onAuthenticated }) {
 
         const mainPane = h(
           'div',
-          { className: 'flex-1 bg-neutral-950 text-neutral-100 font-mono flex flex-col min-h-0' },
+          { className: 'flex-1 bg-neutral-950 text-neutral-100 font-sans flex flex-col min-h-0' },
           activeWorktree
             ? h(
                 'div',
@@ -2017,7 +2017,7 @@ function LoginScreen({ onAuthenticated }) {
                       { className: 'text-xs text-neutral-500' },
                       `${activeWorktree.org}/${activeWorktree.repo}`
                     ),
-                    h('div', { className: 'text-sm text-neutral-300 flex items-center gap-2' }, h('span', null, ` ${activeWorktree.branch}`))
+                    h('div', { className: 'text-sm text-neutral-300 flex items-center gap-2' }, h('span', null, activeWorktree.branch))
                   ),
                   h(
                     'div',
@@ -2960,7 +2960,7 @@ export default function App() {
             'div',
             {
               className:
-                'min-h-screen flex items-center justify-center bg-neutral-950 text-neutral-400 font-mono text-sm'
+                'min-h-screen flex items-center justify-center bg-neutral-950 text-neutral-400 font-sans text-sm'
             },
             'Checking authentication…'
           );
