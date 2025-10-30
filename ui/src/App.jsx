@@ -301,6 +301,8 @@ function LoginScreen({ onAuthenticated }) {
 
         const actionButtonClass = 'inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors';
         const actionMenuRefs = useRef(new Map());
+        const githubMenuRef = useRef(null);
+        const [isGithubMenuOpen, setIsGithubMenuOpen] = useState(false);
 
         const getActionMenuRef = useCallback(
           (action) => (node) => {
@@ -312,6 +314,14 @@ function LoginScreen({ onAuthenticated }) {
           },
           []
         );
+
+        const toggleGithubMenu = useCallback(() => {
+          setIsGithubMenuOpen((current) => !current);
+        }, []);
+
+        const closeGithubMenu = useCallback(() => {
+          setIsGithubMenuOpen(false);
+        }, []);
 
         const getCommandForLaunch = useCallback(
           (action, dangerousMode = false) => {
@@ -370,6 +380,33 @@ function LoginScreen({ onAuthenticated }) {
             document.removeEventListener('keydown', handleEscape);
           };
         }, [openActionMenu]);
+
+        useEffect(() => {
+          if (!isGithubMenuOpen) {
+            return;
+          }
+          const handleDocumentClick = (event) => {
+            const menuNode = githubMenuRef.current;
+            if (menuNode && !menuNode.contains(event.target)) {
+              setIsGithubMenuOpen(false);
+            }
+          };
+          const handleEscape = (event) => {
+            if (event.key === 'Escape') {
+              setIsGithubMenuOpen(false);
+            }
+          };
+          document.addEventListener('mousedown', handleDocumentClick);
+          document.addEventListener('keydown', handleEscape);
+          return () => {
+            document.removeEventListener('mousedown', handleDocumentClick);
+            document.removeEventListener('keydown', handleEscape);
+          };
+        }, [isGithubMenuOpen]);
+
+        useEffect(() => {
+          setIsGithubMenuOpen(false);
+        }, [activeWorktree]);
 
         useEffect(() => {
           if (typeof window === 'undefined') {
@@ -1366,137 +1403,52 @@ function LoginScreen({ onAuthenticated }) {
           if (!hasPrompt) {
             return;
           }
+          if (!selectedRepo) {
+            window.alert('Select a repository before creating a plan.');
+            return;
+          }
 
-          const promptPayload = promptText;
-          const originalPrompt = promptPayload;
-          let hasStreamingContent = false;
+          const originalPrompt = promptText;
+          const [org, repo] = selectedRepo;
 
           setIsCreatingPlan(true);
 
           void (async () => {
             try {
-              // Ask the backend to draft a structured plan via the OpenAI proxy.
-              const response = await fetch('/api/create-plan', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ prompt: promptPayload })
-              });
-              if (response.status === 401) {
-                notifyAuthExpired();
-                return;
-              }
-              if (!response.ok) {
-                throw new Error(`Request failed with status ${response.status}`);
-              }
-              if (!response.body) {
-                throw new Error('Server returned an empty response body.');
-              }
-
-              const reader = response.body.getReader();
-              const decoder = new TextDecoder();
-              let buffer = '';
-              let receivedDoneSignal = false;
-
               flushSync(() => {
                 setPromptText('');
               });
 
-              while (!receivedDoneSignal) {
-                const { value, done } = await reader.read();
-                if (done) {
-                  buffer += decoder.decode();
-                } else {
-                  buffer += decoder.decode(value, { stream: true });
-                }
+              const response = await fetch('/api/create-plan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ prompt: originalPrompt, org, repo })
+              });
 
-                let frameEnd;
-                while ((frameEnd = buffer.indexOf('\n\n')) !== -1) {
-                  const frame = buffer.slice(0, frameEnd);
-                  buffer = buffer.slice(frameEnd + 2);
-
-                  if (!frame.trim()) {
-                    continue;
-                  }
-
-                  const lines = frame.split('\n');
-                  let eventType = 'message';
-                  const dataLines = [];
-
-                  for (const rawLine of lines) {
-                    const line = rawLine.trimEnd();
-                    if (!line) {
-                      continue;
-                    }
-                    if (line.startsWith('event:')) {
-                      eventType = line.slice(6).trim();
-                      continue;
-                    }
-                    if (line.startsWith('data:')) {
-                      let valueSegment = line.slice(5);
-                      if (valueSegment.startsWith(' ')) {
-                        valueSegment = valueSegment.slice(1);
-                      }
-                      dataLines.push(valueSegment);
-                    }
-                  }
-
-                  if (dataLines.length === 0) {
-                    continue;
-                  }
-
-                  const data = dataLines.join('\n');
-                  if (eventType === 'error') {
-                    let message = data;
-                    try {
-                      const parsed = JSON.parse(data);
-                      if (parsed && typeof parsed === 'object' && typeof parsed.message === 'string') {
-                        message = parsed.message;
-                      }
-                    } catch {
-                      // Ignore JSON parse errors from error events.
-                    }
-                    throw new Error(message || 'Stream error');
-                  }
-
-                  if (data === '[DONE]') {
-                    receivedDoneSignal = true;
-                    break;
-                  }
-
-                  let contentSegment = data;
-                  try {
-                    const parsed = JSON.parse(data);
-                    if (parsed && typeof parsed === 'object' && typeof parsed.content === 'string') {
-                      contentSegment = parsed.content;
-                    }
-                  } catch {
-                    // Ignore JSON parse errors if the payload is plain text.
-                  }
-
-                  if (contentSegment) {
-                    hasStreamingContent = true;
-                    flushSync(() => {
-                      setPromptText(current => current + contentSegment);
-                    });
-                  }
-                }
-
-                if (done) {
-                  receivedDoneSignal = true;
-                }
+              if (response.status === 401) {
+                notifyAuthExpired();
+                return;
               }
 
-              if (!hasStreamingContent) {
+              if (!response.ok) {
+                throw new Error(`Request failed with status ${response.status}`);
+              }
+
+              const payload = await response.json();
+              const planText = payload && typeof payload.plan === 'string' ? payload.plan : '';
+              if (!planText.trim()) {
                 throw new Error('Server returned an empty plan. Check server logs for details.');
               }
+
+              flushSync(() => {
+                setPromptText(planText);
+              });
             } catch (error) {
               console.error('Failed to create plan', error);
-              if (!hasStreamingContent) {
-                flushSync(() => {
-                  setPromptText(originalPrompt);
-                });
-              }
+              flushSync(() => {
+                setPromptText(originalPrompt);
+              });
               window.alert('Failed to create plan. Check server logs for details.');
             } finally {
               setIsCreatingPlan(false);
@@ -1742,6 +1694,76 @@ function LoginScreen({ onAuthenticated }) {
             gitSidebarOperations.revert?.inProgress ||
             gitSidebarOperations.bisect?.inProgress
         );
+
+        const githubRepoUrl = activeWorktree
+          ? `https://github.com/${activeWorktree.org}/${activeWorktree.repo}`
+          : null;
+
+        const githubMenuItems = githubRepoUrl
+          ? [
+              { key: 'pulls', label: 'Pull Requests', href: `${githubRepoUrl}/pulls` },
+              { key: 'issues', label: 'Issues', href: `${githubRepoUrl}/issues` },
+              { key: 'actions', label: 'Actions', href: `${githubRepoUrl}/actions` },
+            ]
+          : [];
+
+        const githubControls =
+          activeWorktree && githubRepoUrl
+            ? h(
+                'div',
+                {
+                  className: 'relative flex items-center gap-1',
+                  ref: githubMenuRef,
+                },
+                h(
+                  'a',
+                  {
+                    href: githubRepoUrl,
+                    target: '_blank',
+                    rel: 'noreferrer noopener',
+                    className: `${actionButtonClass} text-neutral-400 hover:text-neutral-100`,
+                    title: 'Open repository on GitHub',
+                  },
+                  h(Github, { size: 16 }),
+                ),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    onClick: toggleGithubMenu,
+                    className: `${actionButtonClass} text-neutral-400 hover:text-neutral-100`,
+                    'aria-haspopup': 'true',
+                    'aria-expanded': isGithubMenuOpen ? 'true' : 'false',
+                    title: 'GitHub quick links',
+                  },
+                  h(ChevronDown, { size: 16 }),
+                ),
+                isGithubMenuOpen
+                  ? h(
+                      'div',
+                      {
+                        className:
+                          'absolute right-0 top-full mt-2 w-44 rounded-md border border-neutral-800 bg-neutral-925 shadow-lg z-30 py-1',
+                      },
+                      githubMenuItems.map((item) =>
+                        h(
+                          'a',
+                          {
+                            key: item.key,
+                            href: item.href,
+                            target: '_blank',
+                            rel: 'noreferrer noopener',
+                            className:
+                              'block px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-800 transition-colors',
+                            onClick: closeGithubMenu,
+                          },
+                          item.label,
+                        ),
+                      ),
+                    )
+                  : null,
+              )
+            : null;
 
         const gitSidebarButton = activeWorktree
           ? h(
@@ -2022,6 +2044,7 @@ function LoginScreen({ onAuthenticated }) {
                   h(
                     'div',
                     { className: 'flex items-center gap-2' },
+                    githubControls,
                     gitSidebarButton,
                     h(
                       'button',

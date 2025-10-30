@@ -8,7 +8,6 @@ import { createGitStatusHandlers } from '../api/git-status.js';
 import { sendJson, readJsonBody } from '../utils/http.js';
 import { createConfigHandlers } from '../api/config.js';
 import { createPlanHandlers } from '../api/create-plan.js';
-import { createPlanService } from '../core/plan.js';
 
 export function createRouter({
   authManager,
@@ -16,7 +15,7 @@ export function createRouter({
   agentCommands,
   automationApiKey,
   branchNameGenerator,
-  openaiApiKey,
+  planService,
 }) {
   if (!authManager) {
     throw new Error('authManager is required');
@@ -26,7 +25,6 @@ export function createRouter({
   }
 
   const authHandlers = createAuthHandlers(authManager);
-  const planService = createPlanService({ apiKey: openaiApiKey });
   const automationHandlers = createAutomationHandlers({
     workdir,
     agentCommands,

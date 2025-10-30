@@ -14,6 +14,7 @@ import {
 const BUNDLED_UI_PATH = fileURLToPath(new URL('../ui/dist', import.meta.url));
 const CONFIG_DIR_NAME = '.terminal-worktree';
 const CONFIG_FILE_NAME = 'config.json';
+const VALID_BRANCH_LLMS = new Set(['codex', 'claude', 'cursor']);
 
 function warnConfig(message) {
   process.stderr.write(`[terminal-worktree] ${message}\n`);
@@ -83,6 +84,36 @@ function pickString(sources, configPath) {
   return undefined;
 }
 
+function coerceBranchLlm(value, name, configPath) {
+  const stringValue = coerceString(value, name, configPath);
+  if (stringValue === undefined) {
+    return undefined;
+  }
+  const lower = stringValue.toLowerCase();
+  if (!VALID_BRANCH_LLMS.has(lower)) {
+    warnConfig(
+      `Ignoring invalid ${name} in ${configPath || 'config'}; expected one of ${[
+        ...VALID_BRANCH_LLMS,
+      ].join(', ')}.`,
+    );
+    return undefined;
+  }
+  return lower;
+}
+
+function pickSupportedLlm(sources, configPath) {
+  for (const { value, name } of sources) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+    const coerced = coerceBranchLlm(value, name, configPath);
+    if (coerced !== undefined) {
+      return coerced;
+    }
+  }
+  return undefined;
+}
+
 function normalizeConfig(rawConfig, configPath) {
   if (!rawConfig || typeof rawConfig !== 'object') {
     if (rawConfig !== undefined) {
@@ -95,6 +126,14 @@ function normalizeConfig(rawConfig, configPath) {
   const commands =
     rawConfig.commands && typeof rawConfig.commands === 'object'
       ? rawConfig.commands
+      : null;
+  const branchName =
+    rawConfig.branchName && typeof rawConfig.branchName === 'object'
+      ? rawConfig.branchName
+      : null;
+  const plan =
+    rawConfig.plan && typeof rawConfig.plan === 'object'
+      ? rawConfig.plan
       : null;
   const openai =
     rawConfig.openai && typeof rawConfig.openai === 'object'
@@ -177,6 +216,42 @@ function normalizeConfig(rawConfig, configPath) {
   );
   if (cursorCommand !== undefined) {
     normalized.cursorCommand = cursorCommand;
+  }
+
+  const branchNameLlm = pickSupportedLlm(
+    [
+      { value: rawConfig.branchNameLlm, name: 'branchNameLlm' },
+      { value: rawConfig.branchNameLLM, name: 'branchNameLLM' },
+      { value: rawConfig.branchLlm, name: 'branchLlm' },
+      { value: rawConfig.branchLLM, name: 'branchLLM' },
+      { value: rawConfig.defaultBranchLlm, name: 'defaultBranchLlm' },
+      { value: rawConfig.defaultBranchLLM, name: 'defaultBranchLLM' },
+      { value: branchName?.llm, name: 'branchName.llm' },
+      { value: branchName?.default, name: 'branchName.default' },
+      { value: branchName?.model, name: 'branchName.model' },
+    ],
+    configPath,
+  );
+  if (branchNameLlm !== undefined) {
+    normalized.branchNameLlm = branchNameLlm;
+  }
+
+  const planLlm = pickSupportedLlm(
+    [
+      { value: rawConfig.planLlm, name: 'planLlm' },
+      { value: rawConfig.planLLM, name: 'planLLM' },
+      { value: rawConfig.createPlanLlm, name: 'createPlanLlm' },
+      { value: rawConfig.createPlanLLM, name: 'createPlanLLM' },
+      { value: rawConfig.defaultPlanLlm, name: 'defaultPlanLlm' },
+      { value: rawConfig.defaultPlanLLM, name: 'defaultPlanLLM' },
+      { value: plan?.llm, name: 'plan.llm' },
+      { value: plan?.default, name: 'plan.default' },
+      { value: plan?.model, name: 'plan.model' },
+    ],
+    configPath,
+  );
+  if (planLlm !== undefined) {
+    normalized.planLlm = planLlm;
   }
 
   const ideCommand = pickString(
@@ -309,7 +384,7 @@ Options:
       --vscode-command <cmd>  Command executed when launching VS Code (default: code .)
       --ngrok-api-key <token> Authtoken used when establishing an ngrok tunnel
       --ngrok-domain <domain> Reserved ngrok domain to expose the server publicly
-      --openai-api-key <token> OpenAI API key used for automatic branch naming
+      --openai-api-key <token> OpenAI API key forwarded to local LLM commands
       --save               Persist the effective configuration and exit
   -h, --help             Display this help message
   -v, --version          Output the version number
@@ -589,6 +664,8 @@ async function main(argv = process.argv.slice(2)) {
   const finalOpenAiApiKey = provided.openaiApiKey
     ? args.openaiApiKey
     : fileConfig.openaiApiKey ?? null;
+  const finalBranchNameLlm = fileConfig.branchNameLlm ?? null;
+  const finalPlanLlm = fileConfig.planLlm ?? null;
 
   if ((finalNgrokApiKey && !finalNgrokDomain) || (finalNgrokDomain && !finalNgrokApiKey)) {
     process.stderr.write(
@@ -633,6 +710,13 @@ async function main(argv = process.argv.slice(2)) {
     }
     if (finalPassword) {
       configToSave.password = finalPassword;
+    }
+
+    if (finalBranchNameLlm) {
+      configToSave.branchNameLlm = finalBranchNameLlm;
+    }
+    if (finalPlanLlm) {
+      configToSave.planLlm = finalPlanLlm;
     }
 
     const commandsConfig = {};
@@ -701,6 +785,8 @@ async function main(argv = process.argv.slice(2)) {
       ngrok: ngrokOptions,
       automationApiKey: finalAutomationApiKey,
       openaiApiKey: finalOpenAiApiKey ?? undefined,
+      branchNameLlm: finalBranchNameLlm ?? undefined,
+      planLlm: finalPlanLlm ?? undefined,
     });
 
     const localAddress = host === '0.0.0.0' ? 'localhost' : host;
