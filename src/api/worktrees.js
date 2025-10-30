@@ -1,4 +1,10 @@
-import { createWorktree, discoverRepositories, normaliseBranchName, removeWorktree } from '../core/git.js';
+import {
+  createWorktree,
+  discoverRepositories,
+  getWorktreePath,
+  normaliseBranchName,
+  removeWorktree,
+} from '../core/git.js';
 import {
   detectTmux,
   isTmuxAvailable,
@@ -6,6 +12,7 @@ import {
   tmuxKillSession,
 } from '../core/tmux.js';
 import { disposeSessionByKey, makeSessionKey } from '../core/terminal-sessions.js';
+import { savePlanToWorktree } from '../core/plan-storage.js';
 import { sendJson } from '../utils/http.js';
 
 export function createWorktreeHandlers(workdir, branchNameGenerator) {
@@ -20,7 +27,8 @@ export function createWorktreeHandlers(workdir, branchNameGenerator) {
 
     const org = typeof payload.org === 'string' ? payload.org.trim() : '';
     const repo = typeof payload.repo === 'string' ? payload.repo.trim() : '';
-    const prompt = typeof payload.prompt === 'string' ? payload.prompt.trim() : '';
+    const rawPrompt = typeof payload.prompt === 'string' ? payload.prompt : '';
+    const prompt = rawPrompt.trim();
     let branch = typeof payload.branch === 'string' ? payload.branch.trim() : '';
 
     if (!org || !repo) {
@@ -52,6 +60,21 @@ export function createWorktreeHandlers(workdir, branchNameGenerator) {
 
     try {
       await createWorktree(workdir, org, repo, normalisedBranch);
+      if (rawPrompt.trim()) {
+        try {
+          const { worktreePath } = await getWorktreePath(workdir, org, repo, normalisedBranch);
+          await savePlanToWorktree({
+            worktreePath,
+            branch: normalisedBranch,
+            planText: rawPrompt,
+          });
+        } catch (error) {
+          console.warn(
+            '[terminal-worktree] Failed to persist plan for worktree:',
+            error?.message || error,
+          );
+        }
+      }
       const data = await discoverRepositories(workdir);
       sendJson(context.res, 200, { data, branch: normalisedBranch });
     } catch (error) {
