@@ -4,6 +4,7 @@ import { createRepoHandlers } from '../api/repos.js';
 import { createSessionHandlers } from '../api/sessions.js';
 import { createTerminalHandlers } from '../api/terminal.js';
 import { createWorktreeHandlers } from '../api/worktrees.js';
+import { createGitStatusHandlers } from '../api/git-status.js';
 import { sendJson, readJsonBody } from '../utils/http.js';
 import { createConfigHandlers } from '../api/config.js';
 import { createPlanHandlers } from '../api/create-plan.js';
@@ -39,6 +40,7 @@ export function createRouter({
   const terminalHandlers = createTerminalHandlers(workdir);
   const configHandlers = createConfigHandlers(agentCommands);
   const planHandlers = createPlanHandlers({ planService });
+  const gitStatusHandlers = createGitStatusHandlers(workdir);
 
   const routes = new Map([
     [
@@ -86,6 +88,20 @@ export function createRouter({
       {
         requiresAuth: true,
         handlers: { POST: worktreeHandlers.upsert, DELETE: worktreeHandlers.destroy },
+      },
+    ],
+    [
+      '/api/git/status',
+      {
+        requiresAuth: true,
+        handlers: { GET: gitStatusHandlers.read, HEAD: gitStatusHandlers.read },
+      },
+    ],
+    [
+      '/api/git/diff',
+      {
+        requiresAuth: true,
+        handlers: { POST: gitStatusHandlers.diff },
       },
     ],
     [

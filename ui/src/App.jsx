@@ -9,6 +9,8 @@ import {
   GitBranch,
   GitPullRequest,
   Menu,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
   Sparkles,
   Trash2,
@@ -17,6 +19,8 @@ import {
 
 import 'xterm/css/xterm.css';
 import { renderMarkdown } from './utils/markdown';
+import GitStatusSidebar from './components/GitStatusSidebar.jsx';
+import DiffViewer from './components/DiffViewer.jsx';
 
 const { createElement: h } = React;
 
@@ -56,7 +60,7 @@ function Modal({ title, onClose, children, size = 'md', position = 'center' }) {
         const content = Array.isArray(children) ? children : [children];
         const alignmentClass = position === 'top' ? 'items-start' : 'items-center';
         const wrapperSpacingClass = position === 'top' ? 'mt-10' : '';
-        const maxWidthClass = size === 'lg' ? 'max-w-3xl' : 'max-w-md';
+        const maxWidthClass = size === 'lg' ? 'max-w-[90vw]' : 'max-w-md';
         return h(
           'div',
           {
@@ -72,7 +76,7 @@ function Modal({ title, onClose, children, size = 'md', position = 'center' }) {
             'div',
             {
               className: [
-                'bg-neutral-900 border border-neutral-700 rounded-lg w-full shadow-xl',
+                'bg-neutral-900 border border-neutral-700 rounded-lg w-full shadow-xl max-h-[90vh] flex flex-col overflow-hidden',
                 maxWidthClass,
                 wrapperSpacingClass
               ]
@@ -94,7 +98,11 @@ function Modal({ title, onClose, children, size = 'md', position = 'center' }) {
                 h(X, { size: 16 })
               )
             ),
-            h('div', { className: 'px-4 py-4 space-y-3' }, ...content)
+            h(
+              'div',
+              { className: 'px-4 py-4 space-y-3 flex-1 overflow-y-auto min-h-0 flex flex-col' },
+              ...content
+            )
           )
         );
       }
@@ -278,6 +286,18 @@ function LoginScreen({ onAuthenticated }) {
           }
           return {};
         });
+        const [gitDiffModal, setGitDiffModal] = useState(() => ({
+          open: false,
+          loading: false,
+          error: null,
+          diff: '',
+          file: null,
+          view:
+            typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
+              ? 'unified'
+              : 'split',
+        }));
+        const [gitSidebarState, setGitSidebarState] = useState({});
 
         const actionButtonClass = 'inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors';
         const actionMenuRefs = useRef(new Map());
@@ -460,6 +480,129 @@ function LoginScreen({ onAuthenticated }) {
             })
           );
 
+        useEffect(() => {
+          setGitDiffModal((current) => {
+            if (!current.open) {
+              return current;
+            }
+            return { open: false, loading: false, error: null, diff: '', file: null, view: 'split' };
+          });
+        }, [activeWorktree]);
+
+        const resolveDefaultDiffView = useCallback(() => {
+          if (typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches) {
+            return 'unified';
+          }
+          return 'split';
+        }, []);
+
+        const handleCloseGitDiff = useCallback(() => {
+          setGitDiffModal({ open: false, loading: false, error: null, diff: '', file: null, view: resolveDefaultDiffView() });
+        }, [resolveDefaultDiffView]);
+
+        const handleOpenGitDiff = useCallback(
+          ({ item }) => {
+            if (!activeWorktree || !item || !item.path) {
+              return;
+            }
+
+            const determineDiffMode = (target) => {
+              if (target.kind === 'staged') {
+                return 'staged';
+              }
+              if (target.kind === 'untracked') {
+                return 'untracked';
+              }
+              if (target.kind === 'conflict') {
+                return 'unstaged';
+              }
+              if (target.indexStatus && target.indexStatus !== ' ') {
+                return 'staged';
+              }
+              return 'unstaged';
+            };
+
+            const diffMode = determineDiffMode(item);
+            const nextFile = {
+              path: item.path,
+              previousPath: item.previousPath || null,
+              kind: item.kind || null,
+              status: item.status || '',
+              mode: diffMode,
+            };
+
+            setGitDiffModal({ open: true, loading: true, error: null, diff: '', file: nextFile, view: resolveDefaultDiffView() });
+
+            (async () => {
+              try {
+                const response = await fetch('/api/git/diff', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
+                  body: JSON.stringify({
+                    org: activeWorktree.org,
+                    repo: activeWorktree.repo,
+                    branch: activeWorktree.branch,
+                    path: item.path,
+                    previousPath: item.previousPath || null,
+                    mode: diffMode,
+                    status: item.status || '',
+                  }),
+                });
+                if (response.status === 401) {
+                  notifyAuthExpired();
+                  throw new Error('AUTH_REQUIRED');
+                }
+                if (!response.ok) {
+                  throw new Error(`Request failed with status ${response.status}`);
+                }
+                const body = await response.json();
+                const payload = body && typeof body === 'object' ? body.diff || null : null;
+                setGitDiffModal((current) => ({
+                  open: true,
+                  loading: false,
+                  error: null,
+                  diff: payload && typeof payload.diff === 'string' ? payload.diff : '',
+                  file: payload && typeof payload === 'object'
+                    ? {
+                        path: payload.path || nextFile.path,
+                        previousPath: payload.previousPath ?? nextFile.previousPath,
+                        kind: nextFile.kind,
+                        status: nextFile.status,
+                        mode: payload.mode || nextFile.mode,
+                      }
+                    : nextFile,
+                  view: current.view || resolveDefaultDiffView(),
+                }));
+              } catch (error) {
+                if (error && error.message === 'AUTH_REQUIRED') {
+                  setGitDiffModal({ open: false, loading: false, error: null, diff: '', file: null, view: resolveDefaultDiffView() });
+                  return;
+                }
+                setGitDiffModal((current) => ({
+                  open: true,
+                  loading: false,
+                  error: error && error.message ? error.message : 'Failed to load diff',
+                  diff: '',
+                  file: current.file || nextFile,
+                  view: current.view || resolveDefaultDiffView(),
+                }));
+              }
+            })();
+          },
+          [activeWorktree, notifyAuthExpired, resolveDefaultDiffView],
+        );
+
+        const toggleDiffView = useCallback(() => {
+          setGitDiffModal((current) => {
+            if (!current.open) {
+              return current;
+            }
+            const nextView = current.view === 'split' ? 'unified' : 'split';
+            return { ...current, view: nextView };
+          });
+        }, []);
+
         const terminalContainerRef = useRef(null);
         const terminalRef = useRef(null);
         const fitAddonRef = useRef(null);
@@ -471,6 +614,87 @@ function LoginScreen({ onAuthenticated }) {
         const sessionKeyByIdRef = useRef(new Map());
         const knownSessionsRef = useRef(new Set());
         const getWorktreeKey = useCallback((org, repo, branch) => `${org}::${repo}::${branch}`, []);
+
+        const gitSidebarKey = activeWorktree
+          ? getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch)
+          : null;
+        const gitSidebarEntry = gitSidebarKey ? gitSidebarState[gitSidebarKey] : null;
+        const isGitSidebarOpen = Boolean(gitSidebarEntry?.open);
+        const gitSidebarSnapshot = gitSidebarEntry?.snapshot || null;
+
+        useEffect(() => {
+          if (!activeWorktree) {
+            return;
+          }
+          const key = getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch);
+          setGitSidebarState(current => {
+            if (current[key]) {
+              return current;
+            }
+            return { ...current, [key]: { open: false, snapshot: null } };
+          });
+        }, [activeWorktree, getWorktreeKey]);
+
+        const handleGitStatusUpdate = useCallback(
+          (snapshot) => {
+            if (!gitSidebarKey) {
+              return;
+            }
+            setGitSidebarState((current) => {
+              const previous = current[gitSidebarKey] || { open: false, snapshot: null };
+              if (previous.snapshot && snapshot && previous.snapshot.fetchedAt === snapshot.fetchedAt) {
+                return current;
+              }
+              return {
+                ...current,
+                [gitSidebarKey]: { ...previous, snapshot },
+              };
+            });
+          },
+          [gitSidebarKey],
+        );
+
+        const toggleGitSidebar = useCallback(() => {
+          if (!gitSidebarKey) {
+            return;
+          }
+          let nextOpen = false;
+          setGitSidebarState((current) => {
+            const previous = current[gitSidebarKey] || { open: false, snapshot: null };
+            nextOpen = !previous.open;
+            return {
+              ...current,
+              [gitSidebarKey]: { ...previous, open: nextOpen },
+            };
+          });
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('terminal-worktree:git-sidebar-toggle', {
+                detail: {
+                  worktree: gitSidebarKey,
+                  open: nextOpen,
+                  timestamp: Date.now()
+                }
+              })
+            );
+          }
+        }, [gitSidebarKey]);
+
+        const closeGitSidebar = useCallback(() => {
+          if (!gitSidebarKey) {
+            return;
+          }
+          setGitSidebarState((current) => {
+            const previous = current[gitSidebarKey] || { open: false, snapshot: null };
+            if (!previous.open) {
+              return current;
+            }
+            return {
+              ...current,
+              [gitSidebarKey]: { ...previous, open: false },
+            };
+          });
+        }, [gitSidebarKey]);
 
         const applyDataUpdate = useCallback(payload => {
           setData(payload);
@@ -672,7 +896,7 @@ function LoginScreen({ onAuthenticated }) {
             sendResize();
           }, 200);
           return () => clearTimeout(timeout);
-        }, [width, isMobileMenuOpen, sessionId, sendResize]);
+        }, [width, isMobileMenuOpen, sessionId, isGitSidebarOpen, sendResize]);
 
         useEffect(() => {
           const handler = () => {
@@ -1479,23 +1703,6 @@ function LoginScreen({ onAuthenticated }) {
         const showPromptDangerousModeOption = promptAgent === 'codex' || promptAgent === 'claude';
         const isPromptLaunchOptionDisabled = !promptText.trim();
 
-        const statusStyles = {
-          connected: 'border border-emerald-500/40 text-emerald-300 bg-emerald-500/15',
-          connecting: 'border border-amber-500/40 text-amber-200 bg-amber-500/15',
-          closed: 'border border-neutral-700 text-neutral-400 bg-neutral-800',
-          error: 'border border-rose-500/40 text-rose-200 bg-rose-500/15',
-          disconnected: 'border border-neutral-800 text-neutral-500 bg-neutral-900'
-        };
-        const statusLabels = {
-          connected: 'Connected',
-          connecting: 'Connecting…',
-          closed: 'Closed',
-          error: 'Error',
-          disconnected: 'Disconnected'
-        };
-        const statusClass = statusStyles[terminalStatus] || statusStyles.disconnected;
-        const statusLabel = statusLabels[terminalStatus] || statusLabels.disconnected;
-
         const logoutButton =
           typeof onLogout === 'function'
             ? h(
@@ -1519,9 +1726,41 @@ function LoginScreen({ onAuthenticated }) {
               )
             : null;
 
+        const gitSidebarTotals = gitSidebarSnapshot?.totals || {};
+        const gitSidebarOperations = gitSidebarSnapshot?.operations || {};
+        const gitSidebarChangeCount =
+          (gitSidebarTotals.staged || 0) +
+          (gitSidebarTotals.unstaged || 0) +
+          (gitSidebarTotals.untracked || 0) +
+          (gitSidebarTotals.conflicts || 0);
+        const gitSidebarBadgeLabel = gitSidebarChangeCount > 999 ? '999+' : String(gitSidebarChangeCount);
+        const gitSidebarHasConflicts = (gitSidebarTotals.conflicts || 0) > 0;
+        const gitSidebarHasOperations = Boolean(
+          gitSidebarOperations.merge?.inProgress ||
+            gitSidebarOperations.rebase?.inProgress ||
+            gitSidebarOperations.cherryPick?.inProgress ||
+            gitSidebarOperations.revert?.inProgress ||
+            gitSidebarOperations.bisect?.inProgress
+        );
+
+        const gitSidebarButton = activeWorktree
+          ? h(
+              'button',
+              {
+                type: 'button',
+                onClick: toggleGitSidebar,
+                className: `${actionButtonClass} text-neutral-400 hover:text-neutral-100`,
+                'aria-pressed': isGitSidebarOpen ? 'true' : 'false',
+                'aria-expanded': isGitSidebarOpen ? 'true' : 'false',
+                title: isGitSidebarOpen ? 'Hide Git status sidebar' : 'Show Git status sidebar'
+              },
+              h(GitBranch, { size: 16 })
+            )
+          : null;
+
         const sidebarContent = h(
           'div',
-          { className: 'flex h-full flex-col text-sm font-mono' },
+          { className: 'flex h-full flex-col text-sm font-sans' },
           h(
             'div',
             { className: 'flex-1 min-h-0 overflow-y-auto p-3 space-y-5' },
@@ -1759,11 +1998,14 @@ function LoginScreen({ onAuthenticated }) {
 
         const mainPane = h(
           'div',
-          { className: 'flex-1 bg-neutral-950 text-neutral-100 font-mono flex flex-col min-h-0' },
+          { className: 'flex-1 bg-neutral-950 text-neutral-100 font-sans flex flex-col min-h-0' },
           activeWorktree
             ? h(
                 'div',
-                { className: 'bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0' },
+                {
+                  className:
+                    'bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0 flex-1'
+                },
                 h(
                   'div',
                   { className: 'flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
@@ -1775,33 +2017,44 @@ function LoginScreen({ onAuthenticated }) {
                       { className: 'text-xs text-neutral-500' },
                       `${activeWorktree.org}/${activeWorktree.repo}`
                     ),
-                    h(
-                      'div',
-                      { className: 'text-sm text-neutral-300 flex items-center gap-2' },
-                      h('span', null, ` ${activeWorktree.branch}`),
-                      h(
-                        'span',
-                        { className: `inline-flex items-center px-2 py-0.5 rounded-md text-2xs uppercase tracking-wide ${statusClass}` },
-                        statusLabel
-                      )
-                    )
+                    h('div', { className: 'text-sm text-neutral-300 flex items-center gap-2' }, h('span', null, activeWorktree.branch))
                   ),
                   h(
-                    'button',
-                    {
-                      type: 'button',
-                      onClick: () => setIsMobileMenuOpen(true),
-                      className:
-                        'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]'
-                    },
-                    h(Menu, { size: 18 }),
-                    h('span', { className: 'sr-only' }, 'Open sidebar')
+                    'div',
+                    { className: 'flex items-center gap-2' },
+                    gitSidebarButton,
+                    h(
+                      'button',
+                      {
+                        type: 'button',
+                        onClick: () => setIsMobileMenuOpen(true),
+                        className:
+                          'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]'
+                      },
+                      h(Menu, { size: 18 }),
+                      h('span', { className: 'sr-only' }, 'Open sidebar')
+                    )
                   )
                 ),
-                h('div', {
-                  ref: terminalContainerRef,
-                  className: 'flex-1 bg-neutral-950 min-h-0 overflow-hidden relative'
-                })
+                h(
+                  'div',
+                  { className: 'flex-1 min-h-0 flex flex-col lg:flex-row lg:min-w-0' },
+                  h('div', {
+                    ref: terminalContainerRef,
+                    className: 'flex-1 bg-neutral-950 min-h-0 min-w-0 overflow-hidden relative'
+                  }),
+                  h(GitStatusSidebar, {
+                    isOpen: isGitSidebarOpen,
+                    worktree: activeWorktree,
+                    onClose: closeGitSidebar,
+                    onAuthExpired: notifyAuthExpired,
+                    onStatusUpdate: handleGitStatusUpdate,
+                    onOpenDiff: handleOpenGitDiff,
+                    entryLimit: 250,
+                    commitLimit: 20,
+                    pollInterval: REPOSITORY_POLL_INTERVAL_MS
+                  })
+                )
             )
           : h(
                 'div',
@@ -1900,6 +2153,76 @@ function LoginScreen({ onAuthenticated }) {
                         )
                       : 'Add repository'
                   )
+                )
+              )
+            : null,
+          gitDiffModal.open
+            ? h(
+                Modal,
+                {
+                  title: gitDiffModal.file?.path ? `Diff: ${gitDiffModal.file.path}` : 'File diff',
+                  onClose: handleCloseGitDiff,
+                  size: 'lg',
+                },
+                h(
+                  'div',
+                  { className: 'space-y-3' },
+                  h(
+                    'div',
+                    { className: 'flex flex-wrap items-center justify-between gap-3 text-xs text-neutral-500' },
+                    h(
+                      'div',
+                      { className: 'space-y-1' },
+                      gitDiffModal.file?.previousPath
+                        ? h(
+                            'p',
+                            null,
+                            `Renamed from ${gitDiffModal.file.previousPath}`
+                          )
+                        : null,
+                      gitDiffModal.file?.mode
+                        ? h(
+                            'p',
+                            null,
+                            `Diff mode: ${gitDiffModal.file.mode}`
+                          )
+                        : null,
+                    ),
+                    h(
+                      'div',
+                      { className: 'flex items-center gap-2' },
+                      h(
+                        'button',
+                        {
+                          type: 'button',
+                          onClick: toggleDiffView,
+                          className:
+                            'inline-flex items-center gap-2 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-1 text-xs text-neutral-200 transition hover:bg-neutral-800',
+                        },
+                        gitDiffModal.view === 'split' ? 'Show unified' : 'Show split'
+                      )
+                    )
+                  ),
+                  gitDiffModal.loading
+                    ? h(
+                        'div',
+                        { className: 'flex items-center gap-2 text-sm text-neutral-300' },
+                        renderSpinner('text-neutral-200'),
+                        h('span', null, 'Loading diff…')
+                      )
+                    : gitDiffModal.error
+                    ? h(
+                        'p',
+                        { className: 'text-sm text-rose-300' },
+                        gitDiffModal.error
+                      )
+                    : h(
+                        DiffViewer,
+                        {
+                          diff: gitDiffModal.diff,
+                          view: gitDiffModal.view,
+                        }
+                      )
                 )
               )
             : null,
@@ -2637,7 +2960,7 @@ export default function App() {
             'div',
             {
               className:
-                'min-h-screen flex items-center justify-center bg-neutral-950 text-neutral-400 font-mono text-sm'
+                'min-h-screen flex items-center justify-center bg-neutral-950 text-neutral-400 font-sans text-sm'
             },
             'Checking authentication…'
           );
