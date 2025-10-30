@@ -313,7 +313,7 @@ export function createAutomationHandlers(
       if (!branchNameGenerator || !branchNameGenerator.isConfigured) {
         fail(
           503,
-          'Branch name generation is not configured. Provide a worktree name or configure an OpenAI API key.',
+          'Branch name generation is not configured. Provide a worktree name or configure a local LLM command (set branchNameLlm in config.json).',
         );
         return;
       }
@@ -339,22 +339,34 @@ export function createAutomationHandlers(
       return;
     }
 
+    let repositoryPath = '';
+    let clonedRepository = false;
+    try {
+      ({ repositoryPath, cloned: clonedRepository } = await ensureRepoExists(workdir, org, repo));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      fail(500, message, error);
+      return;
+    }
+
     let effectivePrompt = userPrompt;
     if (planEnabled) {
       if (!planService || !planService.isConfigured) {
-        fail(503, 'Plan generation is not configured. Provide an OpenAI API key.');
+        fail(
+          503,
+          'Plan generation is not configured. Configure a local LLM command (set planLlm in config.json).',
+        );
         return;
       }
       try {
-        effectivePrompt = await planService.createPlanText({ prompt: userPrompt });
+        effectivePrompt = await planService.createPlanText({
+          prompt: userPrompt,
+          cwd: repositoryPath,
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (error?.code === 'OPENAI_NOT_CONFIGURED') {
-          fail(503, message, error);
-        } else if (message === 'prompt is required') {
+        if (message === 'prompt is required') {
           fail(400, message, error);
-        } else if (message.startsWith('Failed to reach OpenAI:')) {
-          fail(502, message, error);
         } else {
           fail(502, message, error);
         }
@@ -375,7 +387,6 @@ export function createAutomationHandlers(
     );
 
     try {
-      const { repositoryPath, cloned } = await ensureRepoExists(workdir, org, repo);
       const { worktreePath, created } = await ensureWorktree(workdir, org, repo, branch);
 
       const {
@@ -402,7 +413,7 @@ export function createAutomationHandlers(
           branch,
           repositoryPath,
           worktreePath,
-          clonedRepository: cloned,
+          clonedRepository,
           createdWorktree: created,
           agent: agent.key,
           agentCommand: agent.command,

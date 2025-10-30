@@ -31,7 +31,8 @@ export function createWorktreeHandlers(workdir, branchNameGenerator) {
     if (!branch) {
       if (!branchNameGenerator || !branchNameGenerator.isConfigured) {
         sendJson(context.res, 503, {
-          error: 'Branch name generation is not configured. Provide a branch or configure an OpenAI API key.',
+          error:
+            'Branch name generation is not configured. Provide a branch or configure a local LLM command (set branchNameLlm in config.json).',
         });
         return;
       }

@@ -1,11 +1,20 @@
-import OpenAI from 'openai';
+import { spawn } from 'node:child_process';
 import { loadDeveloperMessage } from '../config/developer-messages.js';
 import { normaliseBranchName } from './git.js';
 
-const DEFAULT_MODEL = 'gpt-5-mini';
+const SUPPORTED_LLMS = new Set(['codex', 'claude', 'cursor']);
+const DEFAULT_LLM = 'codex';
+const COMMAND_TIMEOUT_MS = 30_000;
+const COMMAND_MAX_BUFFER = 512 * 1024;
 
 const DEFAULT_DEVELOPER_MESSAGE =
   'Generate a branch name in the format <type>/<description> with no preamble or postamble, and no code blocks. The <type> must be one of: feature, enhancement, fix, chore, or another appropriate status. The <description> should be concise (max 7 words), using dashes to separate words. Example: feature/create-calendar-page.';
+
+const COMMAND_NAMES = {
+  codex: 'codex',
+  claude: 'claude',
+  cursor: 'cursor-agent',
+};
 
 function slugifySegment(value) {
   if (typeof value !== 'string') {
@@ -73,64 +82,382 @@ function buildUserPrompt({ prompt, org, repo } = {}) {
   return sections.join('\n\n');
 }
 
-export function createBranchNameGenerator({ apiKey, model = DEFAULT_MODEL } = {}) {
-  if (!apiKey) {
-    return {
-      isConfigured: false,
-      async generateBranchName() {
-        throw new Error('Branch name generation is not configured (missing OpenAI API key).');
-      },
-    };
+function shellQuote(value) {
+  const str = String(value ?? '');
+  if (str === '') {
+    return "''";
   }
+  return `'${str.replace(/'/g, `'\\''`)}'`;
+}
 
-  const openai = new OpenAI({ apiKey });
+function buildCommandString(baseCommand, args = []) {
+  const trimmedBase =
+    typeof baseCommand === 'string' && baseCommand.trim() ? baseCommand.trim() : '';
+  if (!trimmedBase) {
+    throw new Error('Command is not configured for branch naming.');
+  }
+  const serializedArgs = args.map((arg) => shellQuote(arg));
+  return [trimmedBase, ...serializedArgs].join(' ');
+}
+
+function normaliseLlm(input) {
+  if (typeof input !== 'string') {
+    return DEFAULT_LLM;
+  }
+  const trimmed = input.trim().toLowerCase();
+  if (!trimmed) {
+    return DEFAULT_LLM;
+  }
+  if (!SUPPORTED_LLMS.has(trimmed)) {
+    return DEFAULT_LLM;
+  }
+  return trimmed;
+}
+
+function buildPromptText({ developerMessage, userPrompt }) {
+  const sections = [developerMessage.trim()];
+  if (userPrompt.trim()) {
+    sections.push(userPrompt.trim());
+  }
+  sections.push('Respond with the branch name only.');
+  return sections.join('\n\n');
+}
+
+async function executeLlmCommand(command, { signal, onProcessStart } = {}) {
+  const { shellPath, shellArgs } = resolveShellInvocation();
+  const isPosix = process.platform !== 'win32';
+  return new Promise((resolve, reject) => {
+    let stdout = '';
+    let stderr = '';
+    let totalOutput = 0;
+    let timedOut = false;
+    let aborted = false;
+    let killTimer = null;
+    let overflowed = false;
+    const child = spawn(shellPath, [...shellArgs, command], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: process.env,
+      detached: isPosix,
+    });
+
+    if (typeof onProcessStart === 'function') {
+      try {
+        onProcessStart(child);
+      } catch {
+        // ignore observer errors
+      }
+    }
+
+    const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      if (killTimer) {
+        clearTimeout(killTimer);
+      }
+      if (abortListener && signal) {
+        signal.removeEventListener('abort', abortListener);
+      }
+      if (child.stdout) {
+        child.stdout.off('data', handleStdout);
+      }
+      if (child.stderr) {
+        child.stderr.off('data', handleStderr);
+      }
+      child.off('error', handleError);
+      child.off('close', handleClose);
+    };
+
+    const abortError = new Error('Command aborted');
+    abortError.name = 'AbortError';
+
+    const terminateChild = (code = 'SIGTERM') => {
+      if (isPosix && typeof child.pid === 'number' && child.pid > 0) {
+        try {
+          process.kill(-child.pid, code);
+        } catch {
+          // ignore group kill errors
+        }
+      }
+      if (!child.killed) {
+        try {
+          child.kill(code);
+        } catch {
+          // ignore kill errors
+        }
+      }
+      killTimer = setTimeout(() => {
+        if (isPosix && typeof child.pid === 'number' && child.pid > 0) {
+          try {
+            process.kill(-child.pid, 'SIGKILL');
+          } catch {
+            // ignore group kill errors
+          }
+        }
+        if (!child.killed) {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            // ignore kill errors
+          }
+        }
+      }, 1000);
+      killTimer.unref?.();
+    };
+
+    const handleAbort = () => {
+      if (aborted) {
+        return;
+      }
+      aborted = true;
+      terminateChild();
+    };
+
+    let abortListener = null;
+    if (signal) {
+      if (signal.aborted) {
+        handleAbort();
+      } else {
+        abortListener = handleAbort;
+        signal.addEventListener('abort', abortListener);
+      }
+    }
+
+    const timeoutId = COMMAND_TIMEOUT_MS
+      ? setTimeout(() => {
+          timedOut = true;
+          terminateChild();
+        }, COMMAND_TIMEOUT_MS)
+      : null;
+    timeoutId?.unref?.();
+
+    child.stdout?.setEncoding('utf8');
+    child.stderr?.setEncoding('utf8');
+
+    const handleStdout = (chunk) => {
+      stdout += chunk;
+      totalOutput += Buffer.byteLength(chunk, 'utf8');
+      if (totalOutput > COMMAND_MAX_BUFFER) {
+        overflowed = true;
+        terminateChild();
+      }
+    };
+
+    const handleStderr = (chunk) => {
+      stderr += chunk;
+      totalOutput += Buffer.byteLength(chunk, 'utf8');
+      if (totalOutput > COMMAND_MAX_BUFFER) {
+        overflowed = true;
+        terminateChild();
+      }
+    };
+
+    if (child.stdout) {
+      child.stdout.on('data', handleStdout);
+    }
+    if (child.stderr) {
+      child.stderr.on('data', handleStderr);
+    }
+
+    const handleError = (error) => {
+      cleanup();
+      reject(error);
+    };
+
+    child.on('error', handleError);
+
+    const handleClose = (code, signalCode) => {
+      cleanup();
+      if (overflowed) {
+        reject(new Error('Command output exceeded maximum buffer size.'));
+        return;
+      }
+      if (aborted) {
+        reject(abortError);
+        return;
+      }
+      if (timedOut) {
+        reject(new Error('Command timed out.'));
+        return;
+      }
+      if (signalCode) {
+        reject(new Error(`Command terminated due to signal ${signalCode}`));
+        return;
+      }
+      if (code !== 0) {
+        const message = stderr.trim() || stdout.trim() || `Command exited with code ${code}`;
+        reject(new Error(message));
+        return;
+      }
+      resolve(stdout);
+    };
+
+    child.once('close', handleClose);
+  });
+}
+
+function resolveShellInvocation() {
+  const shellPath =
+    typeof process.env.SHELL === 'string' && process.env.SHELL.trim()
+      ? process.env.SHELL.trim()
+      : '/bin/sh';
+  const name = shellPath.split('/').pop();
+  const shellArgs = [];
+  if (name === 'bash' || name === 'zsh' || name === 'fish') {
+    shellArgs.push('-il');
+  }
+  shellArgs.push('-c');
+  return { shellPath, shellArgs };
+}
+
+function resolveBaseCommand(llm) {
+  if (llm === 'codex') {
+    return COMMAND_NAMES.codex;
+  }
+  if (llm === 'claude') {
+    return COMMAND_NAMES.claude;
+  }
+  if (llm === 'cursor') {
+    return COMMAND_NAMES.cursor;
+  }
+  return null;
+}
+
+function buildCommandForLlm(llm, promptText) {
+  const baseCommand = resolveBaseCommand(llm);
+  if (!baseCommand) {
+    throw new Error(`No command configured for LLM "${llm}".`);
+  }
+  const commandPrefix = `command ${baseCommand}`;
+
+  switch (llm) {
+    case 'claude':
+      return buildCommandString(commandPrefix, ['-p', promptText]);
+    case 'cursor':
+      return buildCommandString(commandPrefix, ['-p', promptText]);
+    case 'codex':
+    default:
+      return buildCommandString(commandPrefix, ['exec', promptText, '--skip-git-repo-check']);
+  }
+}
+
+export function createBranchNameGenerator({ defaultLlm } = {}) {
+  const chosenLlm = normaliseLlm(defaultLlm);
+  const activeControllers = new Set();
+  const runningCommands = new Set();
+  const activeProcesses = new Set();
 
   async function generateBranchName(context = {}) {
     const userPrompt = buildUserPrompt(context);
     const developerMessage = await loadDeveloperMessage('branch-name', DEFAULT_DEVELOPER_MESSAGE);
 
-    let response;
+    const promptText = buildPromptText({ developerMessage, userPrompt });
+    const requestedLlm = normaliseLlm(context.llm || chosenLlm);
+    const controller = new AbortController();
+    activeControllers.add(controller);
+    let commandPromise;
+
     try {
-      response = await openai.chat.completions.create({
-        model,
-        messages: [
-          {
-            role: 'developer',
-            content: [{ type: 'text', text: developerMessage }],
-          },
-          {
-            role: 'user',
-            content: [{ type: 'text', text: userPrompt }],
-          },
-        ],
-        response_format: { type: 'text' },
-        verbosity: 'low',
-        reasoning_effort: 'minimal',
-        store: false,
-      });
+      const command = buildCommandForLlm(requestedLlm, promptText);
+      try {
+        commandPromise = Promise.resolve(
+          executeLlmCommand(command, {
+            signal: controller.signal,
+            onProcessStart: (childProcess) => {
+              if (!childProcess) {
+                return;
+              }
+              activeProcesses.add(childProcess);
+              childProcess.once('close', () => {
+                activeProcesses.delete(childProcess);
+              });
+            },
+          }),
+        );
+      } catch (error) {
+        if (controller.signal.aborted || error?.name === 'AbortError' || error?.code === 'ABORT_ERR') {
+          throw new Error('Branch name generation was cancelled.');
+        }
+        throw error;
+      }
+      runningCommands.add(commandPromise);
+      let output;
+      try {
+        output = await commandPromise;
+      } finally {
+        runningCommands.delete(commandPromise);
+      }
+      const candidate = sanitiseCandidate(output);
+      if (!candidate) {
+        throw new Error('Generated branch name was empty.');
+      }
+      if (candidate.toLowerCase() === 'main') {
+        throw new Error('Generated branch name is invalid (branch "main" is not allowed).');
+      }
+      return candidate;
     } catch (error) {
-      throw new Error(
-        `Failed to generate branch name: ${error instanceof Error ? error.message : String(error)}`,
+      if (controller.signal.aborted || error?.name === 'AbortError' || error?.code === 'ABORT_ERR') {
+        throw new Error('Branch name generation was cancelled.');
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to generate branch name using ${requestedLlm}: ${message}`);
+    } finally {
+      activeControllers.delete(controller);
+    }
+  }
+
+  async function disposeAll() {
+    if (activeControllers.size === 0 && runningCommands.size === 0 && activeProcesses.size === 0) {
+      return;
+    }
+    const controllers = Array.from(activeControllers);
+    controllers.forEach((controller) => {
+      try {
+        controller.abort();
+      } catch {
+        // ignore abort errors during disposal
+      }
+    });
+    activeControllers.clear();
+    const processes = Array.from(activeProcesses);
+    activeProcesses.clear();
+    processes.forEach((child) => {
+      try {
+        if (!child.killed) {
+          child.kill('SIGTERM');
+        }
+      } catch {
+        // ignore kill errors during disposal
+      }
+    });
+    if (processes.length > 0) {
+      await Promise.allSettled(
+        processes.map(
+          (child) =>
+            new Promise((resolve) => {
+              if (child.exitCode !== null || child.signalCode) {
+                resolve();
+                return;
+              }
+              const handleResolve = () => resolve();
+              child.once('close', handleResolve);
+              child.once('exit', handleResolve);
+            }),
+        ),
       );
     }
-
-    const choice = response?.choices?.[0]?.message?.content;
-    const candidate = sanitiseCandidate(choice);
-    if (!candidate) {
-      throw new Error('Generated branch name was empty.');
+    const pending = Array.from(runningCommands);
+    runningCommands.clear();
+    if (pending.length > 0) {
+      await Promise.allSettled(pending);
     }
-
-    return candidate;
   }
 
   return {
     isConfigured: true,
-    async generateBranchName(context) {
-      const branch = await generateBranchName(context);
-      if (branch.toLowerCase() === 'main') {
-        throw new Error('Generated branch name is invalid (branch "main" is not allowed).');
-      }
-      return branch;
+    generateBranchName,
+    async dispose() {
+      await disposeAll();
     },
   };
 }

@@ -89,9 +89,9 @@ test('defaults plan=true and routes prompt through plan service', async () => {
   const planCalls = [];
   const planService = {
     isConfigured: true,
-    async createPlanText({ prompt }) {
-      planCalls.push(prompt);
-      return `PLAN:${prompt}`;
+    async createPlanText(options) {
+      planCalls.push(options);
+      return `PLAN:${options.prompt}`;
     },
   };
 
@@ -127,7 +127,10 @@ test('defaults plan=true and routes prompt through plan service', async () => {
   assert.equal(payload.data.promptRoute, 'create-plan');
   assert.equal(payload.data.automationRequestId, 'req-automation-test');
   assert.equal(planCalls.length, 1);
-  assert.equal(planCalls[0], 'Ship the feature');
+  assert.deepEqual(planCalls[0], {
+    prompt: 'Ship the feature',
+    cwd: '/work/org/repo/repository',
+  });
   assert.equal(lastPrompt, 'PLAN:Ship the feature');
   assert.equal(automationPlanMetrics.planTrue.requests, 1);
   assert.equal(automationPlanMetrics.planTrue.successes, 1);

@@ -144,7 +144,7 @@ The server uses `codex`, `cursor`, or `claude` agent commands configured via `co
 `git@github.com:org/repository.git` if necessary, creating (or reusing) the specified worktree, and
 then launching the agent inside the same tmux-backed terminal session that the UI attaches to. When
 `plan` is omitted or set to `true` the submitted prompt is first transformed via the **Create Plan**
-pipeline (requires an `openaiApiKey`); set `"plan": false` to preserve the original prompt and bypass
+pipeline (powered by the configured local LLM); set `"plan": false` to preserve the original prompt and bypass
 planning. The request responds with `202 Accepted` once the terminal session is ready and includes
 metadata about the repository, worktree, agent command, process `pid`, terminal identifiers
 (`terminalSessionId`, `terminalSessionCreated`, `terminalUsingTmux`, `tmuxSessionName` when

@@ -11,6 +11,7 @@ import { attachTerminalWebSockets } from './websocket.js';
 import { createUiProvider } from './ui.js';
 import { createAgentCommands } from '../config/agent-commands.js';
 import { createBranchNameGenerator } from '../core/branch-name.js';
+import { createPlanService } from '../core/plan.js';
 
 export async function startServer({
   uiPath,
@@ -22,6 +23,8 @@ export async function startServer({
   ngrok: ngrokConfig,
   automationApiKey,
   openaiApiKey,
+  branchNameLlm,
+  planLlm,
 } = {}) {
   if (!uiPath) {
     throw new Error('Missing required option: uiPath');
@@ -37,14 +40,17 @@ export async function startServer({
   if (resolvedOpenAiKey && !process.env.OPENAI_API_KEY) {
     process.env.OPENAI_API_KEY = resolvedOpenAiKey;
   }
-  const branchNameGenerator = createBranchNameGenerator({ apiKey: resolvedOpenAiKey });
+  const branchNameGenerator = createBranchNameGenerator({
+    defaultLlm: branchNameLlm,
+  });
+  const planService = createPlanService({ defaultLlm: planLlm });
   const router = createRouter({
     authManager,
     workdir: resolvedWorkdir,
     agentCommands,
     automationApiKey,
     branchNameGenerator,
-    openaiApiKey: resolvedOpenAiKey,
+    planService,
   });
 
   const server = http.createServer(async (req, res) => {
@@ -73,6 +79,14 @@ export async function startServer({
   });
 
   const { close: closeWebSockets } = attachTerminalWebSockets(server, authManager);
+
+  const activeSockets = new Set();
+  server.on('connection', (socket) => {
+    activeSockets.add(socket);
+    socket.on('close', () => {
+      activeSockets.delete(socket);
+    });
+  });
 
   await new Promise((resolve, reject) => {
     server.once('error', reject);
@@ -123,6 +137,14 @@ export async function startServer({
     }
     closing = true;
 
+    activeSockets.forEach((socket) => {
+      try {
+        socket.destroy();
+      } catch {
+        // ignore socket destroy errors during shutdown
+      }
+    });
+
     const serverClose = new Promise((resolve) => {
       server.close(() => resolve());
     });
@@ -132,6 +154,24 @@ export async function startServer({
       closeWebSockets(),
       serverClose,
     ];
+    if (branchNameGenerator && typeof branchNameGenerator.dispose === 'function') {
+      closeTasks.push(
+        branchNameGenerator
+          .dispose()
+          .catch((error) =>
+            console.error('[terminal-worktree] Failed to dispose branch name generator:', error),
+          ),
+      );
+    }
+    if (planService && typeof planService.dispose === 'function') {
+      closeTasks.push(
+        planService
+          .dispose()
+          .catch((error) =>
+            console.error('[terminal-worktree] Failed to dispose plan service:', error),
+          ),
+      );
+    }
     if (ngrokListener) {
       closeTasks.push(
         ngrokListener

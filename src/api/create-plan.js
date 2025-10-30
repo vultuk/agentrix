@@ -1,8 +1,8 @@
-import { createPlanService } from '../core/plan.js';
 import { sendJson } from '../utils/http.js';
+import { ensureRepository } from '../core/git.js';
 
-export function createPlanHandlers({ openaiApiKey, planService: providedPlanService } = {}) {
-  const planService = providedPlanService ?? createPlanService({ apiKey: openaiApiKey });
+export function createPlanHandlers({ planService: providedPlanService } = {}) {
+  const planService = providedPlanService;
 
   async function create(context) {
     let payload;
@@ -20,145 +20,58 @@ export function createPlanHandlers({ openaiApiKey, planService: providedPlanServ
     }
 
     if (!planService || !planService.isConfigured) {
-      sendJson(context.res, 500, { error: 'OpenAI API key is not configured (set openaiApiKey in config.json).' });
+      sendJson(context.res, 500, {
+        error:
+          'Plan generation is not configured. Configure a local LLM command (set planLlm in config.json).',
+      });
       return;
     }
 
-    let stream;
-    try {
-      stream = await planService.createPlanStream({ prompt });
-    } catch (error) {
-      if (error?.code === 'OPENAI_NOT_CONFIGURED') {
-        sendJson(context.res, 500, { error: error.message });
+    const org = typeof payload.org === 'string' ? payload.org.trim() : '';
+    const repo = typeof payload.repo === 'string' ? payload.repo.trim() : '';
+    let commandCwd = '';
+
+    if ((org && !repo) || (!org && repo)) {
+      sendJson(context.res, 400, {
+        error: 'Both org and repo must be provided when specifying repository context.',
+      });
+      return;
+    }
+
+    if (org && repo) {
+      const workdir = typeof context.workdir === 'string' ? context.workdir : '';
+      if (!workdir) {
+        sendJson(context.res, 500, {
+          error: 'Server workdir is not configured.',
+        });
         return;
       }
+      try {
+        const { repositoryPath } = await ensureRepository(workdir, org, repo);
+        commandCwd = repositoryPath;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        sendJson(context.res, 404, { error: message });
+        return;
+      }
+    }
+
+    let planText;
+    try {
+      const options = commandCwd ? { prompt, cwd: commandCwd } : { prompt };
+      planText = await planService.createPlanText(options);
+    } catch (error) {
       if (error instanceof Error && error.message === 'prompt is required') {
         sendJson(context.res, 400, { error: error.message });
         return;
       }
       const message = error instanceof Error ? error.message : String(error);
-      const errorMessage = message.startsWith('Failed to reach OpenAI:')
-        ? message
-        : `Failed to reach OpenAI: ${message}`;
       sendJson(context.res, 502, {
-        error: errorMessage,
+        error: message,
       });
       return;
     }
-
-    const { req, res } = context;
-
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.shouldKeepAlive = true;
-
-    const socket = res.socket;
-    if (socket) {
-      socket.setKeepAlive(true, 0);
-      socket.setNoDelay(true);
-    }
-
-    if (typeof res.flushHeaders === 'function') {
-      res.flushHeaders();
-    }
-
-    let clientClosed = false;
-    let hasContent = false;
-    let streamErrorMessage = null;
-
-    const handleClose = () => {
-      clientClosed = true;
-    };
-
-    req.on('close', handleClose);
-
-    const writeIfPossible = (chunk) => {
-      if (clientClosed || res.writableEnded) {
-        return;
-      }
-      res.write(chunk);
-    };
-
-    const writeEvent = (data, eventType = 'message') => {
-      if (clientClosed || res.writableEnded) {
-        return;
-      }
-      if (eventType && eventType !== 'message') {
-        writeIfPossible(`event: ${eventType}\n`);
-      }
-      if (typeof data === 'string') {
-        const segments = data.split(/\r?\n/);
-        for (const segment of segments) {
-          writeIfPossible(`data: ${segment}\n`);
-        }
-      } else {
-        writeIfPossible(`data: ${JSON.stringify(data)}\n`);
-      }
-      writeIfPossible('\n');
-    };
-
-    const normaliseContent = (delta) => {
-      if (!delta) {
-        return '';
-      }
-
-      if (typeof delta.content === 'string') {
-        return delta.content;
-      }
-
-      if (Array.isArray(delta.content)) {
-        return delta.content
-          .map((part) => {
-            if (!part) {
-              return '';
-            }
-            if (typeof part === 'string') {
-              return part;
-            }
-            if (typeof part.text === 'string') {
-              return part.text;
-            }
-            return '';
-          })
-          .join('');
-      }
-
-      return '';
-    };
-
-    try {
-      for await (const chunk of stream) {
-        if (clientClosed) {
-          break;
-        }
-        const delta = chunk?.choices?.[0]?.delta;
-        const content = normaliseContent(delta);
-        if (typeof content !== 'string' || content.length === 0) {
-          continue;
-        }
-        hasContent = true;
-        writeEvent({ content });
-      }
-    } catch (error) {
-      streamErrorMessage = `Streaming error: ${error instanceof Error ? error.message : String(error)}`;
-    } finally {
-      if (!clientClosed) {
-        if (!hasContent && !streamErrorMessage) {
-          streamErrorMessage = 'OpenAI response did not include a plan.';
-        }
-        if (streamErrorMessage) {
-          writeEvent({ message: streamErrorMessage }, 'error');
-        }
-        writeEvent('[DONE]');
-        if (!res.writableEnded) {
-          res.end();
-        }
-      }
-      req.removeListener('close', handleClose);
-    }
+    sendJson(context.res, 200, { plan: planText });
   }
 
   return { create };
