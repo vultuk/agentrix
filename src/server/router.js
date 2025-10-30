@@ -98,6 +98,13 @@ export function createRouter({
       },
     ],
     [
+      '/api/git/diff',
+      {
+        requiresAuth: true,
+        handlers: { POST: gitStatusHandlers.diff },
+      },
+    ],
+    [
       '/api/terminal/open',
       {
         requiresAuth: true,

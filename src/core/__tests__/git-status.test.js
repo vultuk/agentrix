@@ -7,6 +7,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { getWorktreeStatus } from '../git.js';
+import { getWorktreeFileDiff } from '../git.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -191,6 +192,47 @@ test('recent commits filter using local main when upstream missing', async () =>
     const commitSubjects = status.commits.items.map((item) => item.subject);
     assert.ok(commitSubjects.includes('Feature branch commit'));
     assert.ok(!commitSubjects.includes('Initial commit'));
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test('getWorktreeFileDiff returns staged and unstaged diffs', async () => {
+  const fixture = await createRepoFixture('diff');
+  const { repositoryPath, workdir, org, repo } = fixture;
+
+  try {
+    const filePath = path.join(repositoryPath, 'sample.txt');
+    await fs.writeFile(filePath, 'original\n');
+    await runGit(['add', 'sample.txt'], { cwd: repositoryPath });
+    await runGit(['commit', '-m', 'Add sample'], { cwd: repositoryPath });
+
+    await fs.writeFile(filePath, 'original\nstaged change\n');
+    await runGit(['add', 'sample.txt'], { cwd: repositoryPath });
+
+    await fs.writeFile(filePath, 'original\nstaged change\nworking tree\n');
+
+    const staged = await getWorktreeFileDiff(workdir, org, repo, 'main', {
+      path: 'sample.txt',
+      mode: 'staged',
+    });
+    assert.ok(staged.diff.includes('staged change'));
+    assert.ok(!staged.diff.includes('working tree'));
+
+    const unstaged = await getWorktreeFileDiff(workdir, org, repo, 'main', {
+      path: 'sample.txt',
+      mode: 'unstaged',
+    });
+    assert.ok(unstaged.diff.includes('working tree'));
+
+    const newFilePath = path.join(repositoryPath, 'fresh.txt');
+    await fs.writeFile(newFilePath, 'hello\n');
+
+    const untracked = await getWorktreeFileDiff(workdir, org, repo, 'main', {
+      path: 'fresh.txt',
+      mode: 'untracked',
+    });
+    assert.ok(untracked.diff.includes('+++ b/fresh.txt'));
   } finally {
     await fixture.cleanup();
   }

@@ -20,6 +20,7 @@ import {
 import 'xterm/css/xterm.css';
 import { renderMarkdown } from './utils/markdown';
 import GitStatusSidebar from './components/GitStatusSidebar.jsx';
+import DiffViewer from './components/DiffViewer.jsx';
 
 const { createElement: h } = React;
 
@@ -59,7 +60,7 @@ function Modal({ title, onClose, children, size = 'md', position = 'center' }) {
         const content = Array.isArray(children) ? children : [children];
         const alignmentClass = position === 'top' ? 'items-start' : 'items-center';
         const wrapperSpacingClass = position === 'top' ? 'mt-10' : '';
-        const maxWidthClass = size === 'lg' ? 'max-w-3xl' : 'max-w-md';
+        const maxWidthClass = size === 'lg' ? 'max-w-[90vw]' : 'max-w-md';
         return h(
           'div',
           {
@@ -75,7 +76,7 @@ function Modal({ title, onClose, children, size = 'md', position = 'center' }) {
             'div',
             {
               className: [
-                'bg-neutral-900 border border-neutral-700 rounded-lg w-full shadow-xl',
+                'bg-neutral-900 border border-neutral-700 rounded-lg w-full shadow-xl max-h-[90vh] flex flex-col overflow-hidden',
                 maxWidthClass,
                 wrapperSpacingClass
               ]
@@ -97,7 +98,11 @@ function Modal({ title, onClose, children, size = 'md', position = 'center' }) {
                 h(X, { size: 16 })
               )
             ),
-            h('div', { className: 'px-4 py-4 space-y-3' }, ...content)
+            h(
+              'div',
+              { className: 'px-4 py-4 space-y-3 flex-1 overflow-y-auto min-h-0 flex flex-col' },
+              ...content
+            )
           )
         );
       }
@@ -281,6 +286,17 @@ function LoginScreen({ onAuthenticated }) {
           }
           return {};
         });
+        const [gitDiffModal, setGitDiffModal] = useState(() => ({
+          open: false,
+          loading: false,
+          error: null,
+          diff: '',
+          file: null,
+          view:
+            typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
+              ? 'unified'
+              : 'split',
+        }));
         const [gitSidebarState, setGitSidebarState] = useState({});
 
         const actionButtonClass = 'inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors';
@@ -463,6 +479,129 @@ function LoginScreen({ onAuthenticated }) {
               d: 'M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z'
             })
           );
+
+        useEffect(() => {
+          setGitDiffModal((current) => {
+            if (!current.open) {
+              return current;
+            }
+            return { open: false, loading: false, error: null, diff: '', file: null, view: 'split' };
+          });
+        }, [activeWorktree]);
+
+        const resolveDefaultDiffView = useCallback(() => {
+          if (typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches) {
+            return 'unified';
+          }
+          return 'split';
+        }, []);
+
+        const handleCloseGitDiff = useCallback(() => {
+          setGitDiffModal({ open: false, loading: false, error: null, diff: '', file: null, view: resolveDefaultDiffView() });
+        }, [resolveDefaultDiffView]);
+
+        const handleOpenGitDiff = useCallback(
+          ({ item }) => {
+            if (!activeWorktree || !item || !item.path) {
+              return;
+            }
+
+            const determineDiffMode = (target) => {
+              if (target.kind === 'staged') {
+                return 'staged';
+              }
+              if (target.kind === 'untracked') {
+                return 'untracked';
+              }
+              if (target.kind === 'conflict') {
+                return 'unstaged';
+              }
+              if (target.indexStatus && target.indexStatus !== ' ') {
+                return 'staged';
+              }
+              return 'unstaged';
+            };
+
+            const diffMode = determineDiffMode(item);
+            const nextFile = {
+              path: item.path,
+              previousPath: item.previousPath || null,
+              kind: item.kind || null,
+              status: item.status || '',
+              mode: diffMode,
+            };
+
+            setGitDiffModal({ open: true, loading: true, error: null, diff: '', file: nextFile, view: resolveDefaultDiffView() });
+
+            (async () => {
+              try {
+                const response = await fetch('/api/git/diff', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
+                  body: JSON.stringify({
+                    org: activeWorktree.org,
+                    repo: activeWorktree.repo,
+                    branch: activeWorktree.branch,
+                    path: item.path,
+                    previousPath: item.previousPath || null,
+                    mode: diffMode,
+                    status: item.status || '',
+                  }),
+                });
+                if (response.status === 401) {
+                  notifyAuthExpired();
+                  throw new Error('AUTH_REQUIRED');
+                }
+                if (!response.ok) {
+                  throw new Error(`Request failed with status ${response.status}`);
+                }
+                const body = await response.json();
+                const payload = body && typeof body === 'object' ? body.diff || null : null;
+                setGitDiffModal((current) => ({
+                  open: true,
+                  loading: false,
+                  error: null,
+                  diff: payload && typeof payload.diff === 'string' ? payload.diff : '',
+                  file: payload && typeof payload === 'object'
+                    ? {
+                        path: payload.path || nextFile.path,
+                        previousPath: payload.previousPath ?? nextFile.previousPath,
+                        kind: nextFile.kind,
+                        status: nextFile.status,
+                        mode: payload.mode || nextFile.mode,
+                      }
+                    : nextFile,
+                  view: current.view || resolveDefaultDiffView(),
+                }));
+              } catch (error) {
+                if (error && error.message === 'AUTH_REQUIRED') {
+                  setGitDiffModal({ open: false, loading: false, error: null, diff: '', file: null, view: resolveDefaultDiffView() });
+                  return;
+                }
+                setGitDiffModal((current) => ({
+                  open: true,
+                  loading: false,
+                  error: error && error.message ? error.message : 'Failed to load diff',
+                  diff: '',
+                  file: current.file || nextFile,
+                  view: current.view || resolveDefaultDiffView(),
+                }));
+              }
+            })();
+          },
+          [activeWorktree, notifyAuthExpired, resolveDefaultDiffView],
+        );
+
+        const toggleDiffView = useCallback(() => {
+          setGitDiffModal((current) => {
+            if (!current.open) {
+              return current;
+            }
+            const nextView = current.view === 'split' ? 'unified' : 'split';
+            return { ...current, view: nextView };
+          });
+        }, []);
 
         const terminalContainerRef = useRef(null);
         const terminalRef = useRef(null);
@@ -1564,23 +1703,6 @@ function LoginScreen({ onAuthenticated }) {
         const showPromptDangerousModeOption = promptAgent === 'codex' || promptAgent === 'claude';
         const isPromptLaunchOptionDisabled = !promptText.trim();
 
-        const statusStyles = {
-          connected: 'border border-emerald-500/40 text-emerald-300 bg-emerald-500/15',
-          connecting: 'border border-amber-500/40 text-amber-200 bg-amber-500/15',
-          closed: 'border border-neutral-700 text-neutral-400 bg-neutral-800',
-          error: 'border border-rose-500/40 text-rose-200 bg-rose-500/15',
-          disconnected: 'border border-neutral-800 text-neutral-500 bg-neutral-900'
-        };
-        const statusLabels = {
-          connected: 'Connected',
-          connecting: 'Connecting…',
-          closed: 'Closed',
-          error: 'Error',
-          disconnected: 'Disconnected'
-        };
-        const statusClass = statusStyles[terminalStatus] || statusStyles.disconnected;
-        const statusLabel = statusLabels[terminalStatus] || statusLabels.disconnected;
-
         const logoutButton =
           typeof onLogout === 'function'
             ? h(
@@ -1621,49 +1743,18 @@ function LoginScreen({ onAuthenticated }) {
             gitSidebarOperations.bisect?.inProgress
         );
 
-        let gitSidebarButtonTone = 'border-neutral-800 bg-neutral-925 hover:bg-neutral-800/80 text-neutral-300';
-        if (isGitSidebarOpen) {
-          gitSidebarButtonTone = 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15';
-        } else if (gitSidebarHasConflicts) {
-          gitSidebarButtonTone = 'border-rose-500/60 bg-rose-500/10 text-rose-200 hover:bg-rose-500/15';
-        } else if (gitSidebarChangeCount > 0) {
-          gitSidebarButtonTone = 'border-amber-500/60 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15';
-        } else if (gitSidebarHasOperations) {
-          gitSidebarButtonTone = 'border-sky-500/60 bg-sky-500/10 text-sky-200 hover:bg-sky-500/15';
-        }
-
         const gitSidebarButton = activeWorktree
           ? h(
               'button',
               {
                 type: 'button',
                 onClick: toggleGitSidebar,
-                className: `inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${gitSidebarButtonTone}`,
+                className: `${actionButtonClass} text-neutral-400 hover:text-neutral-100`,
                 'aria-pressed': isGitSidebarOpen ? 'true' : 'false',
                 'aria-expanded': isGitSidebarOpen ? 'true' : 'false',
                 title: isGitSidebarOpen ? 'Hide Git status sidebar' : 'Show Git status sidebar'
               },
-              h(isGitSidebarOpen ? PanelRightClose : PanelRightOpen, { size: 14 }),
-              h('span', null, 'Git status'),
-              gitSidebarChangeCount > 0
-                ? h(
-                    'span',
-                    {
-                      className:
-                        'inline-flex items-center justify-center rounded-full bg-neutral-950/80 px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-current'
-                    },
-                    gitSidebarBadgeLabel
-                  )
-                : gitSidebarHasOperations
-                ? h(
-                    'span',
-                    {
-                      className:
-                        'inline-flex items-center justify-center rounded-full border border-current/60 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-current'
-                    },
-                    'OPS'
-                  )
-                : null
+              h(GitBranch, { size: 16 })
             )
           : null;
 
@@ -1926,16 +2017,7 @@ function LoginScreen({ onAuthenticated }) {
                       { className: 'text-xs text-neutral-500' },
                       `${activeWorktree.org}/${activeWorktree.repo}`
                     ),
-                    h(
-                      'div',
-                      { className: 'text-sm text-neutral-300 flex items-center gap-2' },
-                      h('span', null, ` ${activeWorktree.branch}`),
-                      h(
-                        'span',
-                        { className: `inline-flex items-center px-2 py-0.5 rounded-md text-2xs uppercase tracking-wide ${statusClass}` },
-                        statusLabel
-                      )
-                    )
+                    h('div', { className: 'text-sm text-neutral-300 flex items-center gap-2' }, h('span', null, ` ${activeWorktree.branch}`))
                   ),
                   h(
                     'div',
@@ -1967,6 +2049,7 @@ function LoginScreen({ onAuthenticated }) {
                     onClose: closeGitSidebar,
                     onAuthExpired: notifyAuthExpired,
                     onStatusUpdate: handleGitStatusUpdate,
+                    onOpenDiff: handleOpenGitDiff,
                     entryLimit: 250,
                     commitLimit: 20,
                     pollInterval: REPOSITORY_POLL_INTERVAL_MS
@@ -2070,6 +2153,76 @@ function LoginScreen({ onAuthenticated }) {
                         )
                       : 'Add repository'
                   )
+                )
+              )
+            : null,
+          gitDiffModal.open
+            ? h(
+                Modal,
+                {
+                  title: gitDiffModal.file?.path ? `Diff: ${gitDiffModal.file.path}` : 'File diff',
+                  onClose: handleCloseGitDiff,
+                  size: 'lg',
+                },
+                h(
+                  'div',
+                  { className: 'space-y-3' },
+                  h(
+                    'div',
+                    { className: 'flex flex-wrap items-center justify-between gap-3 text-xs text-neutral-500' },
+                    h(
+                      'div',
+                      { className: 'space-y-1' },
+                      gitDiffModal.file?.previousPath
+                        ? h(
+                            'p',
+                            null,
+                            `Renamed from ${gitDiffModal.file.previousPath}`
+                          )
+                        : null,
+                      gitDiffModal.file?.mode
+                        ? h(
+                            'p',
+                            null,
+                            `Diff mode: ${gitDiffModal.file.mode}`
+                          )
+                        : null,
+                    ),
+                    h(
+                      'div',
+                      { className: 'flex items-center gap-2' },
+                      h(
+                        'button',
+                        {
+                          type: 'button',
+                          onClick: toggleDiffView,
+                          className:
+                            'inline-flex items-center gap-2 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-1 text-xs text-neutral-200 transition hover:bg-neutral-800',
+                        },
+                        gitDiffModal.view === 'split' ? 'Show unified' : 'Show split'
+                      )
+                    )
+                  ),
+                  gitDiffModal.loading
+                    ? h(
+                        'div',
+                        { className: 'flex items-center gap-2 text-sm text-neutral-300' },
+                        renderSpinner('text-neutral-200'),
+                        h('span', null, 'Loading diff…')
+                      )
+                    : gitDiffModal.error
+                    ? h(
+                        'p',
+                        { className: 'text-sm text-rose-300' },
+                        gitDiffModal.error
+                      )
+                    : h(
+                        DiffViewer,
+                        {
+                          diff: gitDiffModal.diff,
+                          view: gitDiffModal.view,
+                        }
+                      )
                 )
               )
             : null,

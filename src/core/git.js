@@ -348,6 +348,9 @@ const STATUS_LABELS = new Map([
 
 const DEFAULT_ENTRY_LIMIT = 200;
 const DEFAULT_COMMIT_LIMIT = 10;
+const DEFAULT_DIFF_LIMIT = 1024 * 1024 * 4; // 4 MiB
+
+const POSIX_SEPARATOR = '/';
 
 async function pathExists(targetPath) {
   try {
@@ -826,5 +829,142 @@ export async function getWorktreeStatus(
       untracked: fileStatuses.untracked.total,
       conflicts: fileStatuses.conflicts.total,
     },
+  };
+}
+
+function normaliseGitPath(input) {
+  if (typeof input !== 'string') {
+    throw new Error('path is required');
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    throw new Error('path is required');
+  }
+
+  if (path.isAbsolute(trimmed)) {
+    throw new Error('path must be relative to the worktree');
+  }
+
+  const sanitised = trimmed.split(/\\+/).join(POSIX_SEPARATOR);
+  const normalised = path.posix.normalize(sanitised);
+
+  if (!normalised || normalised === '.' || normalised.startsWith('../') || normalised.includes('/../')) {
+    throw new Error('Invalid path');
+  }
+
+  return normalised;
+}
+
+function resolveDiffMode({ mode, kind, status }) {
+  if (mode === 'staged') {
+    return 'staged';
+  }
+  if (mode === 'untracked' || kind === 'untracked') {
+    return 'untracked';
+  }
+  if (mode === 'conflict' || kind === 'conflict') {
+    return 'conflict';
+  }
+  if (mode === 'staged' || kind === 'staged' || (status && status[0] && status[0] !== ' ')) {
+    return 'staged';
+  }
+  return 'unstaged';
+}
+
+export async function getWorktreeFileDiff(
+  workdir,
+  org,
+  repo,
+  branch,
+  {
+    path: targetPath,
+    previousPath,
+    mode,
+    status,
+  } = {},
+) {
+  const branchName = normaliseBranchName(branch);
+  if (!branchName) {
+    throw new Error('branch is required');
+  }
+
+  const relativePath = normaliseGitPath(targetPath || '');
+  const previousRelativePath = previousPath ? normaliseGitPath(previousPath) : null;
+
+  const { worktreePath } = await getWorktreePath(workdir, org, repo, branchName);
+  const diffMode = resolveDiffMode({ mode, kind: mode, status });
+
+  const baseArgs = ['-C', worktreePath, 'diff', '--no-color'];
+  let args;
+
+  if (diffMode === 'staged') {
+    args = [...baseArgs, '--cached', '--', relativePath];
+  } else if (diffMode === 'untracked') {
+    const absolutePath = path.join(worktreePath, relativePath);
+    const nullDevice = process.platform === 'win32' ? 'NUL' : '/dev/null';
+    args = ['diff', '--no-color', '--no-index', '--', nullDevice, absolutePath];
+  } else {
+    args = [...baseArgs, '--', relativePath];
+  }
+
+  let stdout = '';
+  let stderr = '';
+
+  try {
+    if (diffMode === 'untracked') {
+      const { stdout: out } = await execFileAsync('git', args, { maxBuffer: DEFAULT_DIFF_LIMIT });
+      stdout = out;
+    } else {
+      const { stdout: out } = await execFileAsync('git', args, { maxBuffer: DEFAULT_DIFF_LIMIT });
+      stdout = out;
+    }
+  } catch (error) {
+    stderr = error && error.stderr ? error.stderr.toString() : '';
+    stdout = error && error.stdout ? error.stdout.toString() : '';
+    if (!stdout.trim()) {
+      const message = stderr || error.message || 'Failed to render diff';
+      throw new Error(message.trim());
+    }
+  }
+
+  if (diffMode === 'untracked' && stdout.trim()) {
+    stdout = stdout
+      .replace(/^---\s+.*$/m, '--- /dev/null')
+      .replace(/^\+\+\+\s+.*$/m, `+++ b/${relativePath}`);
+  }
+
+  if (!stdout.trim()) {
+    if (diffMode === 'untracked') {
+      try {
+        const absolutePath = path.join(worktreePath, relativePath);
+        const data = await fs.readFile(absolutePath, 'utf8');
+        const lines = data.split('\n');
+        const diffLines = lines.map((line) => `+${line}`).join('\n');
+        const totalLines = lines.length;
+        return {
+          path: relativePath,
+          previousPath: previousRelativePath,
+          mode: diffMode,
+          diff: `--- /dev/null\n+++ b/${relativePath}\n@@ -0,0 +1,${Math.max(totalLines, 1)}\n${diffLines}`,
+        };
+      } catch (error) {
+        throw new Error(error.message || 'Failed to read file contents');
+      }
+    }
+
+    return {
+      path: relativePath,
+      previousPath: previousRelativePath,
+      mode: diffMode,
+      diff: 'No differences to display.',
+    };
+  }
+
+  return {
+    path: relativePath,
+    previousPath: previousRelativePath,
+    mode: diffMode,
+    diff: stdout,
   };
 }

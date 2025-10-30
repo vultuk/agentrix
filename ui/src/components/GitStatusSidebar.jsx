@@ -91,7 +91,7 @@ function SectionHeaderButton({
   );
 }
 
-function ChangeList({ items, emptyLabel, kind }) {
+function ChangeList({ items, emptyLabel, onSelect }) {
   if (!items || items.length === 0) {
     return (
       <p className="px-3 py-3 text-xs text-neutral-500">{emptyLabel}</p>
@@ -103,22 +103,32 @@ function ChangeList({ items, emptyLabel, kind }) {
       {items.map((item) => {
         const key = `${item.path || ''}:${item.previousPath || ''}:${item.status || ''}:${item.kind || ''}`;
         return (
-          <li key={key} className="px-3 py-2">
-            <div className="min-w-0 text-sm">
-              <p className="truncate text-neutral-200" title={item.path}>
-                {item.path}
-              </p>
-              {item.previousPath ? (
-                <p className="truncate text-[11px] uppercase tracking-wide text-neutral-500" title={item.previousPath}>
-                  from {item.previousPath}
+          <li key={key} className="px-1 py-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof onSelect === 'function') {
+                  onSelect(item);
+                }
+              }}
+              className="w-full rounded-md px-2 py-2 text-left transition hover:bg-neutral-800/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-500/60"
+            >
+              <div className="min-w-0 text-sm">
+                <p className="truncate text-neutral-200" title={item.path}>
+                  {item.path}
                 </p>
-              ) : null}
-              {item.description ? (
-                <p className="text-[11px] uppercase tracking-wide text-neutral-500/80">
-                  {item.description}
-                </p>
-              ) : null}
-            </div>
+                {item.previousPath ? (
+                  <p className="truncate text-[11px] uppercase tracking-wide text-neutral-500" title={item.previousPath}>
+                    from {item.previousPath}
+                  </p>
+                ) : null}
+                {item.description ? (
+                  <p className="text-[11px] uppercase tracking-wide text-neutral-500/80">
+                    {item.description}
+                  </p>
+                ) : null}
+              </div>
+            </button>
           </li>
         );
       })}
@@ -160,6 +170,7 @@ export default function GitStatusSidebar({
   onClose,
   onAuthExpired,
   onStatusUpdate,
+  onOpenDiff,
   pollInterval = AUTO_REFRESH_INTERVAL_MS,
   entryLimit,
   commitLimit,
@@ -354,9 +365,19 @@ export default function GitStatusSidebar({
 
   const lastUpdated = formatTimestamp(status?.fetchedAt);
 
+  const handleFileDiffRequest = useCallback(
+    (section, item) => {
+      if (typeof onOpenDiff !== 'function' || !item) {
+        return;
+      }
+      onOpenDiff({ section, item });
+    },
+    [onOpenDiff],
+  );
+
   const desktopPanel = (
     <div
-      className={`hidden h-full flex-col border-l border-neutral-800 bg-neutral-900/95 text-neutral-100 shadow-lg transition-[width,opacity] duration-200 ease-out lg:flex lg:flex-shrink-0 lg:overflow-hidden ${
+      className={`hidden h-full flex-col border-l border-neutral-800 bg-neutral-900/95 text-neutral-100 shadow-lg transition-[width,opacity] duration-200 ease-out lg:flex lg:flex-shrink-0 lg:overflow-hidden font-sans ${
         isOpen ? 'lg:w-[360px] opacity-100' : 'pointer-events-none lg:w-0 opacity-0'
       }`}
       aria-hidden={isOpen ? 'false' : 'true'}
@@ -429,7 +450,7 @@ export default function GitStatusSidebar({
                       <ChangeList
                         items={fileSet.items}
                         emptyLabel={emptyLabels[key]}
-                        kind={key === 'conflicts' ? 'conflict' : key}
+                        onSelect={(item) => handleFileDiffRequest(key, item)}
                       />
                     ) : null}
                   </section>
@@ -463,7 +484,7 @@ export default function GitStatusSidebar({
     >
       <div className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${isOpen ? 'opacity-100' : 'opacity-0'}`} onClick={onClose} />
       <aside
-        className={`absolute inset-y-0 right-0 flex w-[90%] max-w-sm flex-col border-l border-neutral-800 bg-neutral-900/95 text-neutral-100 shadow-xl transition-transform duration-200 ${
+        className={`absolute inset-y-0 right-0 flex w-[90%] max-w-sm flex-col border-l border-neutral-800 bg-neutral-900/95 text-neutral-100 shadow-xl transition-transform duration-200 font-sans ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
@@ -534,7 +555,7 @@ export default function GitStatusSidebar({
                       <ChangeList
                         items={fileSet.items}
                         emptyLabel={emptyLabels[key]}
-                        kind={key === 'conflicts' ? 'conflict' : key}
+                        onSelect={(item) => handleFileDiffRequest(key, item)}
                       />
                     ) : null}
                   </section>

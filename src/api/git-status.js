@@ -1,4 +1,4 @@
-import { getWorktreeStatus, normaliseBranchName } from '../core/git.js';
+import { getWorktreeStatus, getWorktreeFileDiff, normaliseBranchName } from '../core/git.js';
 import { sendJson } from '../utils/http.js';
 
 function parseOptionalInteger(value, fallback) {
@@ -48,5 +48,42 @@ export function createGitStatusHandlers(workdir) {
     }
   }
 
-  return { read };
+  async function diff(context) {
+    let payload;
+    try {
+      payload = await context.readJsonBody();
+    } catch (error) {
+      sendJson(context.res, 400, { error: error.message });
+      return;
+    }
+
+    const org = typeof payload.org === 'string' ? payload.org.trim() : '';
+    const repo = typeof payload.repo === 'string' ? payload.repo.trim() : '';
+    const branch = typeof payload.branch === 'string' ? payload.branch.trim() : '';
+    const filePath = typeof payload.path === 'string' ? payload.path : '';
+    const previousPath = typeof payload.previousPath === 'string' ? payload.previousPath : null;
+    const mode = typeof payload.mode === 'string' ? payload.mode : '';
+    const status = typeof payload.status === 'string' ? payload.status : '';
+
+    if (!org || !repo || !branch || !filePath) {
+      sendJson(context.res, 400, { error: 'org, repo, branch, and path are required' });
+      return;
+    }
+
+    try {
+      const result = await getWorktreeFileDiff(workdir, org, repo, branch, {
+        path: filePath,
+        previousPath,
+        mode,
+        status,
+      });
+      context.res.setHeader('Cache-Control', 'no-store');
+      sendJson(context.res, 200, { diff: result });
+    } catch (error) {
+      const message = error && error.message ? error.message : 'Failed to generate diff';
+      sendJson(context.res, 500, { error: message });
+    }
+  }
+
+  return { read, diff };
 }
