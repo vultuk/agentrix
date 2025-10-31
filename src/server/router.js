@@ -9,6 +9,7 @@ import { createGitStatusHandlers } from '../api/git-status.js';
 import { sendJson, readJsonBody } from '../utils/http.js';
 import { createConfigHandlers } from '../api/config.js';
 import { createPlanHandlers } from '../api/create-plan.js';
+import { createPlanArtifactHandlers } from '../api/plans.js';
 
 export function createRouter({
   authManager,
@@ -41,6 +42,7 @@ export function createRouter({
   const configHandlers = createConfigHandlers(agentCommands);
   const planHandlers = createPlanHandlers({ planService });
   const gitStatusHandlers = createGitStatusHandlers(workdir);
+  const planArtifactHandlers = createPlanArtifactHandlers(workdir);
 
   const routes = new Map([
     [
@@ -144,6 +146,20 @@ export function createRouter({
       {
         requiresAuth: true,
         handlers: { POST: planHandlers.create },
+      },
+    ],
+    [
+      '/api/plans',
+      {
+        requiresAuth: true,
+        handlers: { GET: planArtifactHandlers.list },
+      },
+    ],
+    [
+      '/api/plans/content',
+      {
+        requiresAuth: true,
+        handlers: { GET: planArtifactHandlers.read },
       },
     ],
   ]);

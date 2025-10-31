@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -28,8 +28,94 @@ function ensureTrailingNewline(text) {
   return text.endsWith('\n') ? text : `${text}\n`;
 }
 
+const DEFAULT_MAX_PLANS_PER_BRANCH = 20;
+
 async function gitAddPlans(cwd) {
   await execFileAsync('git', ['add', '-A', '.plans'], { cwd });
+}
+
+function parsePlanFilename(filename) {
+  if (typeof filename !== 'string') {
+    return null;
+  }
+
+  const trimmed = filename.trim();
+  if (!trimmed.endsWith('.md')) {
+    return null;
+  }
+
+  const hyphenIndex = trimmed.indexOf('-');
+  if (hyphenIndex === -1) {
+    return null;
+  }
+
+  const timestampPart = trimmed.slice(0, hyphenIndex);
+  const branchPart = trimmed.slice(hyphenIndex + 1, -'.md'.length);
+  if (!timestampPart || !branchPart) {
+    return null;
+  }
+
+  const timestampMatch = timestampPart.match(/^(\d{8})_(\d{6})$/);
+  if (!timestampMatch) {
+    return null;
+  }
+
+  const [, datePart, timePart] = timestampMatch;
+  const year = Number.parseInt(datePart.slice(0, 4), 10);
+  const month = Number.parseInt(datePart.slice(4, 6), 10) - 1;
+  const day = Number.parseInt(datePart.slice(6, 8), 10);
+  const hour = Number.parseInt(timePart.slice(0, 2), 10);
+  const minute = Number.parseInt(timePart.slice(2, 4), 10);
+  const second = Number.parseInt(timePart.slice(4, 6), 10);
+  const createdAt = new Date(Date.UTC(year, month, day, hour, minute, second));
+  if (Number.isNaN(createdAt.getTime())) {
+    return null;
+  }
+
+  return {
+    id: trimmed,
+    branchSuffix: branchPart,
+    createdAt,
+  };
+}
+
+async function prunePlans(directory, branchSuffix, maxCount) {
+  if (!maxCount || maxCount <= 0) {
+    return;
+  }
+
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+
+  const matching = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(`-${branchSuffix}.md`))
+    .map((entry) => entry.name)
+    .sort((a, b) => a.localeCompare(b));
+
+  if (matching.length <= maxCount) {
+    return;
+  }
+
+  const toRemove = matching.slice(0, matching.length - maxCount);
+  await Promise.all(
+    toRemove.map(async (name) => {
+      const filePath = join(directory, name);
+      try {
+        await unlink(filePath);
+      } catch (error) {
+        if (!error || error.code !== 'ENOENT') {
+          throw error;
+        }
+      }
+    }),
+  );
 }
 
 export async function savePlanToWorktree({
@@ -38,6 +124,7 @@ export async function savePlanToWorktree({
   planText,
   clock = () => new Date(),
   gitAdd = gitAddPlans,
+  maxPlansPerBranch = DEFAULT_MAX_PLANS_PER_BRANCH,
 }) {
   const resolvedWorktreePath = typeof worktreePath === 'string' ? worktreePath.trim() : '';
   if (!resolvedWorktreePath) {
@@ -85,14 +172,104 @@ export async function savePlanToWorktree({
 
   await mkdir(directory, { recursive: true });
   await writeFile(filePath, content, 'utf8');
+  await prunePlans(directory, safeBranch, maxPlansPerBranch);
   if (typeof gitAdd === 'function') {
     await gitAdd(resolvedWorktreePath);
   }
   return filePath;
 }
 
+export async function listPlansForWorktree({
+  worktreePath,
+  branch,
+  limit,
+}) {
+  const resolvedWorktreePath = typeof worktreePath === 'string' ? worktreePath.trim() : '';
+  if (!resolvedWorktreePath) {
+    throw new Error('worktreePath is required');
+  }
+  const safeBranch = normaliseBranchName(branch);
+  if (!safeBranch) {
+    throw new Error('branch is required');
+  }
+
+  const directory = join(resolvedWorktreePath, '.plans');
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      return [];
+    }
+    throw error;
+  }
+
+  const suffix = `-${safeBranch}.md`;
+  const plans = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(suffix))
+    .map((entry) => parsePlanFilename(entry.name))
+    .filter((parsed) => parsed !== null)
+    .map((parsed) => ({
+      id: parsed.id,
+      branch: safeBranch,
+      createdAt: parsed.createdAt.toISOString(),
+    }))
+    .sort((a, b) => b.id.localeCompare(a.id));
+
+  if (Number.isInteger(limit) && limit > 0 && plans.length > limit) {
+    return plans.slice(0, limit);
+  }
+  return plans;
+}
+
+export async function readPlanFromWorktree({
+  worktreePath,
+  branch,
+  id,
+}) {
+  const resolvedWorktreePath = typeof worktreePath === 'string' ? worktreePath.trim() : '';
+  if (!resolvedWorktreePath) {
+    throw new Error('worktreePath is required');
+  }
+  const safeBranch = normaliseBranchName(branch);
+  if (!safeBranch) {
+    throw new Error('branch is required');
+  }
+
+  const planId = typeof id === 'string' ? id.trim() : '';
+  if (!planId || planId.includes('/') || planId.includes('..')) {
+    throw new Error('Invalid plan identifier');
+  }
+
+  const parsed = parsePlanFilename(planId);
+  if (!parsed || parsed.branchSuffix !== safeBranch) {
+    throw new Error('Plan not found');
+  }
+
+  const directory = join(resolvedWorktreePath, '.plans');
+  const filePath = join(directory, planId);
+
+  let content;
+  try {
+    content = await readFile(filePath, 'utf8');
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      throw new Error('Plan not found');
+    }
+    throw error;
+  }
+
+  return {
+    id: planId,
+    branch: safeBranch,
+    createdAt: parsed.createdAt.toISOString(),
+    content,
+  };
+}
+
 export const _internals = {
   formatTimestampPart,
   normaliseBranchName,
   ensureTrailingNewline,
+  parsePlanFilename,
 };

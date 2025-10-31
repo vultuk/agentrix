@@ -156,6 +156,21 @@ launches therefore appear immediately inside the UI terminal. The effective prom
 passthrough) is exported to the session as `TERMINAL_WORKTREE_PROMPT` and appended to the initial
 agent command so automation invocations receive it straight away.
 
+### Plan Artifacts
+
+Automation runs (and prompt-driven worktree creation) persist Markdown plans inside each worktree
+under `.plans/`. Access them without SSHing into the worktree:
+
+- `GET /api/plans?org=<org>&repo=<repo>&branch=<branch>` – returns the newest plan identifiers and
+  timestamps for the requested worktree.
+- `GET /api/plans/content?...&planId=<file>` – streams the selected plan’s contents in Markdown.
+- CLI helper: `terminal-worktree plans list --org <org> --repo <repo> --branch <branch>` followed by
+  `terminal-worktree plans show --org <org> --repo <repo> --branch <branch> --plan-id <file>` to
+  render Markdown locally.
+
+The server prunes older artifacts, keeping the 20 most recent plans per branch by default. Delete
+entries manually if you need to reclaim space sooner.
+
 ### Repository Layout & Worktrees
 
 The work directory is expected to follow:
