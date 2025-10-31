@@ -41,6 +41,22 @@ export async function listWorktrees(repositoryPath) {
   }
 }
 
+export async function countLocalWorktrees(
+  repositoryPath,
+  { includeMain = false } = {},
+) {
+  const worktrees = await listWorktrees(repositoryPath);
+  return worktrees.reduce((total, entry) => {
+    if (!entry || typeof entry.branch !== 'string') {
+      return total;
+    }
+    if (!includeMain && entry.branch === 'main') {
+      return total;
+    }
+    return total + 1;
+  }, 0);
+}
+
 export function parseRepositoryUrl(input) {
   if (typeof input !== 'string' || !input.trim()) {
     throw new Error('Repository URL is required');
