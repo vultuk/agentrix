@@ -10,6 +10,7 @@ import { sendJson, readJsonBody } from '../utils/http.js';
 import { createConfigHandlers } from '../api/config.js';
 import { createPlanHandlers } from '../api/create-plan.js';
 import { createPlanArtifactHandlers } from '../api/plans.js';
+import { createEventStreamHandler } from './events.js';
 
 export function createRouter({
   authManager,
@@ -43,6 +44,7 @@ export function createRouter({
   const planHandlers = createPlanHandlers({ planService });
   const gitStatusHandlers = createGitStatusHandlers(workdir);
   const planArtifactHandlers = createPlanArtifactHandlers(workdir);
+  const eventStreamHandler = createEventStreamHandler({ authManager, workdir });
 
   const routes = new Map([
     [
@@ -160,6 +162,13 @@ export function createRouter({
       {
         requiresAuth: true,
         handlers: { GET: planArtifactHandlers.read },
+      },
+    ],
+    [
+      '/api/events',
+      {
+        requiresAuth: true,
+        handlers: { GET: eventStreamHandler },
       },
     ],
   ]);

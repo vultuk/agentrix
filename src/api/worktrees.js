@@ -13,6 +13,7 @@ import {
 } from '../core/tmux.js';
 import { disposeSessionByKey, makeSessionKey } from '../core/terminal-sessions.js';
 import { savePlanToWorktree } from '../core/plan-storage.js';
+import { emitReposUpdate } from '../core/event-bus.js';
 import { sendJson } from '../utils/http.js';
 
 export function createWorktreeHandlers(workdir, branchNameGenerator) {
@@ -77,6 +78,7 @@ export function createWorktreeHandlers(workdir, branchNameGenerator) {
       }
       const data = await discoverRepositories(workdir);
       sendJson(context.res, 200, { data, branch: normalisedBranch });
+      emitReposUpdate(data);
     } catch (error) {
       sendJson(context.res, 500, { error: error.message });
     }
@@ -122,6 +124,7 @@ export function createWorktreeHandlers(workdir, branchNameGenerator) {
       await removeWorktree(workdir, org, repo, normalised);
       const data = await discoverRepositories(workdir);
       sendJson(context.res, 200, { data });
+      emitReposUpdate(data);
     } catch (error) {
       sendJson(context.res, 500, { error: error.message });
     }

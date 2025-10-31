@@ -171,6 +171,17 @@ under `.plans/`. Access them without SSHing into the worktree:
 The server prunes older artifacts, keeping the 20 most recent plans per branch by default. Delete
 entries manually if you need to reclaim space sooner.
 
+### Real-time Updates
+
+After authentication the UI opens a Server-Sent Events stream at `GET /api/events` to receive
+push notifications:
+
+- `repos:update` — emits the full repository/worktree snapshot (equivalent to `GET /api/repos`).
+- `sessions:update` — lists active terminal sessions (subset of `GET /api/sessions`).
+
+When the stream is unavailable the client automatically falls back to minute-level polling to keep
+state in sync.
+
 ### Repository Layout & Worktrees
 
 The work directory is expected to follow:

@@ -24,6 +24,7 @@ import { renderMarkdown } from './utils/markdown';
 import GitStatusSidebar from './components/GitStatusSidebar.jsx';
 import DiffViewer from './components/DiffViewer.jsx';
 import RepositoryDashboard from './components/RepositoryDashboard.jsx';
+import { createEventStream } from './utils/eventStream.js';
 
 const { createElement: h } = React;
 
@@ -67,8 +68,9 @@ const PROMPT_EDITOR_TABS = Object.freeze([
   { value: 'preview', label: 'Preview' }
 ]);
 
-const REPOSITORY_POLL_INTERVAL_MS = 5000;
+const REPOSITORY_POLL_INTERVAL_MS = 60000;
 const REPOSITORY_DASHBOARD_POLL_INTERVAL_MS = 60000;
+const SESSION_POLL_INTERVAL_MS = 60000;
 
 const ORGANISATION_COLLAPSE_STORAGE_KEY = 'terminal-worktree:collapsed-organisations';
 
@@ -829,6 +831,7 @@ function LoginScreen({ onAuthenticated }) {
         const sessionKeyByIdRef = useRef(new Map());
         const knownSessionsRef = useRef(new Set());
         const getWorktreeKey = useCallback((org, repo, branch) => `${org}::${repo}::${branch}`, []);
+        const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
 
         const gitSidebarKey = activeWorktree
           ? getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch)
@@ -911,6 +914,23 @@ function LoginScreen({ onAuthenticated }) {
           });
         }, [gitSidebarKey]);
 
+        const normaliseRepositoryPayload = useCallback((payload) => {
+          if (!payload || typeof payload !== 'object') {
+            return {};
+          }
+          return Object.fromEntries(
+            Object.entries(payload).map(([org, repos]) => [
+              org,
+              Object.fromEntries(
+                Object.entries(repos || {}).map(([repo, branches]) => [
+                  repo,
+                  Array.isArray(branches) ? branches : [],
+                ]),
+              ),
+            ]),
+          );
+        }, []);
+
         const applyDataUpdate = useCallback(payload => {
           setData(payload);
           setActiveWorktree(current => {
@@ -944,6 +964,22 @@ function LoginScreen({ onAuthenticated }) {
           });
         }, []);
 
+        const syncKnownSessions = useCallback((sessions) => {
+          const next = new Set();
+          if (Array.isArray(sessions)) {
+            sessions.forEach((item) => {
+              if (!item || typeof item !== 'object') {
+                return;
+              }
+              const { org, repo, branch } = item;
+              if (org && repo && branch) {
+                next.add(`${org}::${repo}::${branch}`);
+              }
+            });
+          }
+          knownSessionsRef.current = next;
+        }, []);
+
         const refreshRepositories = useCallback(async () => {
           try {
             const response = await fetch('/api/repos', { credentials: 'include' });
@@ -956,28 +992,71 @@ function LoginScreen({ onAuthenticated }) {
             }
             const body = await response.json();
             const payload = body && typeof body === 'object' && body.data ? body.data : {};
-            const normalised = Object.fromEntries(
-              Object.entries(payload).map(([org, repos]) => [
-                org,
-                Object.fromEntries(
-                  Object.entries(repos || {}).map(([repo, branches]) => [
-                    repo,
-                    Array.isArray(branches) ? branches : []
-                  ])
-                )
-              ])
-            );
-            applyDataUpdate(normalised);
+            applyDataUpdate(normaliseRepositoryPayload(payload));
           } catch (error) {
             console.error('Failed to load repositories', error);
           }
-        }, [applyDataUpdate, notifyAuthExpired]);
+        }, [applyDataUpdate, normaliseRepositoryPayload, notifyAuthExpired]);
 
         useEffect(() => {
           refreshRepositories();
         }, [refreshRepositories]);
 
+        const loadSessions = useCallback(async () => {
+          try {
+            const response = await fetch('/api/sessions', { credentials: 'include' });
+            if (response.status === 401) {
+              notifyAuthExpired();
+              return;
+            }
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+            const body = await response.json();
+            const sessions = Array.isArray(body.sessions) ? body.sessions : [];
+            syncKnownSessions(sessions);
+          } catch (error) {
+            syncKnownSessions([]);
+          }
+        }, [notifyAuthExpired, syncKnownSessions]);
+
         useEffect(() => {
+          const stop = createEventStream({
+            onRepos: (payload) => {
+              const reposData = payload && typeof payload === 'object' ? payload.data : null;
+              if (reposData) {
+                applyDataUpdate(normaliseRepositoryPayload(reposData));
+              }
+            },
+            onSessions: (payload) => {
+              const sessions = payload && typeof payload === 'object' ? payload.sessions : null;
+              if (sessions) {
+                syncKnownSessions(sessions);
+              }
+            },
+            onConnect: () => {
+              setIsRealtimeConnected(true);
+            },
+            onDisconnect: () => {
+              setIsRealtimeConnected(false);
+            },
+          });
+
+          return stop;
+        }, [applyDataUpdate, normaliseRepositoryPayload, syncKnownSessions]);
+
+        useEffect(() => {
+          if (!isRealtimeConnected) {
+            refreshRepositories();
+            loadSessions();
+          }
+        }, [isRealtimeConnected, loadSessions, refreshRepositories]);
+
+        useEffect(() => {
+          if (isRealtimeConnected) {
+            return () => {};
+          }
+
           if (!REPOSITORY_POLL_INTERVAL_MS || Number.isNaN(REPOSITORY_POLL_INTERVAL_MS)) {
             return () => {};
           }
@@ -1022,7 +1101,7 @@ function LoginScreen({ onAuthenticated }) {
               document.removeEventListener('visibilitychange', handleVisibilityChange);
             }
           };
-        }, [refreshRepositories]);
+        }, [isRealtimeConnected, refreshRepositories]);
 
         const fetchRepositoryDashboard = useCallback(
           async (org, repo, { showLoading = true } = {}) => {
@@ -1099,46 +1178,19 @@ function LoginScreen({ onAuthenticated }) {
           [notifyAuthExpired],
         );
 
-        const loadSessions = useCallback(async () => {
-          try {
-            const response = await fetch('/api/sessions', { credentials: 'include' });
-            if (response.status === 401) {
-              notifyAuthExpired();
-              return;
-            }
-            if (!response.ok) {
-              throw new Error(`Request failed with status ${response.status}`);
-            }
-            const body = await response.json();
-            const sessions = Array.isArray(body.sessions) ? body.sessions : [];
-            knownSessionsRef.current = new Set(
-              sessions
-                .map((item) => {
-                  if (item && typeof item === 'object') {
-                    const { org, repo, branch } = item;
-                    if (org && repo && branch) {
-                      return `${org}::${repo}::${branch}`;
-                    }
-                  }
-                  return null;
-                })
-                .filter(Boolean)
-            );
-          } catch (error) {
-            knownSessionsRef.current = new Set();
-          }
-        }, []);
-
         useEffect(() => {
           loadSessions();
         }, [loadSessions]);
 
         useEffect(() => {
-          const id = setInterval(() => {
+          if (isRealtimeConnected) {
+            return () => {};
+          }
+          const id = window.setInterval(() => {
             loadSessions();
-          }, 15000);
-          return () => clearInterval(id);
-        }, [loadSessions]);
+          }, SESSION_POLL_INTERVAL_MS);
+          return () => window.clearInterval(id);
+        }, [isRealtimeConnected, loadSessions]);
 
         useEffect(() => {
           if (!activeRepoDashboard) {

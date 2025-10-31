@@ -5,6 +5,7 @@ import pty from 'node-pty';
 import { MAX_TERMINAL_BUFFER, TMUX_BIN } from '../config/constants.js';
 import { getWorktreePath } from './git.js';
 import { detectTmux, isTmuxAvailable, makeTmuxSessionName, tmuxHasSession } from './tmux.js';
+import { emitSessionsUpdate } from './event-bus.js';
 
 const terminalSessions = new Map();
 const terminalSessionsById = new Map();
@@ -112,6 +113,16 @@ function handleSessionOutput(session, chunk) {
   broadcast(session, 'output', { chunk: text });
 }
 
+function serialiseSessions(sessions) {
+  return sessions.map((session) => ({
+    id: session.id,
+    org: session.org,
+    repo: session.repo,
+    branch: session.branch,
+    usingTmux: session.usingTmux,
+  }));
+}
+
 function handleSessionExit(session, code, signal, error) {
   if (session.closed) {
     return;
@@ -148,6 +159,7 @@ function handleSessionExit(session, code, signal, error) {
     session.waiters.forEach((resolve) => resolve());
     session.waiters = [];
   }
+  emitSessionsUpdate(serialiseSessions(listActiveSessions()));
 }
 
 export function makeSessionKey(org, repo, branch) {
@@ -197,6 +209,7 @@ export async function disposeSessionByKey(key) {
     return;
   }
   await terminateSession(session);
+  emitSessionsUpdate(serialiseSessions(listActiveSessions()));
 }
 
 export async function disposeSessionsForRepository(org, repo) {
@@ -216,6 +229,7 @@ export async function disposeSessionsForRepository(org, repo) {
     return;
   }
   await Promise.allSettled(tasks);
+  emitSessionsUpdate(serialiseSessions(listActiveSessions()));
 }
 
 export async function disposeSessionById(sessionId) {
@@ -224,6 +238,7 @@ export async function disposeSessionById(sessionId) {
     return;
   }
   await terminateSession(session);
+  emitSessionsUpdate(serialiseSessions(listActiveSessions()));
 }
 
 export async function disposeAllSessions() {
@@ -233,6 +248,7 @@ export async function disposeAllSessions() {
   await Promise.allSettled(closures);
   terminalSessions.clear();
   terminalSessionsById.clear();
+  emitSessionsUpdate([]);
 }
 
 export function getSessionById(sessionId) {
@@ -337,6 +353,8 @@ export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
   session.readyTimer = setTimeout(() => {
     markSessionReady(session);
   }, 150);
+
+  emitSessionsUpdate(serialiseSessions(listActiveSessions()));
 
   const created = usingTmux ? !tmuxSessionExists : true;
   return { session, created };
