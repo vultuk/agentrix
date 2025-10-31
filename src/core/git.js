@@ -5,6 +5,17 @@ import { execFile } from 'node:child_process';
 
 const execFileAsync = promisify(execFile);
 
+export class GitWorktreeError extends Error {
+  constructor(repositoryPath, message, cause) {
+    super(`Failed to list worktrees for ${repositoryPath}: ${message}`);
+    this.name = 'GitWorktreeError';
+    this.repositoryPath = repositoryPath;
+    if (cause) {
+      this.cause = cause;
+    }
+  }
+}
+
 export async function listWorktrees(repositoryPath) {
   try {
     const { stdout } = await execFileAsync(
@@ -37,7 +48,12 @@ export async function listWorktrees(repositoryPath) {
 
     return worktrees;
   } catch (error) {
-    return [];
+    const stderr = error && error.stderr ? error.stderr.toString().trim() : '';
+    const message = stderr || error.message || 'Unknown git error';
+    console.error(
+      `[terminal-worktree] Failed to list worktrees for ${repositoryPath}: ${message}`,
+    );
+    throw new GitWorktreeError(repositoryPath, message, error);
   }
 }
 
