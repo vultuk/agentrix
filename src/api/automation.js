@@ -8,6 +8,7 @@ import {
 } from '../core/git.js';
 import { launchAgentProcess } from '../core/agents.js';
 import { sendJson } from '../utils/http.js';
+import { selectDefaultBranchOverride } from '../core/default-branch.js';
 
 function extractApiKey(req) {
   const apiKeyHeader = req.headers?.['x-api-key'];
@@ -96,13 +97,13 @@ async function ensureRepositoryExists(workdir, org, repo) {
   }
 }
 
-async function ensureWorktreeExists(workdir, org, repo, branch) {
+async function ensureWorktreeExists(workdir, org, repo, branch, options = {}) {
   try {
     const { worktreePath } = await getWorktreePath(workdir, org, repo, branch);
     return { worktreePath, created: false };
   } catch (error) {
     if (error && /worktree .* not found/i.test(error.message || '')) {
-      await createWorktree(workdir, org, repo, branch);
+      await createWorktree(workdir, org, repo, branch, options);
       const { worktreePath } = await getWorktreePath(workdir, org, repo, branch);
       return { worktreePath, created: true };
     }
@@ -185,6 +186,7 @@ export function createAutomationHandlers(
     branchNameGenerator,
     planService,
     logger,
+    defaultBranches,
   },
   {
     ensureRepositoryExists: ensureRepoExists = ensureRepositoryExists,
@@ -387,7 +389,10 @@ export function createAutomationHandlers(
     );
 
     try {
-      const { worktreePath, created } = await ensureWorktree(workdir, org, repo, branch);
+      const defaultBranchOverride = selectDefaultBranchOverride(defaultBranches, org, repo);
+      const { worktreePath, created } = await ensureWorktree(workdir, org, repo, branch, {
+        defaultBranchOverride,
+      });
 
       const {
         pid,

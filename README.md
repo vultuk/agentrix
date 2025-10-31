@@ -67,7 +67,9 @@ node bin/terminal-worktree.js \
 - `-H, --host <host>` – Bind address (default: `0.0.0.0`)
 - `-u, --ui <path>` – Directory or entry file for the built UI (default: `ui/dist`)
 - `-w, --workdir <path>` – Root directory that holds `org/repo` folders (default: process CWD)
-- `-P, --password <string>` – UI password (default: secure random string printed at startup)
+- `-P, --password <string>` – UI password (default: secure random string generated at startup)
+- `--default-branch <name>` – Override the sync branch when repositories use a non-`main` default
+- `--show-password` – Print the resolved password even if it was set via config or flag
 - `--ngrok-api-key <token>` – Authtoken used to establish a public ngrok tunnel
 - `--ngrok-domain <domain>` – Reserved ngrok domain exposed when tunnelling (requires `--ngrok-api-key`)
 - `--save` – Persist the effective configuration to `~/.terminal-worktree/config.json` and exit
@@ -91,6 +93,13 @@ configuration might look like:
   "ui": "./ui/dist",
   "workdir": "/srv/worktrees",
   "password": "s3cr3t",
+  "defaultBranch": "develop",
+  "defaultBranches": {
+    "acme/web": "master"
+  },
+  "cookies": {
+    "secure": "auto"
+  },
   "commands": {
     "codex": "codex",
     "cursor": "cursor-agent",
@@ -116,7 +125,12 @@ the config file without starting the server.
 
 ### Authentication
 
-Every server boot prints the UI password. Clients must authenticate before calling API endpoints.
+When the CLI generates a password it prints the value once at startup. If you supply a password via
+CLI flag or config file it is kept out of stdout; pass `--show-password` if you still need the value
+echoed. Clients must authenticate before calling API endpoints.
+
+Repositories that do not use `main` can set a global `defaultBranch` or repo-specific overrides in
+`defaultBranches` (keyed by `org/repo`). The CLI uses these when syncing before creating worktrees.
 Successful logins receive an HTTP-only session cookie; log out via the UI or `POST
 /api/auth/logout`. On shutdown the backend cleans up shell sessions, tmux attachments, and WebSocket
 clients.
@@ -152,6 +166,32 @@ applicable), plus the automation metadata `plan`, `promptRoute`, and `automation
 launches therefore appear immediately inside the UI terminal. The effective prompt (planned or
 passthrough) is exported to the session as `TERMINAL_WORKTREE_PROMPT` and appended to the initial
 agent command so automation invocations receive it straight away.
+
+### Plan Artifacts
+
+Automation runs (and prompt-driven worktree creation) persist Markdown plans inside each worktree
+under `.plans/`. Access them without SSHing into the worktree:
+
+- `GET /api/plans?org=<org>&repo=<repo>&branch=<branch>` – returns the newest plan identifiers and
+  timestamps for the requested worktree.
+- `GET /api/plans/content?...&planId=<file>` – streams the selected plan’s contents in Markdown.
+- CLI helper: `terminal-worktree plans list --org <org> --repo <repo> --branch <branch>` followed by
+  `terminal-worktree plans show --org <org> --repo <repo> --branch <branch> --plan-id <file>` to
+  render Markdown locally.
+
+The server prunes older artifacts, keeping the 20 most recent plans per branch by default. Delete
+entries manually if you need to reclaim space sooner.
+
+### Real-time Updates
+
+After authentication the UI opens a Server-Sent Events stream at `GET /api/events` to receive
+push notifications:
+
+- `repos:update` — emits the full repository/worktree snapshot (equivalent to `GET /api/repos`).
+- `sessions:update` — lists active terminal sessions (subset of `GET /api/sessions`).
+
+When the stream is unavailable the client automatically falls back to minute-level polling to keep
+state in sync.
 
 ### Repository Layout & Worktrees
 

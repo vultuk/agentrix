@@ -16,6 +16,7 @@ import {
   Sparkles,
   Trash2,
   X,
+  ScrollText,
 } from 'lucide-react';
 
 import 'xterm/css/xterm.css';
@@ -23,6 +24,7 @@ import { renderMarkdown } from './utils/markdown';
 import GitStatusSidebar from './components/GitStatusSidebar.jsx';
 import DiffViewer from './components/DiffViewer.jsx';
 import RepositoryDashboard from './components/RepositoryDashboard.jsx';
+import { createEventStream } from './utils/eventStream.js';
 
 const { createElement: h } = React;
 
@@ -49,13 +51,26 @@ const PROMPT_AGENT_OPTIONS = Object.freeze([
   { value: 'cursor', label: 'Cursor' }
 ]);
 
+const createEmptyPlanModalState = () => ({
+  open: false,
+  loading: false,
+  error: null,
+  plans: [],
+  selectedPlanId: null,
+  content: '',
+  contentLoading: false,
+  contentError: null,
+  context: null
+});
+
 const PROMPT_EDITOR_TABS = Object.freeze([
   { value: 'edit', label: 'Edit' },
   { value: 'preview', label: 'Preview' }
 ]);
 
-const REPOSITORY_POLL_INTERVAL_MS = 5000;
+const REPOSITORY_POLL_INTERVAL_MS = 60000;
 const REPOSITORY_DASHBOARD_POLL_INTERVAL_MS = 60000;
+const SESSION_POLL_INTERVAL_MS = 60000;
 
 const ORGANISATION_COLLAPSE_STORAGE_KEY = 'terminal-worktree:collapsed-organisations';
 
@@ -300,6 +315,7 @@ function LoginScreen({ onAuthenticated }) {
               ? 'unified'
               : 'split',
         }));
+        const [planModal, setPlanModal] = useState(() => createEmptyPlanModalState());
         const [gitSidebarState, setGitSidebarState] = useState({});
         const [activeRepoDashboard, setActiveRepoDashboard] = useState(null);
         const [dashboardData, setDashboardData] = useState(null);
@@ -536,6 +552,151 @@ function LoginScreen({ onAuthenticated }) {
             })
           );
 
+        const handleClosePlanModal = useCallback(() => {
+          setPlanModal(createEmptyPlanModalState());
+        }, []);
+
+        const fetchPlanContent = useCallback(
+          async (context, planId) => {
+            if (!context || !planId) {
+              return;
+            }
+
+            setPlanModal((current) => ({
+              ...current,
+              selectedPlanId: planId,
+              content: '',
+              contentLoading: true,
+              contentError: null
+            }));
+
+            try {
+              const params = new URLSearchParams({
+                org: context.org,
+                repo: context.repo,
+                branch: context.branch,
+                planId
+              });
+              const response = await fetch(`/api/plans/content?${params.toString()}`, {
+                credentials: 'include'
+              });
+              if (response.status === 401) {
+                notifyAuthExpired();
+                setPlanModal(createEmptyPlanModalState());
+                return;
+              }
+              if (!response.ok) {
+                throw new Error(`Request failed with status ${response.status}`);
+              }
+              const body = await response.json();
+              const data = body && typeof body === 'object' ? body.data : null;
+              const content = data && typeof data.content === 'string' ? data.content : '';
+              setPlanModal((current) => ({
+                ...current,
+                content,
+                contentLoading: false,
+                contentError: null
+              }));
+            } catch (error) {
+              setPlanModal((current) => ({
+                ...current,
+                contentLoading: false,
+                contentError: error?.message || 'Failed to load plan.'
+              }));
+            }
+          },
+          [notifyAuthExpired]
+        );
+
+        const openPlanHistory = useCallback(async () => {
+          if (!activeWorktree) {
+            return;
+          }
+
+          const context = {
+            org: activeWorktree.org,
+            repo: activeWorktree.repo,
+            branch: activeWorktree.branch
+          };
+
+          setPlanModal({
+            ...createEmptyPlanModalState(),
+            open: true,
+            loading: true,
+            context
+          });
+
+          try {
+            const params = new URLSearchParams(context);
+            const response = await fetch(`/api/plans?${params.toString()}`, {
+              credentials: 'include'
+            });
+            if (response.status === 401) {
+              notifyAuthExpired();
+              setPlanModal(createEmptyPlanModalState());
+              return;
+            }
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+            const body = await response.json();
+            const plans = Array.isArray(body?.data) ? body.data : [];
+            setPlanModal((current) => ({
+              ...current,
+              loading: false,
+              error: null,
+              plans,
+              context
+            }));
+            if (plans.length > 0) {
+              await fetchPlanContent(context, plans[0].id);
+            } else {
+              setPlanModal((current) => ({
+                ...current,
+                selectedPlanId: null,
+                content: ''
+              }));
+            }
+          } catch (error) {
+            setPlanModal((current) => ({
+              ...current,
+              loading: false,
+              error: error?.message || 'Failed to load plans.'
+            }));
+          }
+        }, [activeWorktree, fetchPlanContent, notifyAuthExpired]);
+
+        const handleSelectPlan = useCallback(
+          (planId) => {
+            if (!planId || !planModal.context) {
+              return;
+            }
+            fetchPlanContent(planModal.context, planId);
+          },
+          [fetchPlanContent, planModal.context]
+        );
+
+        const selectedPlan = useMemo(
+          () => planModal.plans.find((plan) => plan.id === planModal.selectedPlanId) || null,
+          [planModal.plans, planModal.selectedPlanId]
+        );
+
+        const planModalContentHtml = useMemo(
+          () => (planModal.content ? renderMarkdown(planModal.content) : ''),
+          [planModal.content]
+        );
+
+        const formatPlanTimestamp = (isoString) => {
+          if (!isoString) {
+            return 'Unknown date';
+          }
+          const date = new Date(isoString);
+          if (Number.isNaN(date.getTime())) {
+            return isoString;
+          }
+          return date.toLocaleString();
+        };
+
         useEffect(() => {
           setGitDiffModal((current) => {
             if (!current.open) {
@@ -670,6 +831,7 @@ function LoginScreen({ onAuthenticated }) {
         const sessionKeyByIdRef = useRef(new Map());
         const knownSessionsRef = useRef(new Set());
         const getWorktreeKey = useCallback((org, repo, branch) => `${org}::${repo}::${branch}`, []);
+        const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
 
         const gitSidebarKey = activeWorktree
           ? getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch)
@@ -752,6 +914,23 @@ function LoginScreen({ onAuthenticated }) {
           });
         }, [gitSidebarKey]);
 
+        const normaliseRepositoryPayload = useCallback((payload) => {
+          if (!payload || typeof payload !== 'object') {
+            return {};
+          }
+          return Object.fromEntries(
+            Object.entries(payload).map(([org, repos]) => [
+              org,
+              Object.fromEntries(
+                Object.entries(repos || {}).map(([repo, branches]) => [
+                  repo,
+                  Array.isArray(branches) ? branches : [],
+                ]),
+              ),
+            ]),
+          );
+        }, []);
+
         const applyDataUpdate = useCallback(payload => {
           setData(payload);
           setActiveWorktree(current => {
@@ -785,6 +964,22 @@ function LoginScreen({ onAuthenticated }) {
           });
         }, []);
 
+        const syncKnownSessions = useCallback((sessions) => {
+          const next = new Set();
+          if (Array.isArray(sessions)) {
+            sessions.forEach((item) => {
+              if (!item || typeof item !== 'object') {
+                return;
+              }
+              const { org, repo, branch } = item;
+              if (org && repo && branch) {
+                next.add(`${org}::${repo}::${branch}`);
+              }
+            });
+          }
+          knownSessionsRef.current = next;
+        }, []);
+
         const refreshRepositories = useCallback(async () => {
           try {
             const response = await fetch('/api/repos', { credentials: 'include' });
@@ -797,28 +992,71 @@ function LoginScreen({ onAuthenticated }) {
             }
             const body = await response.json();
             const payload = body && typeof body === 'object' && body.data ? body.data : {};
-            const normalised = Object.fromEntries(
-              Object.entries(payload).map(([org, repos]) => [
-                org,
-                Object.fromEntries(
-                  Object.entries(repos || {}).map(([repo, branches]) => [
-                    repo,
-                    Array.isArray(branches) ? branches : []
-                  ])
-                )
-              ])
-            );
-            applyDataUpdate(normalised);
+            applyDataUpdate(normaliseRepositoryPayload(payload));
           } catch (error) {
             console.error('Failed to load repositories', error);
           }
-        }, [applyDataUpdate, notifyAuthExpired]);
+        }, [applyDataUpdate, normaliseRepositoryPayload, notifyAuthExpired]);
 
         useEffect(() => {
           refreshRepositories();
         }, [refreshRepositories]);
 
+        const loadSessions = useCallback(async () => {
+          try {
+            const response = await fetch('/api/sessions', { credentials: 'include' });
+            if (response.status === 401) {
+              notifyAuthExpired();
+              return;
+            }
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+            const body = await response.json();
+            const sessions = Array.isArray(body.sessions) ? body.sessions : [];
+            syncKnownSessions(sessions);
+          } catch (error) {
+            syncKnownSessions([]);
+          }
+        }, [notifyAuthExpired, syncKnownSessions]);
+
         useEffect(() => {
+          const stop = createEventStream({
+            onRepos: (payload) => {
+              const reposData = payload && typeof payload === 'object' ? payload.data : null;
+              if (reposData) {
+                applyDataUpdate(normaliseRepositoryPayload(reposData));
+              }
+            },
+            onSessions: (payload) => {
+              const sessions = payload && typeof payload === 'object' ? payload.sessions : null;
+              if (sessions) {
+                syncKnownSessions(sessions);
+              }
+            },
+            onConnect: () => {
+              setIsRealtimeConnected(true);
+            },
+            onDisconnect: () => {
+              setIsRealtimeConnected(false);
+            },
+          });
+
+          return stop;
+        }, [applyDataUpdate, normaliseRepositoryPayload, syncKnownSessions]);
+
+        useEffect(() => {
+          if (!isRealtimeConnected) {
+            refreshRepositories();
+            loadSessions();
+          }
+        }, [isRealtimeConnected, loadSessions, refreshRepositories]);
+
+        useEffect(() => {
+          if (isRealtimeConnected) {
+            return () => {};
+          }
+
           if (!REPOSITORY_POLL_INTERVAL_MS || Number.isNaN(REPOSITORY_POLL_INTERVAL_MS)) {
             return () => {};
           }
@@ -863,7 +1101,7 @@ function LoginScreen({ onAuthenticated }) {
               document.removeEventListener('visibilitychange', handleVisibilityChange);
             }
           };
-        }, [refreshRepositories]);
+        }, [isRealtimeConnected, refreshRepositories]);
 
         const fetchRepositoryDashboard = useCallback(
           async (org, repo, { showLoading = true } = {}) => {
@@ -940,46 +1178,19 @@ function LoginScreen({ onAuthenticated }) {
           [notifyAuthExpired],
         );
 
-        const loadSessions = useCallback(async () => {
-          try {
-            const response = await fetch('/api/sessions', { credentials: 'include' });
-            if (response.status === 401) {
-              notifyAuthExpired();
-              return;
-            }
-            if (!response.ok) {
-              throw new Error(`Request failed with status ${response.status}`);
-            }
-            const body = await response.json();
-            const sessions = Array.isArray(body.sessions) ? body.sessions : [];
-            knownSessionsRef.current = new Set(
-              sessions
-                .map((item) => {
-                  if (item && typeof item === 'object') {
-                    const { org, repo, branch } = item;
-                    if (org && repo && branch) {
-                      return `${org}::${repo}::${branch}`;
-                    }
-                  }
-                  return null;
-                })
-                .filter(Boolean)
-            );
-          } catch (error) {
-            knownSessionsRef.current = new Set();
-          }
-        }, []);
-
         useEffect(() => {
           loadSessions();
         }, [loadSessions]);
 
         useEffect(() => {
-          const id = setInterval(() => {
+          if (isRealtimeConnected) {
+            return () => {};
+          }
+          const id = window.setInterval(() => {
             loadSessions();
-          }, 15000);
-          return () => clearInterval(id);
-        }, [loadSessions]);
+          }, SESSION_POLL_INTERVAL_MS);
+          return () => window.clearInterval(id);
+        }, [isRealtimeConnected, loadSessions]);
 
         useEffect(() => {
           if (!activeRepoDashboard) {
@@ -2015,6 +2226,22 @@ function LoginScreen({ onAuthenticated }) {
               )
             : null;
 
+        const planHistoryButton =
+          activeWorktree
+            ? h(
+                'button',
+                {
+                  type: 'button',
+                  onClick: openPlanHistory,
+                  className: `${actionButtonClass} text-neutral-400 hover:text-neutral-100`,
+                  title: 'View saved plans',
+                },
+                planModal.open && planModal.loading
+                  ? renderSpinner('text-neutral-100')
+                  : h(ScrollText, { size: 16 })
+              )
+            : null;
+
         const gitSidebarButton = activeWorktree
           ? h(
               'button',
@@ -2303,6 +2530,7 @@ function LoginScreen({ onAuthenticated }) {
                 'div',
                 { className: 'flex items-center gap-2' },
                 githubControls,
+                planHistoryButton,
                 gitSidebarButton,
                 h(
                   'button',
@@ -2571,6 +2799,119 @@ function LoginScreen({ onAuthenticated }) {
                           view: gitDiffModal.view,
                         }
                       )
+                )
+              )
+            : null,
+          planModal.open
+            ? h(
+                Modal,
+                {
+                  title: planModal.context
+                    ? `Plans for ${planModal.context.org}/${planModal.context.repo}`
+                    : 'Plans',
+                  onClose: handleClosePlanModal,
+                  size: 'lg',
+                },
+                h(
+                  'div',
+                  { className: 'space-y-4' },
+                  planModal.context
+                    ? h(
+                        'p',
+                        { className: 'text-xs text-neutral-400' },
+                        `Branch: ${planModal.context.branch}`
+                      )
+                    : null,
+                  planModal.loading
+                    ? h(
+                        'div',
+                        { className: 'flex items-center gap-2 text-sm text-neutral-200' },
+                        renderSpinner('text-neutral-100'),
+                        h('span', null, 'Loading plans…')
+                      )
+                    : planModal.error
+                    ? h('p', { className: 'text-sm text-rose-300' }, planModal.error)
+                    : h(
+                        'div',
+                        { className: 'flex flex-col gap-4 lg:flex-row lg:gap-6' },
+                        h(
+                          'div',
+                          { className: 'lg:w-60 flex-shrink-0' },
+                          planModal.plans.length > 0
+                            ? h(
+                                'div',
+                                { className: 'space-y-2 max-h-[320px] overflow-y-auto pr-1' },
+                                planModal.plans.map((plan) => {
+                                  const isActive = plan.id === planModal.selectedPlanId;
+                                  const timestampLabel = formatPlanTimestamp(plan.createdAt);
+                                  return h(
+                                    'button',
+                                    {
+                                      key: plan.id,
+                                      type: 'button',
+                                      onClick: () => handleSelectPlan(plan.id),
+                                      className: [
+                                        'w-full text-left rounded-md border px-3 py-2 text-sm transition-colors',
+                                        isActive
+                                          ? 'border-emerald-500/70 bg-emerald-500/10 text-emerald-100'
+                                          : 'border-neutral-800 bg-neutral-950 text-neutral-300 hover:bg-neutral-900'
+                                      ].join(' ')
+                                    },
+                                    h('div', { className: 'font-medium truncate' }, timestampLabel),
+                                    h(
+                                      'div',
+                                      { className: 'text-xs text-neutral-400 mt-1 truncate' },
+                                      plan.id
+                                    )
+                                  );
+                                })
+                              )
+                            : h(
+                                'p',
+                                { className: 'text-sm text-neutral-400' },
+                                'No plans saved for this worktree yet.'
+                              ),
+                        ),
+                        h(
+                          'div',
+                          {
+                            className:
+                              'flex-1 min-h-[220px] max-h-[420px] overflow-y-auto rounded-md border border-neutral-800 bg-neutral-950 px-3 py-3',
+                          },
+                          planModal.contentLoading
+                            ? h(
+                                'div',
+                                { className: 'flex items-center gap-2 text-sm text-neutral-200' },
+                                renderSpinner('text-neutral-100'),
+                                h('span', null, 'Loading plan…')
+                              )
+                            : planModal.contentError
+                            ? h('p', { className: 'text-sm text-rose-300' }, planModal.contentError)
+                            : planModal.selectedPlanId
+                            ? h(
+                                'div',
+                                { className: 'space-y-3 text-sm text-neutral-100' },
+                                selectedPlan
+                                  ? h(
+                                      'div',
+                                      {
+                                        className:
+                                          'flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800 pb-2 text-xs text-neutral-400',
+                                      },
+                                      h('span', { className: 'truncate max-w-[60%]' }, selectedPlan.id),
+                                      h('span', null, formatPlanTimestamp(selectedPlan.createdAt))
+                                    )
+                                  : null,
+                                planModal.content
+                                  ? h('div', {
+                                      className: 'markdown-preview__content space-y-3',
+                                      dangerouslySetInnerHTML: { __html: planModalContentHtml },
+                                    })
+                                  : h('p', { className: 'text-sm text-neutral-400' }, 'Plan is empty.')
+                              )
+                            : h('p', { className: 'text-sm text-neutral-400' }, 'Select a plan to view.'),
+                        ),
+                      ),
                 )
               )
             : null,

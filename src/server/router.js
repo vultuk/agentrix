@@ -9,6 +9,8 @@ import { createGitStatusHandlers } from '../api/git-status.js';
 import { sendJson, readJsonBody } from '../utils/http.js';
 import { createConfigHandlers } from '../api/config.js';
 import { createPlanHandlers } from '../api/create-plan.js';
+import { createPlanArtifactHandlers } from '../api/plans.js';
+import { createEventStreamHandler } from './events.js';
 
 export function createRouter({
   authManager,
@@ -17,6 +19,8 @@ export function createRouter({
   automationApiKey,
   branchNameGenerator,
   planService,
+  defaultBranches,
+  cookieManager,
 }) {
   if (!authManager) {
     throw new Error('authManager is required');
@@ -25,22 +29,25 @@ export function createRouter({
     throw new Error('agentCommands is required');
   }
 
-  const authHandlers = createAuthHandlers(authManager);
+  const authHandlers = createAuthHandlers(authManager, { cookieManager });
   const automationHandlers = createAutomationHandlers({
     workdir,
     agentCommands,
     apiKey: automationApiKey,
     branchNameGenerator,
     planService,
+    defaultBranches,
   });
   const repoHandlers = createRepoHandlers(workdir);
   const repoDashboardHandlers = createRepoDashboardHandlers(workdir);
   const sessionHandlers = createSessionHandlers(workdir);
-  const worktreeHandlers = createWorktreeHandlers(workdir, branchNameGenerator);
+  const worktreeHandlers = createWorktreeHandlers(workdir, branchNameGenerator, defaultBranches);
   const terminalHandlers = createTerminalHandlers(workdir);
   const configHandlers = createConfigHandlers(agentCommands);
   const planHandlers = createPlanHandlers({ planService });
   const gitStatusHandlers = createGitStatusHandlers(workdir);
+  const planArtifactHandlers = createPlanArtifactHandlers(workdir);
+  const eventStreamHandler = createEventStreamHandler({ authManager, workdir });
 
   const routes = new Map([
     [
@@ -144,6 +151,27 @@ export function createRouter({
       {
         requiresAuth: true,
         handlers: { POST: planHandlers.create },
+      },
+    ],
+    [
+      '/api/plans',
+      {
+        requiresAuth: true,
+        handlers: { GET: planArtifactHandlers.list },
+      },
+    ],
+    [
+      '/api/plans/content',
+      {
+        requiresAuth: true,
+        handlers: { GET: planArtifactHandlers.read },
+      },
+    ],
+    [
+      '/api/events',
+      {
+        requiresAuth: true,
+        handlers: { GET: eventStreamHandler },
       },
     ],
   ]);

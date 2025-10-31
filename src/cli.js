@@ -10,11 +10,168 @@ import {
   DEFAULT_PORT,
   generateRandomPassword,
 } from './server/index.js';
+import { getWorktreePath } from './core/git.js';
+import { listPlansForWorktree, readPlanFromWorktree } from './core/plan-storage.js';
 
 const BUNDLED_UI_PATH = fileURLToPath(new URL('../ui/dist', import.meta.url));
 const CONFIG_DIR_NAME = '.terminal-worktree';
 const CONFIG_FILE_NAME = 'config.json';
 const VALID_BRANCH_LLMS = new Set(['codex', 'claude', 'cursor']);
+
+function printPlansHelp() {
+  const helpText = `Usage: terminal-worktree plans <command> [options]
+
+Commands:
+  list    List saved plans for a worktree
+  show    Print the contents of a saved plan
+
+Options:
+  --org <name>        Repository organisation
+  --repo <name>       Repository name
+  --branch <branch>   Branch/worktree name
+  --plan-id <file>    Identifier returned by the list command (show only)
+  --limit <number>    Maximum number of plans to list (list only)
+  --workdir <path>    Override workdir root (defaults to current directory)
+  -h, --help          Show this help message
+`;
+  process.stdout.write(helpText);
+}
+
+function parsePlansOptions(args) {
+  const options = {
+    org: '',
+    repo: '',
+    branch: '',
+    planId: '',
+    limit: undefined,
+    workdir: process.cwd(),
+    help: false,
+  };
+
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i];
+    switch (token) {
+      case '--org':
+        options.org = (args[++i] || '').trim();
+        break;
+      case '--repo':
+        options.repo = (args[++i] || '').trim();
+        break;
+      case '--branch':
+        options.branch = (args[++i] || '').trim();
+        break;
+      case '--plan-id':
+        options.planId = (args[++i] || '').trim();
+        break;
+      case '--limit': {
+        const value = args[++i];
+        if (!value) {
+          throw new Error('Expected value after --limit');
+        }
+        const parsed = Number.parseInt(value, 10);
+        if (!Number.isInteger(parsed) || parsed < 1) {
+          throw new Error('limit must be a positive integer');
+        }
+        options.limit = parsed;
+        break;
+      }
+      case '--workdir': {
+        const value = args[++i];
+        if (!value) {
+          throw new Error('Expected value after --workdir');
+        }
+        options.workdir = path.resolve(process.cwd(), value);
+        break;
+      }
+      case '-h':
+      case '--help':
+        options.help = true;
+        break;
+      default:
+        throw new Error(`Unknown option for plans command: ${token}`);
+    }
+  }
+
+  return options;
+}
+
+async function handlePlansSubcommand(argv) {
+  const [command, ...rest] = argv;
+  if (!command || command === '--help' || command === '-h') {
+    printPlansHelp();
+    return;
+  }
+
+  if (command !== 'list' && command !== 'show') {
+    process.stderr.write(`Unknown plans command: ${command}\n`);
+    printPlansHelp();
+    process.exitCode = 1;
+    return;
+  }
+
+  let options;
+  try {
+    options = parsePlansOptions(rest);
+  } catch (error) {
+    process.stderr.write(`${error.message}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  if (options.help) {
+    printPlansHelp();
+    return;
+  }
+
+  if (!options.org || !options.repo || !options.branch) {
+    process.stderr.write('org, repo, and branch are required.\n');
+    process.exitCode = 1;
+    return;
+  }
+
+  try {
+    const { worktreePath } = await getWorktreePath(
+      options.workdir,
+      options.org,
+      options.repo,
+      options.branch,
+    );
+
+    if (command === 'list') {
+      const plans = await listPlansForWorktree({
+        worktreePath,
+        branch: options.branch,
+        limit: options.limit,
+      });
+
+      if (plans.length === 0) {
+        process.stdout.write('No plans found.\n');
+        return;
+      }
+
+      plans.forEach((plan) => {
+        process.stdout.write(`${plan.createdAt}\t${plan.id}\n`);
+      });
+      return;
+    }
+
+    if (!options.planId) {
+      process.stderr.write('planId is required for the show command.\n');
+      process.exitCode = 1;
+      return;
+    }
+
+    const plan = await readPlanFromWorktree({
+      worktreePath,
+      branch: options.branch,
+      id: options.planId,
+    });
+    process.stdout.write(`# ${plan.id}\n\n${plan.content}`);
+  } catch (error) {
+    process.stderr.write(`${error?.message || error}\n`);
+    process.exitCode = 1;
+  }
+}
 
 function warnConfig(message) {
   process.stderr.write(`[terminal-worktree] ${message}\n`);
@@ -123,6 +280,10 @@ function normalizeConfig(rawConfig, configPath) {
   }
 
   const normalized = {};
+  const defaultBranchesOverride =
+    rawConfig.defaultBranches && typeof rawConfig.defaultBranches === 'object'
+      ? rawConfig.defaultBranches
+      : null;
   const commands =
     rawConfig.commands && typeof rawConfig.commands === 'object'
       ? rawConfig.commands
@@ -178,6 +339,45 @@ function normalizeConfig(rawConfig, configPath) {
   );
   if (workdir !== undefined) {
     normalized.workdir = workdir;
+  }
+
+  const defaultBranch = coerceString(rawConfig.defaultBranch, 'defaultBranch', configPath);
+  if (defaultBranch !== undefined) {
+    normalized.defaultBranch = defaultBranch;
+  }
+
+  const cookieConfig = rawConfig.cookies && typeof rawConfig.cookies === 'object'
+    ? rawConfig.cookies
+    : null;
+  const cookieSecureRaw = cookieConfig?.secure ?? rawConfig.cookieSecure;
+  if (typeof cookieSecureRaw === 'string') {
+    const trimmed = cookieSecureRaw.trim().toLowerCase();
+    if (trimmed === 'true' || trimmed === 'false' || trimmed === 'auto') {
+      normalized.cookieSecure = trimmed;
+    } else {
+      warnConfig(`Ignoring invalid cookieSecure value in ${configPath || 'config'}; expected true, false, or auto.`);
+    }
+  } else if (typeof cookieSecureRaw === 'boolean') {
+    normalized.cookieSecure = cookieSecureRaw ? 'true' : 'false';
+  }
+
+  if (defaultBranchesOverride) {
+    const overrides = {};
+    for (const [key, value] of Object.entries(defaultBranchesOverride)) {
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed) {
+          overrides[key.trim()] = trimmed;
+        }
+      } else {
+        warnConfig(
+          `Ignoring non-string defaultBranches entry for ${key} in ${configPath || 'config'}.`,
+        );
+      }
+    }
+    if (Object.keys(overrides).length > 0) {
+      normalized.defaultBranches = overrides;
+    }
   }
 
   const password = coerceString(rawConfig.password, 'password', configPath);
@@ -377,6 +577,9 @@ Options:
   -u, --ui <path>        Path to the UI directory or entry file (default: bundled build)
   -w, --workdir <path>   Working directory root (default: current directory)
   -P, --password <string>  Password for login (default: randomly generated)
+      --default-branch <name>  Override default branch used when syncing repositories
+      --cookie-secure <mode>  Set session cookie security (true, false, auto)
+      --show-password     Print the resolved password even if provided via config or flag
       --codex-command <cmd>   Command executed when launching Codex (default: codex)
       --claude-command <cmd>  Command executed when launching Claude (default: claude)
       --cursor-command <cmd>  Command executed when launching Cursor (default: cursor-agent)
@@ -399,6 +602,9 @@ function parseArgs(argv) {
     ui: false,
     workdir: false,
     password: false,
+    cookieSecure: false,
+    defaultBranch: false,
+    showPassword: false,
     codexCommand: false,
     claudeCommand: false,
     cursorCommand: false,
@@ -416,6 +622,9 @@ function parseArgs(argv) {
     ui: null,
     workdir: null,
     password: null,
+    cookieSecure: null,
+    defaultBranch: null,
+    showPassword: false,
     codexCommand: null,
     claudeCommand: null,
     cursorCommand: null,
@@ -482,6 +691,32 @@ function parseArgs(argv) {
         provided.workdir = true;
         break;
       }
+      case '--cookie-secure': {
+        const value = argv[++i];
+        if (!value) {
+          throw new Error(`Expected value after ${token}`);
+        }
+        const trimmed = value.trim().toLowerCase();
+        if (!['true', 'false', 'auto'].includes(trimmed)) {
+          throw new Error('cookie-secure must be one of: true, false, auto');
+        }
+        args.cookieSecure = trimmed;
+        provided.cookieSecure = true;
+        break;
+      }
+      case '--default-branch': {
+        const value = argv[++i];
+        if (!value) {
+          throw new Error(`Expected branch name after ${token}`);
+        }
+        const trimmed = value.trim();
+        if (!trimmed) {
+          throw new Error('Default branch cannot be empty');
+        }
+        args.defaultBranch = trimmed;
+        provided.defaultBranch = true;
+        break;
+      }
       case '--password':
       case '-P': {
         const value = argv[++i];
@@ -494,6 +729,11 @@ function parseArgs(argv) {
         }
         args.password = trimmed;
         provided.password = true;
+        break;
+      }
+      case '--show-password': {
+        args.showPassword = true;
+        provided.showPassword = true;
         break;
       }
       case '--codex-command': {
@@ -606,6 +846,11 @@ function parseArgs(argv) {
 }
 
 async function main(argv = process.argv.slice(2)) {
+  if (argv[0] === 'plans') {
+    await handlePlansSubcommand(argv.slice(1));
+    return;
+  }
+
   let args;
   try {
     args = parseArgs(argv);
@@ -635,6 +880,16 @@ async function main(argv = process.argv.slice(2)) {
   const finalUi = provided.ui ? args.ui : fileConfig.ui ?? null;
   const finalWorkdir = provided.workdir ? args.workdir : fileConfig.workdir ?? null;
   const finalPassword = provided.password ? args.password : fileConfig.password ?? null;
+  const finalDefaultBranch = provided.defaultBranch
+    ? args.defaultBranch
+    : fileConfig.defaultBranch ?? null;
+  const finalCookieSecure = provided.cookieSecure
+    ? args.cookieSecure
+    : fileConfig.cookieSecure ?? 'auto';
+  const defaultBranchOverrides =
+    fileConfig.defaultBranches && Object.keys(fileConfig.defaultBranches).length > 0
+      ? fileConfig.defaultBranches
+      : null;
 
   const finalCodexCommand = provided.codexCommand
     ? args.codexCommand
@@ -684,6 +939,9 @@ async function main(argv = process.argv.slice(2)) {
     ? path.resolve(process.cwd(), uiInput)
     : BUNDLED_UI_PATH;
   const chosenPassword = finalPassword || generateRandomPassword();
+  const showPassword = args.showPassword === true;
+  const passwordWasProvided = finalPassword !== null;
+  const shouldPrintPassword = showPassword || !passwordWasProvided;
   const commandOverrides = {
     codex: finalCodexCommand,
     claude: finalClaudeCommand,
@@ -695,6 +953,13 @@ async function main(argv = process.argv.slice(2)) {
     finalNgrokApiKey && finalNgrokDomain
       ? { apiKey: finalNgrokApiKey, domain: finalNgrokDomain }
       : undefined;
+  const hasDefaultBranchConfig = Boolean(finalDefaultBranch) || Boolean(defaultBranchOverrides);
+  const defaultBranchConfig = hasDefaultBranchConfig
+    ? {
+        global: finalDefaultBranch ?? undefined,
+        overrides: defaultBranchOverrides || undefined,
+      }
+    : undefined;
 
   if (args.save) {
     const configToSave = {
@@ -710,6 +975,15 @@ async function main(argv = process.argv.slice(2)) {
     }
     if (finalPassword) {
       configToSave.password = finalPassword;
+    }
+    if (finalDefaultBranch) {
+      configToSave.defaultBranch = finalDefaultBranch;
+    }
+    if (defaultBranchOverrides) {
+      configToSave.defaultBranches = defaultBranchOverrides;
+    }
+    if (finalCookieSecure && finalCookieSecure !== 'auto') {
+      configToSave.cookies = { secure: finalCookieSecure };
     }
 
     if (finalBranchNameLlm) {
@@ -787,13 +1061,22 @@ async function main(argv = process.argv.slice(2)) {
       openaiApiKey: finalOpenAiApiKey ?? undefined,
       branchNameLlm: finalBranchNameLlm ?? undefined,
       planLlm: finalPlanLlm ?? undefined,
+      defaultBranches: defaultBranchConfig,
+      cookieSecure: finalCookieSecure,
     });
 
     const localAddress = host === '0.0.0.0' ? 'localhost' : host;
     process.stdout.write(`Serving UI from ${resolvedUi}\n`);
     process.stdout.write(`Working directory set to ${workingDir}\n`);
     process.stdout.write(`Listening on http://${localAddress}:${port}\n`);
-    process.stdout.write(`Password: ${serverPassword || chosenPassword}\n`);
+    const effectivePassword = serverPassword || chosenPassword;
+    if (shouldPrintPassword) {
+      process.stdout.write(`Password: ${effectivePassword}\n`);
+    } else {
+      process.stdout.write(
+        'Password logging suppressed (operator-provided password). Use --show-password to print.\n',
+      );
+    }
     if (publicUrl) {
       process.stdout.write(`Public URL (ngrok): ${publicUrl}\n`);
     }

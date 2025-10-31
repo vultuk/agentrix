@@ -1,4 +1,5 @@
 import { cloneRepository, discoverRepositories } from '../core/git.js';
+import { emitReposUpdate } from '../core/event-bus.js';
 import { removeRepository } from '../core/repositories.js';
 import { sendJson } from '../utils/http.js';
 
@@ -44,6 +45,7 @@ export function createRepoHandlers(workdir) {
       const repoInfo = await cloneRepository(workdir, repoUrl);
       const data = await discoverRepositories(workdir);
       sendJson(context.res, 200, { data, repo: repoInfo });
+      emitReposUpdate(data);
     } catch (error) {
       sendJson(context.res, 500, { error: error.message });
     }
@@ -70,6 +72,7 @@ export function createRepoHandlers(workdir) {
       await removeRepository(workdir, org, repo);
       const data = await discoverRepositories(workdir);
       sendJson(context.res, 200, { data });
+      emitReposUpdate(data);
     } catch (error) {
       sendJson(context.res, 500, { error: error.message });
     }

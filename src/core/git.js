@@ -3,7 +3,20 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
 
+import { resolveDefaultBranch } from './default-branch.js';
+
 const execFileAsync = promisify(execFile);
+
+export class GitWorktreeError extends Error {
+  constructor(repositoryPath, message, cause) {
+    super(`Failed to list worktrees for ${repositoryPath}: ${message}`);
+    this.name = 'GitWorktreeError';
+    this.repositoryPath = repositoryPath;
+    if (cause) {
+      this.cause = cause;
+    }
+  }
+}
 
 export async function listWorktrees(repositoryPath) {
   try {
@@ -37,7 +50,12 @@ export async function listWorktrees(repositoryPath) {
 
     return worktrees;
   } catch (error) {
-    return [];
+    const stderr = error && error.stderr ? error.stderr.toString().trim() : '';
+    const message = stderr || error.message || 'Unknown git error';
+    console.error(
+      `[terminal-worktree] Failed to list worktrees for ${repositoryPath}: ${message}`,
+    );
+    throw new GitWorktreeError(repositoryPath, message, error);
   }
 }
 
@@ -200,7 +218,7 @@ async function branchExists(repositoryPath, branch) {
   }
 }
 
-export async function createWorktree(workdir, org, repo, branch) {
+export async function createWorktree(workdir, org, repo, branch, options = {}) {
   const branchName = normaliseBranchName(branch);
   if (!branchName) {
     throw new Error('Branch name cannot be empty');
@@ -220,10 +238,13 @@ export async function createWorktree(workdir, org, repo, branch) {
   }
 
   try {
-    await execFileAsync('git', ['-C', repositoryPath, 'checkout', 'main'], {
+    const defaultBranch = await resolveDefaultBranch(repositoryPath, {
+      override: options.defaultBranchOverride,
+    });
+    await execFileAsync('git', ['-C', repositoryPath, 'checkout', defaultBranch], {
       maxBuffer: 1024 * 1024,
     });
-    await execFileAsync('git', ['-C', repositoryPath, 'pull', '--ff-only', 'origin', 'main'], {
+    await execFileAsync('git', ['-C', repositoryPath, 'pull', '--ff-only', 'origin', defaultBranch], {
       maxBuffer: 1024 * 1024,
     });
 

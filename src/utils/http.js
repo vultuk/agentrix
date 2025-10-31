@@ -41,3 +41,29 @@ export async function readJsonBody(req) {
     });
   });
 }
+
+export function determineSecureCookie({ configValue, request }) {
+  const normalized = typeof configValue === 'string' ? configValue.trim().toLowerCase() : configValue;
+  if (normalized === 'true' || normalized === true) {
+    return true;
+  }
+  if (normalized === 'false' || normalized === false) {
+    return false;
+  }
+
+  if (!request || typeof request !== 'object') {
+    return false;
+  }
+
+  const encrypted = Boolean(request.socket && request.socket.encrypted);
+  if (encrypted) {
+    return true;
+  }
+
+  const forwardedProto = request.headers?.['x-forwarded-proto'];
+  if (typeof forwardedProto === 'string') {
+    return forwardedProto.split(',').map((value) => value.trim().toLowerCase()).includes('https');
+  }
+
+  return false;
+}
