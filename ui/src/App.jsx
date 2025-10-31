@@ -11,6 +11,7 @@ import {
   Menu,
   PanelRightClose,
   PanelRightOpen,
+  RefreshCcw,
   Plus,
   Sparkles,
   Trash2,
@@ -21,6 +22,7 @@ import 'xterm/css/xterm.css';
 import { renderMarkdown } from './utils/markdown';
 import GitStatusSidebar from './components/GitStatusSidebar.jsx';
 import DiffViewer from './components/DiffViewer.jsx';
+import RepositoryDashboard from './components/RepositoryDashboard.jsx';
 
 const { createElement: h } = React;
 
@@ -53,6 +55,7 @@ const PROMPT_EDITOR_TABS = Object.freeze([
 ]);
 
 const REPOSITORY_POLL_INTERVAL_MS = 5000;
+const REPOSITORY_DASHBOARD_POLL_INTERVAL_MS = 60000;
 
 const ORGANISATION_COLLAPSE_STORAGE_KEY = 'terminal-worktree:collapsed-organisations';
 
@@ -298,6 +301,22 @@ function LoginScreen({ onAuthenticated }) {
               : 'split',
         }));
         const [gitSidebarState, setGitSidebarState] = useState({});
+        const [activeRepoDashboard, setActiveRepoDashboard] = useState(null);
+        const [dashboardData, setDashboardData] = useState(null);
+        const [dashboardError, setDashboardError] = useState(null);
+        const [isDashboardLoading, setIsDashboardLoading] = useState(false);
+        const dashboardCacheRef = useRef(new Map());
+        const dashboardPollingRef = useRef({ timerId: null, controller: null });
+
+        const clearDashboardPolling = useCallback(() => {
+          if (dashboardPollingRef.current.timerId !== null && typeof window !== 'undefined') {
+            window.clearInterval(dashboardPollingRef.current.timerId);
+          }
+          if (dashboardPollingRef.current.controller) {
+            dashboardPollingRef.current.controller.abort();
+          }
+          dashboardPollingRef.current = { timerId: null, controller: null };
+        }, []);
 
         const actionButtonClass = 'inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors';
         const actionMenuRefs = useRef(new Map());
@@ -745,6 +764,16 @@ function LoginScreen({ onAuthenticated }) {
             }
             return null;
           });
+          setActiveRepoDashboard((current) => {
+            if (!current) {
+              return current;
+            }
+            const branches = payload?.[current.org]?.[current.repo] || [];
+            if (branches.includes('main')) {
+              return current;
+            }
+            return null;
+          });
           sessionMapRef.current.forEach((session, key) => {
             const [orgKey, repoKey, branchKey] = key.split('::');
             const branches = payload?.[orgKey]?.[repoKey] || [];
@@ -836,6 +865,81 @@ function LoginScreen({ onAuthenticated }) {
           };
         }, [refreshRepositories]);
 
+        const fetchRepositoryDashboard = useCallback(
+          async (org, repo, { showLoading = true } = {}) => {
+            if (!org || !repo) {
+              return null;
+            }
+
+            if (showLoading) {
+              setIsDashboardLoading(true);
+            }
+
+            if (dashboardPollingRef.current.controller) {
+              dashboardPollingRef.current.controller.abort();
+            }
+
+            const controller = new AbortController();
+            dashboardPollingRef.current.controller = controller;
+
+            try {
+              const response = await fetch(
+                `/api/repos/dashboard?org=${encodeURIComponent(org)}&repo=${encodeURIComponent(repo)}`,
+                { credentials: 'include', signal: controller.signal },
+              );
+
+              if (response.status === 401) {
+                notifyAuthExpired();
+                throw new Error('AUTH_REQUIRED');
+              }
+
+              if (!response.ok) {
+                let message = `Request failed with status ${response.status}`;
+                try {
+                  const errorBody = await response.json();
+                  if (errorBody && typeof errorBody === 'object' && typeof errorBody.error === 'string') {
+                    message = errorBody.error;
+                  }
+                } catch {
+                  // ignore JSON parse failures
+                }
+                throw new Error(message);
+              }
+
+              const body = await response.json();
+              const payload = body && typeof body === 'object' && body.data ? body.data : null;
+
+              if (payload) {
+                const cacheKey = `${org}::${repo}`;
+                dashboardCacheRef.current.set(cacheKey, payload);
+                setDashboardData(payload);
+                setDashboardError(null);
+              } else {
+                setDashboardError('Unexpected response from server');
+              }
+
+              return payload;
+            } catch (error) {
+              if (controller.signal.aborted) {
+                return null;
+              }
+              if (error && error.message === 'AUTH_REQUIRED') {
+                return null;
+              }
+              setDashboardError(error?.message || 'Failed to load dashboard metrics');
+              return null;
+            } finally {
+              if (dashboardPollingRef.current.controller === controller) {
+                dashboardPollingRef.current.controller = null;
+              }
+              if (showLoading) {
+                setIsDashboardLoading(false);
+              }
+            }
+          },
+          [notifyAuthExpired],
+        );
+
         const loadSessions = useCallback(async () => {
           try {
             const response = await fetch('/api/sessions', { credentials: 'include' });
@@ -876,6 +980,81 @@ function LoginScreen({ onAuthenticated }) {
           }, 15000);
           return () => clearInterval(id);
         }, [loadSessions]);
+
+        useEffect(() => {
+          if (!activeRepoDashboard) {
+            clearDashboardPolling();
+            setIsDashboardLoading(false);
+            setDashboardError(null);
+            setDashboardData(null);
+            return () => {};
+          }
+
+          const { org, repo } = activeRepoDashboard;
+          const cacheKey = `${org}::${repo}`;
+          const cached = dashboardCacheRef.current.get(cacheKey);
+
+          if (cached) {
+            setDashboardData(cached);
+            setDashboardError(null);
+          }
+
+          let visibilityListenerAttached = false;
+
+          const startPolling = () => {
+            if (!REPOSITORY_DASHBOARD_POLL_INTERVAL_MS || Number.isNaN(REPOSITORY_DASHBOARD_POLL_INTERVAL_MS)) {
+              return;
+            }
+            if (typeof window === 'undefined') {
+              return;
+            }
+            if (dashboardPollingRef.current.timerId !== null) {
+              window.clearInterval(dashboardPollingRef.current.timerId);
+            }
+            const timerId = window.setInterval(() => {
+              if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+                return;
+              }
+              fetchRepositoryDashboard(org, repo, { showLoading: false });
+            }, REPOSITORY_DASHBOARD_POLL_INTERVAL_MS);
+            dashboardPollingRef.current.timerId = timerId;
+          };
+
+          clearDashboardPolling();
+          fetchRepositoryDashboard(org, repo, { showLoading: !cached });
+          startPolling();
+
+          const handleVisibilityChange = () => {
+            if (typeof document === 'undefined') {
+              return;
+            }
+            if (document.visibilityState === 'hidden') {
+              clearDashboardPolling();
+              if (dashboardPollingRef.current.controller) {
+                dashboardPollingRef.current.controller.abort();
+              }
+            } else {
+              fetchRepositoryDashboard(org, repo, { showLoading: false });
+              startPolling();
+            }
+          };
+
+          if (typeof document !== 'undefined') {
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            visibilityListenerAttached = true;
+          }
+
+          return () => {
+            if (visibilityListenerAttached && typeof document !== 'undefined') {
+              document.removeEventListener('visibilitychange', handleVisibilityChange);
+            }
+            clearDashboardPolling();
+          };
+        }, [
+          activeRepoDashboard,
+          clearDashboardPolling,
+          fetchRepositoryDashboard,
+        ]);
 
         const disposeSocket = useCallback(() => {
           if (socketRef.current) {
@@ -1317,6 +1496,18 @@ function LoginScreen({ onAuthenticated }) {
               setSessionId(null);
               setTerminalStatus('disconnected');
             }
+            dashboardCacheRef.current.delete(`${org}::${repo}`);
+            if (
+              activeRepoDashboard &&
+              activeRepoDashboard.org === org &&
+              activeRepoDashboard.repo === repo
+            ) {
+              clearDashboardPolling();
+              setActiveRepoDashboard(null);
+              setDashboardData(null);
+              setDashboardError(null);
+              setIsDashboardLoading(false);
+            }
             setConfirmDeleteRepo(null);
           } catch (error) {
             console.error('Failed to delete repository', error);
@@ -1353,6 +1544,10 @@ function LoginScreen({ onAuthenticated }) {
             const payload = body && typeof body === 'object' && body.data ? body.data : {};
             applyDataUpdate(payload);
             const worktree = { org, repo, branch: trimmedBranch };
+            setActiveRepoDashboard(null);
+            clearDashboardPolling();
+            setDashboardError(null);
+            setIsDashboardLoading(false);
             const key = getWorktreeKey(org, repo, trimmedBranch);
             const hasKnownSession =
               sessionMapRef.current.has(key) || knownSessionsRef.current.has(key);
@@ -1504,6 +1699,10 @@ function LoginScreen({ onAuthenticated }) {
             }
             const worktree = { org, repo, branch: generatedBranch };
             const previousActiveWorktree = activeWorktree;
+            setActiveRepoDashboard(null);
+            clearDashboardPolling();
+            setDashboardError(null);
+            setIsDashboardLoading(false);
             setActiveWorktree(worktree);
             try {
               await openTerminalForWorktree(worktree, {
@@ -1582,31 +1781,69 @@ function LoginScreen({ onAuthenticated }) {
           }
         };
 
-        const handleWorktreeSelection = useCallback(async (org, repo, branch) => {
-          if (branch === 'main') {
-            return;
-          }
-          const worktree = { org, repo, branch };
-          const key = getWorktreeKey(org, repo, branch);
-          if (!sessionMapRef.current.has(key) && !knownSessionsRef.current.has(key)) {
-            await loadSessions();
-          }
-          if (sessionMapRef.current.has(key) || knownSessionsRef.current.has(key)) {
-            setActiveWorktree(worktree);
-            try {
-              await openTerminalForWorktree(worktree);
+        const handleWorktreeSelection = useCallback(
+          async (org, repo, branch) => {
+            if (branch === 'main') {
+              clearDashboardPolling();
               setPendingWorktreeAction(null);
-            } catch (error) {
-              if (error && error.message === 'AUTH_REQUIRED') {
-                return;
+              setOpenActionMenu(null);
+              setActiveWorktree(null);
+              setSessionId(null);
+              setTerminalStatus('disconnected');
+              disposeSocket();
+              disposeTerminal();
+              closeGitSidebar();
+              const cacheKey = `${org}::${repo}`;
+              const cached = dashboardCacheRef.current.get(cacheKey);
+              if (cached) {
+                setDashboardData(cached);
+                setDashboardError(null);
+                setIsDashboardLoading(false);
+              } else {
+                setDashboardData(null);
+                setIsDashboardLoading(true);
               }
-              window.alert('Failed to reconnect to the existing session.');
+              setActiveRepoDashboard({ org, repo });
+              setIsMobileMenuOpen(false);
+              return;
             }
-          } else {
-            setPendingWorktreeAction(worktree);
-            setIsMobileMenuOpen(false);
-          }
-        }, [getWorktreeKey, openTerminalForWorktree, loadSessions]);
+
+            clearDashboardPolling();
+            setActiveRepoDashboard(null);
+            setDashboardError(null);
+            setIsDashboardLoading(false);
+
+            const worktree = { org, repo, branch };
+            const key = getWorktreeKey(org, repo, branch);
+            if (!sessionMapRef.current.has(key) && !knownSessionsRef.current.has(key)) {
+              await loadSessions();
+            }
+            if (sessionMapRef.current.has(key) || knownSessionsRef.current.has(key)) {
+              setActiveWorktree(worktree);
+              try {
+                await openTerminalForWorktree(worktree);
+                setPendingWorktreeAction(null);
+              } catch (error) {
+                if (error && error.message === 'AUTH_REQUIRED') {
+                  return;
+                }
+                window.alert('Failed to reconnect to the existing session.');
+              }
+            } else {
+              setPendingWorktreeAction(worktree);
+              setIsMobileMenuOpen(false);
+            }
+          },
+          [
+            clearDashboardPolling,
+            closeGitSidebar,
+            disposeSocket,
+            disposeTerminal,
+            getWorktreeKey,
+            loadSessions,
+            openTerminalForWorktree,
+          ],
+        );
 
         const handleWorktreeAction = useCallback(async (action) => {
           if (!pendingWorktreeAction || pendingActionLoading) {
@@ -1614,6 +1851,10 @@ function LoginScreen({ onAuthenticated }) {
           }
           setOpenActionMenu(null);
           setPendingActionLoading(action);
+          clearDashboardPolling();
+          setActiveRepoDashboard(null);
+          setDashboardError(null);
+          setIsDashboardLoading(false);
           const worktree = pendingWorktreeAction;
           const isDangerous = action.endsWith('-dangerous');
           const resolvedAction = isDangerous ? action.replace(/-dangerous$/, '') : action;
@@ -1632,12 +1873,20 @@ function LoginScreen({ onAuthenticated }) {
             setPendingActionLoading(null);
           }
         }, [
+          clearDashboardPolling,
           openTerminalForWorktree,
           pendingWorktreeAction,
           pendingActionLoading,
           setOpenActionMenu,
           getCommandForLaunch,
         ]);
+
+        const handleDashboardRefresh = useCallback(() => {
+          if (!activeRepoDashboard) {
+            return;
+          }
+          fetchRepositoryDashboard(activeRepoDashboard.org, activeRepoDashboard.repo, { showLoading: true });
+        }, [activeRepoDashboard, fetchRepositoryDashboard]);
 
         const isCodexLoading =
           Boolean(pendingActionLoading && typeof pendingActionLoading === 'string' && pendingActionLoading.startsWith('codex'));
@@ -1695,8 +1944,9 @@ function LoginScreen({ onAuthenticated }) {
             gitSidebarOperations.bisect?.inProgress
         );
 
-        const githubRepoUrl = activeWorktree
-          ? `https://github.com/${activeWorktree.org}/${activeWorktree.repo}`
+        const githubRepoContext = activeWorktree || activeRepoDashboard;
+        const githubRepoUrl = githubRepoContext
+          ? `https://github.com/${githubRepoContext.org}/${githubRepoContext.repo}`
           : null;
 
         const githubMenuItems = githubRepoUrl
@@ -1708,7 +1958,7 @@ function LoginScreen({ onAuthenticated }) {
           : [];
 
         const githubControls =
-          activeWorktree && githubRepoUrl
+          githubRepoUrl
             ? h(
                 'div',
                 {
@@ -1899,40 +2149,49 @@ function LoginScreen({ onAuthenticated }) {
                       h(
                         'ul',
                         { className: 'ml-5 mt-1 space-y-[2px]' },
-                        branches.map(branch =>
-                          h(
+                        branches.map((branch) => {
+                          const isActiveWorktree =
+                            activeWorktree &&
+                            activeWorktree.org === org &&
+                            activeWorktree.repo === repo &&
+                            activeWorktree.branch === branch;
+                          const isDashboardActive =
+                            branch === 'main' &&
+                            activeRepoDashboard &&
+                            activeRepoDashboard.org === org &&
+                            activeRepoDashboard.repo === repo;
+                          const isActive = Boolean(isActiveWorktree || isDashboardActive);
+
+                          let rowClasses = 'text-neutral-500 hover:bg-neutral-800/70 hover:text-neutral-100';
+                          if (branch === 'main') {
+                            rowClasses = 'text-neutral-400 hover:bg-neutral-800/70 hover:text-neutral-100';
+                          }
+                          if (isActive) {
+                            rowClasses = 'bg-neutral-800 text-neutral-100';
+                          }
+
+                          return h(
                             'li',
                             { key: branch },
                             h(
                               'div',
                               {
-                                className: `flex items-center justify-between rounded-sm px-2 py-2 transition-colors ${
-                                  activeWorktree &&
-                                  activeWorktree.org === org &&
-                                  activeWorktree.repo === repo &&
-                                  activeWorktree.branch === branch
-                                    ? 'bg-neutral-800 text-neutral-100'
-                                    : branch === 'main'
-                                    ? 'text-neutral-600'
-                                    : 'text-neutral-500 hover:bg-neutral-800/70 hover:text-neutral-100'
-                                }`
+                                className: `flex items-center justify-between rounded-sm px-2 py-2 transition-colors ${rowClasses}`,
                               },
                               h(
                                 'button',
                                 {
                                   type: 'button',
-                                  disabled: branch === 'main',
                                   onClick: () => handleWorktreeSelection(org, repo, branch).catch(() => {}),
-                                  className: `flex items-center gap-2 min-w-0 overflow-hidden text-left w-full ${
-                                    branch === 'main' ? 'cursor-not-allowed' : 'cursor-pointer'
-                                  }`
+                                  className:
+                                    'flex items-center gap-2 min-w-0 overflow-hidden text-left w-full cursor-pointer',
                                 },
                                 h(GitBranch, { size: 14, className: 'flex-shrink-0' }),
                                 h(
                                   'span',
                                   { className: 'whitespace-nowrap overflow-hidden text-ellipsis text-sm' },
-                                  branch
-                                )
+                                  branch,
+                                ),
                               ),
                               h(
                                 'button',
@@ -1949,13 +2208,13 @@ function LoginScreen({ onAuthenticated }) {
                                       ? 'text-neutral-700 cursor-not-allowed'
                                       : 'text-neutral-500 hover:text-red-400'
                                   }`,
-                                  title: branch === 'main' ? 'Main branch cannot be removed' : 'Delete Worktree'
+                                  title: branch === 'main' ? 'Main branch cannot be removed' : 'Delete Worktree',
                                 },
-                                h(Trash2, { size: 12 })
-                              )
-                            )
-                          )
-                        )
+                                h(Trash2, { size: 12 }),
+                              ),
+                            ),
+                          );
+                        })
                       )
                     )
                   )
@@ -2018,98 +2277,164 @@ function LoginScreen({ onAuthenticated }) {
           )
         );
 
+        let mainPaneContent = null;
+
+        if (activeWorktree) {
+          mainPaneContent = h(
+            'div',
+            {
+              className:
+                'bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0 flex-1',
+            },
+            h(
+              'div',
+              { className: 'flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
+              h(
+                'div',
+                null,
+                h(
+                  'div',
+                  { className: 'text-xs text-neutral-500' },
+                  `${activeWorktree.org}/${activeWorktree.repo}`,
+                ),
+                h('div', { className: 'text-sm text-neutral-300 flex items-center gap-2' }, h('span', null, activeWorktree.branch)),
+              ),
+              h(
+                'div',
+                { className: 'flex items-center gap-2' },
+                githubControls,
+                gitSidebarButton,
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    onClick: () => setIsMobileMenuOpen(true),
+                    className:
+                      'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]',
+                  },
+                  h(Menu, { size: 18 }),
+                  h('span', { className: 'sr-only' }, 'Open sidebar'),
+                ),
+              ),
+            ),
+            h(
+              'div',
+              { className: 'flex-1 min-h-0 flex flex-col lg:flex-row lg:min-w-0' },
+              h('div', {
+                ref: terminalContainerRef,
+                className: 'flex-1 bg-neutral-950 min-h-0 min-w-0 overflow-hidden relative',
+              }),
+              h(GitStatusSidebar, {
+                isOpen: isGitSidebarOpen,
+                worktree: activeWorktree,
+                onClose: closeGitSidebar,
+                onAuthExpired: notifyAuthExpired,
+                onStatusUpdate: handleGitStatusUpdate,
+                onOpenDiff: handleOpenGitDiff,
+                entryLimit: 250,
+                commitLimit: 20,
+                pollInterval: REPOSITORY_POLL_INTERVAL_MS,
+              }),
+            ),
+          );
+        } else if (activeRepoDashboard) {
+          mainPaneContent = h(
+            'div',
+            {
+              className:
+                'bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0 flex-1',
+            },
+            h(
+              'div',
+              { className: 'flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
+              h(
+                'div',
+                null,
+                h(
+                  'div',
+                  { className: 'text-xs text-neutral-500' },
+                  `${activeRepoDashboard.org}/${activeRepoDashboard.repo}`,
+                ),
+                h('div', { className: 'text-sm text-neutral-300' }, 'Repository Dashboard'),
+              ),
+              h(
+                'div',
+                { className: 'flex items-center gap-2' },
+                githubControls,
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    onClick: handleDashboardRefresh,
+                    disabled: isDashboardLoading,
+                    className: `${actionButtonClass} text-neutral-400 hover:text-neutral-100 disabled:opacity-60 disabled:cursor-not-allowed`,
+                    title: isDashboardLoading ? 'Refreshing…' : 'Refresh metrics',
+                  },
+                  isDashboardLoading
+                    ? renderSpinner('text-neutral-100')
+                    : h(RefreshCcw, { size: 16 }),
+                ),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    onClick: () => setIsMobileMenuOpen(true),
+                    className:
+                      'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]',
+                  },
+                  h(Menu, { size: 18 }),
+                  h('span', { className: 'sr-only' }, 'Open sidebar'),
+                ),
+              ),
+            ),
+            h(
+              'div',
+              { className: 'flex-1 min-h-0 overflow-y-auto p-4' },
+              h(RepositoryDashboard, {
+                repository: activeRepoDashboard,
+                data: dashboardData,
+                loading: isDashboardLoading,
+                error: dashboardError,
+              }),
+            ),
+          );
+        } else {
+          mainPaneContent = h(
+            'div',
+            {
+              className:
+                'bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0',
+            },
+            h(
+              'div',
+              { className: 'flex justify-end px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
+              h(
+                'button',
+                {
+                  type: 'button',
+                  onClick: () => setIsMobileMenuOpen(true),
+                  className:
+                    'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]',
+                },
+                h(Menu, { size: 18 }),
+                h('span', { className: 'sr-only' }, 'Open sidebar'),
+              ),
+            ),
+            h(
+              'div',
+              {
+                className: 'flex-1 flex items-center justify-center text-neutral-500 px-4 text-center',
+              },
+              h('p', null, 'Select a repository and branch from the left panel'),
+            ),
+          );
+        }
+
         const mainPane = h(
           'div',
           { className: 'flex-1 bg-neutral-950 text-neutral-100 font-sans flex flex-col min-h-0' },
-          activeWorktree
-            ? h(
-                'div',
-                {
-                  className:
-                    'bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0 flex-1'
-                },
-                h(
-                  'div',
-                  { className: 'flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
-                  h(
-                    'div',
-                    null,
-                    h(
-                      'div',
-                      { className: 'text-xs text-neutral-500' },
-                      `${activeWorktree.org}/${activeWorktree.repo}`
-                    ),
-                    h('div', { className: 'text-sm text-neutral-300 flex items-center gap-2' }, h('span', null, activeWorktree.branch))
-                  ),
-                  h(
-                    'div',
-                    { className: 'flex items-center gap-2' },
-                    githubControls,
-                    gitSidebarButton,
-                    h(
-                      'button',
-                      {
-                        type: 'button',
-                        onClick: () => setIsMobileMenuOpen(true),
-                        className:
-                          'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]'
-                      },
-                      h(Menu, { size: 18 }),
-                      h('span', { className: 'sr-only' }, 'Open sidebar')
-                    )
-                  )
-                ),
-                h(
-                  'div',
-                  { className: 'flex-1 min-h-0 flex flex-col lg:flex-row lg:min-w-0' },
-                  h('div', {
-                    ref: terminalContainerRef,
-                    className: 'flex-1 bg-neutral-950 min-h-0 min-w-0 overflow-hidden relative'
-                  }),
-                  h(GitStatusSidebar, {
-                    isOpen: isGitSidebarOpen,
-                    worktree: activeWorktree,
-                    onClose: closeGitSidebar,
-                    onAuthExpired: notifyAuthExpired,
-                    onStatusUpdate: handleGitStatusUpdate,
-                    onOpenDiff: handleOpenGitDiff,
-                    entryLimit: 250,
-                    commitLimit: 20,
-                    pollInterval: REPOSITORY_POLL_INTERVAL_MS
-                  })
-                )
-            )
-          : h(
-                'div',
-                {
-                  className:
-                    'bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0'
-                },
-                h(
-                  'div',
-                  { className: 'flex justify-end px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
-                  h(
-                    'button',
-                    {
-                      type: 'button',
-                      onClick: () => setIsMobileMenuOpen(true),
-                      className:
-                        'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]'
-                    },
-                    h(Menu, { size: 18 }),
-                    h('span', { className: 'sr-only' }, 'Open sidebar')
-                  )
-                ),
-                h(
-                  'div',
-                  {
-                    className:
-                      'flex-1 flex items-center justify-center text-neutral-500 px-4 text-center'
-                  },
-                  h('p', null, 'Select a repository and branch from the left panel')
-                )
-            )
-          );
+          mainPaneContent,
+        );
 
         return h(
           Fragment,

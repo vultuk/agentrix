@@ -1,6 +1,7 @@
 import { createAuthHandlers } from '../api/auth.js';
 import { createAutomationHandlers } from '../api/automation.js';
 import { createRepoHandlers } from '../api/repos.js';
+import { createRepoDashboardHandlers } from '../api/repo-dashboard.js';
 import { createSessionHandlers } from '../api/sessions.js';
 import { createTerminalHandlers } from '../api/terminal.js';
 import { createWorktreeHandlers } from '../api/worktrees.js';
@@ -33,6 +34,7 @@ export function createRouter({
     planService,
   });
   const repoHandlers = createRepoHandlers(workdir);
+  const repoDashboardHandlers = createRepoDashboardHandlers(workdir);
   const sessionHandlers = createSessionHandlers(workdir);
   const worktreeHandlers = createWorktreeHandlers(workdir, branchNameGenerator);
   const terminalHandlers = createTerminalHandlers(workdir);
@@ -72,6 +74,13 @@ export function createRouter({
           POST: repoHandlers.create,
           DELETE: repoHandlers.destroy,
         },
+      },
+    ],
+    [
+      '/api/repos/dashboard',
+      {
+        requiresAuth: true,
+        handlers: { GET: repoDashboardHandlers.read, HEAD: repoDashboardHandlers.read },
       },
     ],
     [
