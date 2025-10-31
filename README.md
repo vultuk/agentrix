@@ -68,6 +68,7 @@ node bin/terminal-worktree.js \
 - `-u, --ui <path>` – Directory or entry file for the built UI (default: `ui/dist`)
 - `-w, --workdir <path>` – Root directory that holds `org/repo` folders (default: process CWD)
 - `-P, --password <string>` – UI password (default: secure random string generated at startup)
+- `--default-branch <name>` – Override the sync branch when repositories use a non-`main` default
 - `--show-password` – Print the resolved password even if it was set via config or flag
 - `--ngrok-api-key <token>` – Authtoken used to establish a public ngrok tunnel
 - `--ngrok-domain <domain>` – Reserved ngrok domain exposed when tunnelling (requires `--ngrok-api-key`)
@@ -92,6 +93,10 @@ configuration might look like:
   "ui": "./ui/dist",
   "workdir": "/srv/worktrees",
   "password": "s3cr3t",
+  "defaultBranch": "develop",
+  "defaultBranches": {
+    "acme/web": "master"
+  },
   "commands": {
     "codex": "codex",
     "cursor": "cursor-agent",
@@ -120,6 +125,9 @@ the config file without starting the server.
 When the CLI generates a password it prints the value once at startup. If you supply a password via
 CLI flag or config file it is kept out of stdout; pass `--show-password` if you still need the value
 echoed. Clients must authenticate before calling API endpoints.
+
+Repositories that do not use `main` can set a global `defaultBranch` or repo-specific overrides in
+`defaultBranches` (keyed by `org/repo`). The CLI uses these when syncing before creating worktrees.
 Successful logins receive an HTTP-only session cookie; log out via the UI or `POST
 /api/auth/logout`. On shutdown the backend cleans up shell sessions, tmux attachments, and WebSocket
 clients.

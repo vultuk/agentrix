@@ -3,6 +3,8 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
 
+import { resolveDefaultBranch } from './default-branch.js';
+
 const execFileAsync = promisify(execFile);
 
 export class GitWorktreeError extends Error {
@@ -216,7 +218,7 @@ async function branchExists(repositoryPath, branch) {
   }
 }
 
-export async function createWorktree(workdir, org, repo, branch) {
+export async function createWorktree(workdir, org, repo, branch, options = {}) {
   const branchName = normaliseBranchName(branch);
   if (!branchName) {
     throw new Error('Branch name cannot be empty');
@@ -236,10 +238,13 @@ export async function createWorktree(workdir, org, repo, branch) {
   }
 
   try {
-    await execFileAsync('git', ['-C', repositoryPath, 'checkout', 'main'], {
+    const defaultBranch = await resolveDefaultBranch(repositoryPath, {
+      override: options.defaultBranchOverride,
+    });
+    await execFileAsync('git', ['-C', repositoryPath, 'checkout', defaultBranch], {
       maxBuffer: 1024 * 1024,
     });
-    await execFileAsync('git', ['-C', repositoryPath, 'pull', '--ff-only', 'origin', 'main'], {
+    await execFileAsync('git', ['-C', repositoryPath, 'pull', '--ff-only', 'origin', defaultBranch], {
       maxBuffer: 1024 * 1024,
     });
 

@@ -280,6 +280,10 @@ function normalizeConfig(rawConfig, configPath) {
   }
 
   const normalized = {};
+  const defaultBranchesOverride =
+    rawConfig.defaultBranches && typeof rawConfig.defaultBranches === 'object'
+      ? rawConfig.defaultBranches
+      : null;
   const commands =
     rawConfig.commands && typeof rawConfig.commands === 'object'
       ? rawConfig.commands
@@ -335,6 +339,30 @@ function normalizeConfig(rawConfig, configPath) {
   );
   if (workdir !== undefined) {
     normalized.workdir = workdir;
+  }
+
+  const defaultBranch = coerceString(rawConfig.defaultBranch, 'defaultBranch', configPath);
+  if (defaultBranch !== undefined) {
+    normalized.defaultBranch = defaultBranch;
+  }
+
+  if (defaultBranchesOverride) {
+    const overrides = {};
+    for (const [key, value] of Object.entries(defaultBranchesOverride)) {
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed) {
+          overrides[key.trim()] = trimmed;
+        }
+      } else {
+        warnConfig(
+          `Ignoring non-string defaultBranches entry for ${key} in ${configPath || 'config'}.`,
+        );
+      }
+    }
+    if (Object.keys(overrides).length > 0) {
+      normalized.defaultBranches = overrides;
+    }
   }
 
   const password = coerceString(rawConfig.password, 'password', configPath);
@@ -534,6 +562,7 @@ Options:
   -u, --ui <path>        Path to the UI directory or entry file (default: bundled build)
   -w, --workdir <path>   Working directory root (default: current directory)
   -P, --password <string>  Password for login (default: randomly generated)
+      --default-branch <name>  Override default branch used when syncing repositories
       --show-password     Print the resolved password even if provided via config or flag
       --codex-command <cmd>   Command executed when launching Codex (default: codex)
       --claude-command <cmd>  Command executed when launching Claude (default: claude)
@@ -557,6 +586,7 @@ function parseArgs(argv) {
     ui: false,
     workdir: false,
     password: false,
+    defaultBranch: false,
     showPassword: false,
     codexCommand: false,
     claudeCommand: false,
@@ -575,6 +605,7 @@ function parseArgs(argv) {
     ui: null,
     workdir: null,
     password: null,
+    defaultBranch: null,
     showPassword: false,
     codexCommand: null,
     claudeCommand: null,
@@ -640,6 +671,19 @@ function parseArgs(argv) {
         }
         args.workdir = value;
         provided.workdir = true;
+        break;
+      }
+      case '--default-branch': {
+        const value = argv[++i];
+        if (!value) {
+          throw new Error(`Expected branch name after ${token}`);
+        }
+        const trimmed = value.trim();
+        if (!trimmed) {
+          throw new Error('Default branch cannot be empty');
+        }
+        args.defaultBranch = trimmed;
+        provided.defaultBranch = true;
         break;
       }
       case '--password':
@@ -805,6 +849,13 @@ async function main(argv = process.argv.slice(2)) {
   const finalUi = provided.ui ? args.ui : fileConfig.ui ?? null;
   const finalWorkdir = provided.workdir ? args.workdir : fileConfig.workdir ?? null;
   const finalPassword = provided.password ? args.password : fileConfig.password ?? null;
+  const finalDefaultBranch = provided.defaultBranch
+    ? args.defaultBranch
+    : fileConfig.defaultBranch ?? null;
+  const defaultBranchOverrides =
+    fileConfig.defaultBranches && Object.keys(fileConfig.defaultBranches).length > 0
+      ? fileConfig.defaultBranches
+      : null;
 
   const finalCodexCommand = provided.codexCommand
     ? args.codexCommand
@@ -868,6 +919,13 @@ async function main(argv = process.argv.slice(2)) {
     finalNgrokApiKey && finalNgrokDomain
       ? { apiKey: finalNgrokApiKey, domain: finalNgrokDomain }
       : undefined;
+  const hasDefaultBranchConfig = Boolean(finalDefaultBranch) || Boolean(defaultBranchOverrides);
+  const defaultBranchConfig = hasDefaultBranchConfig
+    ? {
+        global: finalDefaultBranch ?? undefined,
+        overrides: defaultBranchOverrides || undefined,
+      }
+    : undefined;
 
   if (args.save) {
     const configToSave = {
@@ -883,6 +941,12 @@ async function main(argv = process.argv.slice(2)) {
     }
     if (finalPassword) {
       configToSave.password = finalPassword;
+    }
+    if (finalDefaultBranch) {
+      configToSave.defaultBranch = finalDefaultBranch;
+    }
+    if (defaultBranchOverrides) {
+      configToSave.defaultBranches = defaultBranchOverrides;
     }
 
     if (finalBranchNameLlm) {
@@ -960,6 +1024,7 @@ async function main(argv = process.argv.slice(2)) {
       openaiApiKey: finalOpenAiApiKey ?? undefined,
       branchNameLlm: finalBranchNameLlm ?? undefined,
       planLlm: finalPlanLlm ?? undefined,
+      defaultBranches: defaultBranchConfig,
     });
 
     const localAddress = host === '0.0.0.0' ? 'localhost' : host;

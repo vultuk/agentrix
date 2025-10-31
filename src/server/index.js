@@ -25,6 +25,7 @@ export async function startServer({
   openaiApiKey,
   branchNameLlm,
   planLlm,
+  defaultBranches,
 } = {}) {
   if (!uiPath) {
     throw new Error('Missing required option: uiPath');
@@ -51,6 +52,7 @@ export async function startServer({
     automationApiKey,
     branchNameGenerator,
     planService,
+    defaultBranches,
   });
 
   const server = http.createServer(async (req, res) => {

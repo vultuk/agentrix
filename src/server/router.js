@@ -19,6 +19,7 @@ export function createRouter({
   automationApiKey,
   branchNameGenerator,
   planService,
+  defaultBranches,
 }) {
   if (!authManager) {
     throw new Error('authManager is required');
@@ -34,11 +35,12 @@ export function createRouter({
     apiKey: automationApiKey,
     branchNameGenerator,
     planService,
+    defaultBranches,
   });
   const repoHandlers = createRepoHandlers(workdir);
   const repoDashboardHandlers = createRepoDashboardHandlers(workdir);
   const sessionHandlers = createSessionHandlers(workdir);
-  const worktreeHandlers = createWorktreeHandlers(workdir, branchNameGenerator);
+  const worktreeHandlers = createWorktreeHandlers(workdir, branchNameGenerator, defaultBranches);
   const terminalHandlers = createTerminalHandlers(workdir);
   const configHandlers = createConfigHandlers(agentCommands);
   const planHandlers = createPlanHandlers({ planService });

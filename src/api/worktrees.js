@@ -5,6 +5,7 @@ import {
   normaliseBranchName,
   removeWorktree,
 } from '../core/git.js';
+import { selectDefaultBranchOverride } from '../core/default-branch.js';
 import {
   detectTmux,
   isTmuxAvailable,
@@ -16,7 +17,7 @@ import { savePlanToWorktree } from '../core/plan-storage.js';
 import { emitReposUpdate } from '../core/event-bus.js';
 import { sendJson } from '../utils/http.js';
 
-export function createWorktreeHandlers(workdir, branchNameGenerator) {
+export function createWorktreeHandlers(workdir, branchNameGenerator, defaultBranchConfig) {
   async function upsert(context) {
     let payload;
     try {
@@ -60,7 +61,10 @@ export function createWorktreeHandlers(workdir, branchNameGenerator) {
     }
 
     try {
-      await createWorktree(workdir, org, repo, normalisedBranch);
+      const defaultBranchOverride = selectDefaultBranchOverride(defaultBranchConfig, org, repo);
+      await createWorktree(workdir, org, repo, normalisedBranch, {
+        defaultBranchOverride,
+      });
       if (rawPrompt.trim()) {
         try {
           const { worktreePath } = await getWorktreePath(workdir, org, repo, normalisedBranch);
@@ -103,8 +107,12 @@ export function createWorktreeHandlers(workdir, branchNameGenerator) {
       return;
     }
 
-    if (normalised.toLowerCase() === 'main') {
-      sendJson(context.res, 500, { error: 'Cannot remove the main worktree' });
+    const overrideDefault = selectDefaultBranchOverride(defaultBranchConfig, org, repo);
+    const protectedBranch = overrideDefault ? overrideDefault.toLowerCase() : 'main';
+    if (normalised.toLowerCase() === protectedBranch) {
+      sendJson(context.res, 500, {
+        error: `Cannot remove the default worktree (${overrideDefault || 'main'})`,
+      });
       return;
     }
 
