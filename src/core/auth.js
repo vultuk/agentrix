@@ -21,7 +21,7 @@ export function createAuthManager(expectedPassword) {
     return Boolean(token && validSessionTokens.has(token));
   }
 
-  function login(req, res, providedPassword) {
+  function login(req, res, providedPassword, options = {}) {
     if (typeof providedPassword !== 'string' || !providedPassword.trim()) {
       throw createError('Password is required', 400);
     }
@@ -36,21 +36,23 @@ export function createAuthManager(expectedPassword) {
 
     const token = generateSessionToken();
     validSessionTokens.add(token);
+    const secureFlag = options.secure;
     setCookie(res, SESSION_COOKIE_NAME, token, {
       maxAge: SESSION_MAX_AGE_SECONDS,
       sameSite: 'Strict',
       httpOnly: true,
       path: '/',
+      secure: secureFlag,
     });
     return token;
   }
 
-  function logout(req, res) {
+  function logout(req, res, options = {}) {
     const token = getTokenFromRequest(req);
     if (token) {
       validSessionTokens.delete(token);
     }
-    clearCookie(res, SESSION_COOKIE_NAME, { path: '/', sameSite: 'Strict', httpOnly: true });
+    clearCookie(res, SESSION_COOKIE_NAME, { path: '/', sameSite: 'Strict', httpOnly: true, secure: options?.secure });
   }
 
   function hasToken(token) {

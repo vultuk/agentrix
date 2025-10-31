@@ -1,13 +1,14 @@
 import { sendJson } from '../utils/http.js';
 
-export function createAuthHandlers(authManager) {
+export function createAuthHandlers(authManager, { cookieManager } = {}) {
   async function login(context) {
     const payload = await context.readJsonBody();
     const password =
       typeof payload.password === 'string' ? payload.password.trim() : '';
 
     try {
-      authManager.login(context.req, context.res, password);
+      const secure = cookieManager ? cookieManager.resolveSecure(context.req) : false;
+      authManager.login(context.req, context.res, password, { secure });
       sendJson(context.res, 200, { authenticated: true });
     } catch (error) {
       const statusCode = error.statusCode || (error.message === 'Invalid password' ? 401 : 400);
@@ -16,7 +17,8 @@ export function createAuthHandlers(authManager) {
   }
 
   async function logout(context) {
-    authManager.logout(context.req, context.res);
+    const secure = cookieManager ? cookieManager.resolveSecure(context.req) : false;
+    authManager.logout(context.req, context.res, { secure });
     sendJson(context.res, 200, { authenticated: false });
   }
 

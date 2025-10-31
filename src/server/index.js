@@ -9,6 +9,7 @@ import { sendJson } from '../utils/http.js';
 import { createRouter } from './router.js';
 import { attachTerminalWebSockets } from './websocket.js';
 import { createUiProvider } from './ui.js';
+import { createCookieManager } from './cookies.js';
 import { createAgentCommands } from '../config/agent-commands.js';
 import { createBranchNameGenerator } from '../core/branch-name.js';
 import { createPlanService } from '../core/plan.js';
@@ -26,6 +27,7 @@ export async function startServer({
   branchNameLlm,
   planLlm,
   defaultBranches,
+  cookieSecure,
 } = {}) {
   if (!uiPath) {
     throw new Error('Missing required option: uiPath');
@@ -45,6 +47,7 @@ export async function startServer({
     defaultLlm: branchNameLlm,
   });
   const planService = createPlanService({ defaultLlm: planLlm });
+  const cookieManager = createCookieManager({ secureSetting: cookieSecure });
   const router = createRouter({
     authManager,
     workdir: resolvedWorkdir,
@@ -53,6 +56,7 @@ export async function startServer({
     branchNameGenerator,
     planService,
     defaultBranches,
+    cookieManager,
   });
 
   const server = http.createServer(async (req, res) => {

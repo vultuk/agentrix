@@ -97,6 +97,9 @@ configuration might look like:
   "defaultBranches": {
     "acme/web": "master"
   },
+  "cookies": {
+    "secure": "auto"
+  },
   "commands": {
     "codex": "codex",
     "cursor": "cursor-agent",

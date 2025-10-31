@@ -346,6 +346,21 @@ function normalizeConfig(rawConfig, configPath) {
     normalized.defaultBranch = defaultBranch;
   }
 
+  const cookieConfig = rawConfig.cookies && typeof rawConfig.cookies === 'object'
+    ? rawConfig.cookies
+    : null;
+  const cookieSecureRaw = cookieConfig?.secure ?? rawConfig.cookieSecure;
+  if (typeof cookieSecureRaw === 'string') {
+    const trimmed = cookieSecureRaw.trim().toLowerCase();
+    if (trimmed === 'true' || trimmed === 'false' || trimmed === 'auto') {
+      normalized.cookieSecure = trimmed;
+    } else {
+      warnConfig(`Ignoring invalid cookieSecure value in ${configPath || 'config'}; expected true, false, or auto.`);
+    }
+  } else if (typeof cookieSecureRaw === 'boolean') {
+    normalized.cookieSecure = cookieSecureRaw ? 'true' : 'false';
+  }
+
   if (defaultBranchesOverride) {
     const overrides = {};
     for (const [key, value] of Object.entries(defaultBranchesOverride)) {
@@ -563,6 +578,7 @@ Options:
   -w, --workdir <path>   Working directory root (default: current directory)
   -P, --password <string>  Password for login (default: randomly generated)
       --default-branch <name>  Override default branch used when syncing repositories
+      --cookie-secure <mode>  Set session cookie security (true, false, auto)
       --show-password     Print the resolved password even if provided via config or flag
       --codex-command <cmd>   Command executed when launching Codex (default: codex)
       --claude-command <cmd>  Command executed when launching Claude (default: claude)
@@ -586,6 +602,7 @@ function parseArgs(argv) {
     ui: false,
     workdir: false,
     password: false,
+    cookieSecure: false,
     defaultBranch: false,
     showPassword: false,
     codexCommand: false,
@@ -605,6 +622,7 @@ function parseArgs(argv) {
     ui: null,
     workdir: null,
     password: null,
+    cookieSecure: null,
     defaultBranch: null,
     showPassword: false,
     codexCommand: null,
@@ -671,6 +689,19 @@ function parseArgs(argv) {
         }
         args.workdir = value;
         provided.workdir = true;
+        break;
+      }
+      case '--cookie-secure': {
+        const value = argv[++i];
+        if (!value) {
+          throw new Error(`Expected value after ${token}`);
+        }
+        const trimmed = value.trim().toLowerCase();
+        if (!['true', 'false', 'auto'].includes(trimmed)) {
+          throw new Error('cookie-secure must be one of: true, false, auto');
+        }
+        args.cookieSecure = trimmed;
+        provided.cookieSecure = true;
         break;
       }
       case '--default-branch': {
@@ -852,6 +883,9 @@ async function main(argv = process.argv.slice(2)) {
   const finalDefaultBranch = provided.defaultBranch
     ? args.defaultBranch
     : fileConfig.defaultBranch ?? null;
+  const finalCookieSecure = provided.cookieSecure
+    ? args.cookieSecure
+    : fileConfig.cookieSecure ?? 'auto';
   const defaultBranchOverrides =
     fileConfig.defaultBranches && Object.keys(fileConfig.defaultBranches).length > 0
       ? fileConfig.defaultBranches
@@ -948,6 +982,9 @@ async function main(argv = process.argv.slice(2)) {
     if (defaultBranchOverrides) {
       configToSave.defaultBranches = defaultBranchOverrides;
     }
+    if (finalCookieSecure && finalCookieSecure !== 'auto') {
+      configToSave.cookies = { secure: finalCookieSecure };
+    }
 
     if (finalBranchNameLlm) {
       configToSave.branchNameLlm = finalBranchNameLlm;
@@ -1025,6 +1062,7 @@ async function main(argv = process.argv.slice(2)) {
       branchNameLlm: finalBranchNameLlm ?? undefined,
       planLlm: finalPlanLlm ?? undefined,
       defaultBranches: defaultBranchConfig,
+      cookieSecure: finalCookieSecure,
     });
 
     const localAddress = host === '0.0.0.0' ? 'localhost' : host;

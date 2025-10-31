@@ -20,6 +20,7 @@ export function createRouter({
   branchNameGenerator,
   planService,
   defaultBranches,
+  cookieManager,
 }) {
   if (!authManager) {
     throw new Error('authManager is required');
@@ -28,7 +29,7 @@ export function createRouter({
     throw new Error('agentCommands is required');
   }
 
-  const authHandlers = createAuthHandlers(authManager);
+  const authHandlers = createAuthHandlers(authManager, { cookieManager });
   const automationHandlers = createAutomationHandlers({
     workdir,
     agentCommands,
