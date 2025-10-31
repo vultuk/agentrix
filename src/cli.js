@@ -377,6 +377,7 @@ Options:
   -u, --ui <path>        Path to the UI directory or entry file (default: bundled build)
   -w, --workdir <path>   Working directory root (default: current directory)
   -P, --password <string>  Password for login (default: randomly generated)
+      --show-password     Print the resolved password even if provided via config or flag
       --codex-command <cmd>   Command executed when launching Codex (default: codex)
       --claude-command <cmd>  Command executed when launching Claude (default: claude)
       --cursor-command <cmd>  Command executed when launching Cursor (default: cursor-agent)
@@ -399,6 +400,7 @@ function parseArgs(argv) {
     ui: false,
     workdir: false,
     password: false,
+    showPassword: false,
     codexCommand: false,
     claudeCommand: false,
     cursorCommand: false,
@@ -416,6 +418,7 @@ function parseArgs(argv) {
     ui: null,
     workdir: null,
     password: null,
+    showPassword: false,
     codexCommand: null,
     claudeCommand: null,
     cursorCommand: null,
@@ -494,6 +497,11 @@ function parseArgs(argv) {
         }
         args.password = trimmed;
         provided.password = true;
+        break;
+      }
+      case '--show-password': {
+        args.showPassword = true;
+        provided.showPassword = true;
         break;
       }
       case '--codex-command': {
@@ -684,6 +692,9 @@ async function main(argv = process.argv.slice(2)) {
     ? path.resolve(process.cwd(), uiInput)
     : BUNDLED_UI_PATH;
   const chosenPassword = finalPassword || generateRandomPassword();
+  const showPassword = args.showPassword === true;
+  const passwordWasProvided = finalPassword !== null;
+  const shouldPrintPassword = showPassword || !passwordWasProvided;
   const commandOverrides = {
     codex: finalCodexCommand,
     claude: finalClaudeCommand,
@@ -793,7 +804,14 @@ async function main(argv = process.argv.slice(2)) {
     process.stdout.write(`Serving UI from ${resolvedUi}\n`);
     process.stdout.write(`Working directory set to ${workingDir}\n`);
     process.stdout.write(`Listening on http://${localAddress}:${port}\n`);
-    process.stdout.write(`Password: ${serverPassword || chosenPassword}\n`);
+    const effectivePassword = serverPassword || chosenPassword;
+    if (shouldPrintPassword) {
+      process.stdout.write(`Password: ${effectivePassword}\n`);
+    } else {
+      process.stdout.write(
+        'Password logging suppressed (operator-provided password). Use --show-password to print.\n',
+      );
+    }
     if (publicUrl) {
       process.stdout.write(`Public URL (ngrok): ${publicUrl}\n`);
     }

@@ -67,7 +67,8 @@ node bin/terminal-worktree.js \
 - `-H, --host <host>` – Bind address (default: `0.0.0.0`)
 - `-u, --ui <path>` – Directory or entry file for the built UI (default: `ui/dist`)
 - `-w, --workdir <path>` – Root directory that holds `org/repo` folders (default: process CWD)
-- `-P, --password <string>` – UI password (default: secure random string printed at startup)
+- `-P, --password <string>` – UI password (default: secure random string generated at startup)
+- `--show-password` – Print the resolved password even if it was set via config or flag
 - `--ngrok-api-key <token>` – Authtoken used to establish a public ngrok tunnel
 - `--ngrok-domain <domain>` – Reserved ngrok domain exposed when tunnelling (requires `--ngrok-api-key`)
 - `--save` – Persist the effective configuration to `~/.terminal-worktree/config.json` and exit
@@ -116,7 +117,9 @@ the config file without starting the server.
 
 ### Authentication
 
-Every server boot prints the UI password. Clients must authenticate before calling API endpoints.
+When the CLI generates a password it prints the value once at startup. If you supply a password via
+CLI flag or config file it is kept out of stdout; pass `--show-password` if you still need the value
+echoed. Clients must authenticate before calling API endpoints.
 Successful logins receive an HTTP-only session cookie; log out via the UI or `POST
 /api/auth/logout`. On shutdown the backend cleans up shell sessions, tmux attachments, and WebSocket
 clients.
