@@ -84,6 +84,13 @@ export function createRouter({
       },
     ],
     [
+      '/api/repos/init-command',
+      {
+        requiresAuth: true,
+        handlers: { POST: repoHandlers.updateInitCommand },
+      },
+    ],
+    [
       '/api/repos/dashboard',
       {
         requiresAuth: true,

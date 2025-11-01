@@ -14,6 +14,7 @@ import {
   RefreshCcw,
   Plus,
   Sparkles,
+  Settings,
   Trash2,
   X,
   ScrollText,
@@ -258,6 +259,7 @@ function LoginScreen({ onAuthenticated }) {
         const [data, setData] = useState({});
         const [showAddRepoModal, setShowAddRepoModal] = useState(false);
         const [repoUrl, setRepoUrl] = useState('');
+        const [repoInitCommand, setRepoInitCommand] = useState('');
         const [showWorktreeModal, setShowWorktreeModal] = useState(false);
         const [selectedRepo, setSelectedRepo] = useState(null);
         const [branchName, setBranchName] = useState('');
@@ -284,6 +286,14 @@ function LoginScreen({ onAuthenticated }) {
         const [pendingActionLoading, setPendingActionLoading] = useState(null);
         const [openActionMenu, setOpenActionMenu] = useState(null);
         const [commandConfig, setCommandConfig] = useState(DEFAULT_COMMAND_CONFIG);
+        const [editInitCommandModal, setEditInitCommandModal] = useState({
+          open: false,
+          org: null,
+          repo: null,
+          value: '',
+          error: null,
+          saving: false,
+        });
         const [collapsedOrganisations, setCollapsedOrganisations] = useState(() => {
           if (typeof window === 'undefined') {
             return {};
@@ -919,25 +929,31 @@ function LoginScreen({ onAuthenticated }) {
             return {};
           }
           return Object.fromEntries(
-            Object.entries(payload).map(([org, repos]) => [
-              org,
-              Object.fromEntries(
-                Object.entries(repos || {}).map(([repo, branches]) => [
-                  repo,
-                  Array.isArray(branches) ? branches : [],
-                ]),
-              ),
-            ]),
+            Object.entries(payload).map(([org, repos]) => {
+              const repoMap = Object.entries(repos || {}).map(([repo, value]) => {
+                const repoInfo = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+                const branchesSource = Array.isArray(repoInfo.branches) ? repoInfo.branches : Array.isArray(value) ? value : [];
+                const branches = branchesSource
+                  .filter((branch) => typeof branch === 'string' && branch.trim().length > 0)
+                  .map((branch) => branch.trim());
+                const initCommand =
+                  typeof repoInfo.initCommand === 'string' ? repoInfo.initCommand.trim() : '';
+                return [repo, { branches, initCommand }];
+              });
+              return [org, Object.fromEntries(repoMap)];
+            }),
           );
         }, []);
 
-        const applyDataUpdate = useCallback(payload => {
-          setData(payload);
-          setActiveWorktree(current => {
+        const applyDataUpdate = useCallback((payload) => {
+          const normalised = normaliseRepositoryPayload(payload);
+          setData(normalised);
+          setActiveWorktree((current) => {
             if (!current) {
               return current;
             }
-            const branches = payload?.[current.org]?.[current.repo] || [];
+            const repoInfo = normalised?.[current.org]?.[current.repo] || {};
+            const branches = Array.isArray(repoInfo.branches) ? repoInfo.branches : [];
             if (branches.includes(current.branch) && current.branch !== 'main') {
               return current;
             }
@@ -947,7 +963,8 @@ function LoginScreen({ onAuthenticated }) {
             if (!current) {
               return current;
             }
-            const branches = payload?.[current.org]?.[current.repo] || [];
+            const repoInfo = normalised?.[current.org]?.[current.repo] || {};
+            const branches = Array.isArray(repoInfo.branches) ? repoInfo.branches : [];
             if (branches.includes('main')) {
               return current;
             }
@@ -955,14 +972,15 @@ function LoginScreen({ onAuthenticated }) {
           });
           sessionMapRef.current.forEach((session, key) => {
             const [orgKey, repoKey, branchKey] = key.split('::');
-            const branches = payload?.[orgKey]?.[repoKey] || [];
+            const repoInfo = normalised?.[orgKey]?.[repoKey] || {};
+            const branches = Array.isArray(repoInfo.branches) ? repoInfo.branches : [];
             if (!branches.includes(branchKey)) {
               sessionMapRef.current.delete(key);
               sessionKeyByIdRef.current.delete(session);
               knownSessionsRef.current.delete(key);
             }
           });
-        }, []);
+        }, [normaliseRepositoryPayload]);
 
         const syncKnownSessions = useCallback((sessions) => {
           const next = new Set();
@@ -992,11 +1010,11 @@ function LoginScreen({ onAuthenticated }) {
             }
             const body = await response.json();
             const payload = body && typeof body === 'object' && body.data ? body.data : {};
-            applyDataUpdate(normaliseRepositoryPayload(payload));
+            applyDataUpdate(payload);
           } catch (error) {
             console.error('Failed to load repositories', error);
           }
-        }, [applyDataUpdate, normaliseRepositoryPayload, notifyAuthExpired]);
+        }, [applyDataUpdate, notifyAuthExpired]);
 
         useEffect(() => {
           refreshRepositories();
@@ -1025,7 +1043,7 @@ function LoginScreen({ onAuthenticated }) {
             onRepos: (payload) => {
               const reposData = payload && typeof payload === 'object' ? payload.data : null;
               if (reposData) {
-                applyDataUpdate(normaliseRepositoryPayload(reposData));
+                applyDataUpdate(reposData);
               }
             },
             onSessions: (payload) => {
@@ -1043,7 +1061,7 @@ function LoginScreen({ onAuthenticated }) {
           });
 
           return stop;
-        }, [applyDataUpdate, normaliseRepositoryPayload, syncKnownSessions]);
+        }, [applyDataUpdate, syncKnownSessions]);
 
         useEffect(() => {
           if (!isRealtimeConnected) {
@@ -1603,13 +1621,14 @@ function LoginScreen({ onAuthenticated }) {
             window.alert('Please enter a repository URL.');
             return;
           }
+          const initCommandPayload = repoInitCommand.trim();
           setIsAddingRepo(true);
           try {
             const response = await fetch('/api/repos', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               credentials: 'include',
-              body: JSON.stringify({ url: trimmed })
+              body: JSON.stringify({ url: trimmed, initCommand: initCommandPayload })
             });
             if (response.status === 401) {
               notifyAuthExpired();
@@ -1621,9 +1640,11 @@ function LoginScreen({ onAuthenticated }) {
             const body = await response.json();
             const payload = body && typeof body === 'object' && body.data ? body.data : {};
             applyDataUpdate(payload);
+            const normalisedPayload = normaliseRepositoryPayload(payload);
             const info = body && body.repo ? body.repo : null;
             if (info && info.org && info.repo) {
-              const branches = payload?.[info.org]?.[info.repo] || [];
+              const repoInfo = normalisedPayload?.[info.org]?.[info.repo] || {};
+              const branches = Array.isArray(repoInfo.branches) ? repoInfo.branches : [];
               const firstNonMain = branches.find(branch => branch !== 'main');
               if (firstNonMain) {
                 const key = getWorktreeKey(info.org, info.repo, firstNonMain);
@@ -1644,6 +1665,7 @@ function LoginScreen({ onAuthenticated }) {
               }
             }
             setRepoUrl('');
+            setRepoInitCommand('');
             setShowAddRepoModal(false);
           } catch (error) {
             console.error('Failed to clone repository', error);
@@ -1652,6 +1674,55 @@ function LoginScreen({ onAuthenticated }) {
             setIsAddingRepo(false);
           }
         };
+
+        const closeEditInitCommandModal = useCallback(() => {
+          setEditInitCommandModal({
+            open: false,
+            org: null,
+            repo: null,
+            value: '',
+            error: null,
+            saving: false,
+          });
+        }, []);
+
+        const handleSaveInitCommand = useCallback(async () => {
+          const state = editInitCommandModal;
+          if (!state.open || state.saving || !state.org || !state.repo) {
+            return;
+          }
+          setEditInitCommandModal((current) => ({ ...current, saving: true, error: null }));
+          try {
+            const response = await fetch('/api/repos/init-command', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                org: state.org,
+                repo: state.repo,
+                initCommand: state.value,
+              }),
+            });
+            if (response.status === 401) {
+              notifyAuthExpired();
+              setEditInitCommandModal((current) => ({ ...current, saving: false }));
+              return;
+            }
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+            const body = await response.json();
+            const payload = body && typeof body === 'object' && body.data ? body.data : {};
+            applyDataUpdate(payload);
+            closeEditInitCommandModal();
+          } catch (error) {
+            setEditInitCommandModal((current) => ({
+              ...current,
+              saving: false,
+              error: error?.message || 'Failed to update init command.',
+            }));
+          }
+        }, [applyDataUpdate, closeEditInitCommandModal, editInitCommandModal, notifyAuthExpired]);
 
         const handleConfirmDeleteRepo = async () => {
           if (isDeletingRepo || !confirmDeleteRepo) {
@@ -2299,153 +2370,190 @@ function LoginScreen({ onAuthenticated }) {
                   h(
                     'ul',
                     { className: 'space-y-2' },
-                    Object.entries(repos).map(([repo, branches]) =>
-                    h(
-                      'li',
-                      {
-                        key: repo,
-                        className: 'bg-neutral-900/60 hover:bg-neutral-900 transition-colors rounded-lg px-2 py-1.5'
-                      },
-                      h(
-                        'div',
-                        { className: 'flex items-center justify-between gap-2' },
+                    Object.entries(repos).map(([repo, repoInfo]) => {
+                      const branches = Array.isArray(repoInfo?.branches) ? repoInfo.branches : [];
+                      const initCommand =
+                        typeof repoInfo?.initCommand === 'string' ? repoInfo.initCommand : '';
+                      return h(
+                        'li',
+                        {
+                          key: repo,
+                          className:
+                            'bg-neutral-900/60 hover:bg-neutral-900 transition-colors rounded-lg px-2 py-1.5',
+                        },
                         h(
                           'div',
-                          {
-                            className: 'flex items-center space-x-2 cursor-pointer min-w-0 overflow-hidden',
-                            onClick: () => {
-                              const firstNonMain = branches.find(branch => branch !== 'main');
-                              if (firstNonMain) {
-                                handleWorktreeSelection(org, repo, firstNonMain).catch(() => {});
-                              }
-                            }
-                          },
-                          h(Github, { size: 14, className: 'text-neutral-400 flex-shrink-0' }),
+                          { className: 'flex items-center justify-between gap-2' },
                           h(
-                            'span',
-                            { className: 'text-neutral-200 whitespace-nowrap overflow-hidden' },
-                            repo
-                          )
+                            'div',
+                            {
+                              className:
+                                'flex items-center space-x-2 cursor-pointer min-w-0 overflow-hidden',
+                              onClick: () => {
+                                const firstNonMain = branches.find((branch) => branch !== 'main');
+                                if (firstNonMain) {
+                                  handleWorktreeSelection(org, repo, firstNonMain).catch(() => {});
+                                }
+                              },
+                            },
+                            h(Github, { size: 14, className: 'text-neutral-400 flex-shrink-0' }),
+                            h(
+                              'span',
+                              { className: 'text-neutral-200 whitespace-nowrap overflow-hidden' },
+                              repo,
+                            ),
+                          ),
+                          h(
+                            'div',
+                            { className: 'flex items-center gap-1 flex-shrink-0' },
+                            h(
+                              'button',
+                              {
+                                type: 'button',
+                                onClick: () => {
+                                  setEditInitCommandModal({
+                                    open: true,
+                                    org,
+                                    repo,
+                                    value: initCommand,
+                                    error: null,
+                                    saving: false,
+                                  });
+                                },
+                                className: `${actionButtonClass} text-neutral-400 hover:text-neutral-200`,
+                                title: 'Edit init command',
+                              },
+                              h(Settings, { size: 14 }),
+                            ),
+                            h(
+                              'button',
+                              {
+                                type: 'button',
+                                onClick: () => {
+                                  setSelectedRepo([org, repo]);
+                                  setWorktreeLaunchOption('terminal');
+                                  setLaunchDangerousMode(false);
+                                  setShowWorktreeModal(true);
+                                },
+                                className: `${actionButtonClass} text-neutral-400 hover:text-neutral-200`,
+                                title: 'Create Worktree',
+                              },
+                              h(GitPullRequest, { size: 14 }),
+                            ),
+                            h(
+                              'button',
+                              {
+                                type: 'button',
+                                onClick: () => {
+                                  setSelectedRepo([org, repo]);
+                                  setPromptText('');
+                                  setPromptAgent('codex');
+                                  setPromptDangerousMode(false);
+                                  setPromptInputMode('edit');
+                                  setShowPromptWorktreeModal(true);
+                                },
+                                className: `${actionButtonClass} text-neutral-400 hover:text-emerald-300`,
+                                title: 'Create Worktree From Prompt',
+                              },
+                              h(Sparkles, { size: 14 }),
+                            ),
+                            h(
+                              'button',
+                              {
+                                type: 'button',
+                                onClick: () => setConfirmDeleteRepo({ org, repo }),
+                                className: `${actionButtonClass} text-neutral-500 hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-neutral-500`,
+                                title: 'Delete Repository',
+                                disabled: Boolean(isDeletingRepo),
+                                'aria-busy': isDeletingRepo ? 'true' : undefined,
+                              },
+                              h(Trash2, { size: 12 }),
+                            ),
+                          ),
                         ),
                         h(
-                          'div',
-                          { className: 'flex items-center gap-1 flex-shrink-0' },
-                          h(
-                            'button',
-                            {
-                              onClick: () => {
-                                setSelectedRepo([org, repo]);
-                                setWorktreeLaunchOption('terminal');
-                                setLaunchDangerousMode(false);
-                                setShowWorktreeModal(true);
-                              },
-                              className: `${actionButtonClass} text-neutral-400 hover:text-neutral-200`,
-                              title: 'Create Worktree'
-                            },
-                            h(GitPullRequest, { size: 14 })
-                          ),
-                          h(
-                            'button',
-                            {
-                              onClick: () => {
-                                setSelectedRepo([org, repo]);
-                                setPromptText('');
-                                setPromptAgent('codex');
-                                setPromptDangerousMode(false);
-                                setPromptInputMode('edit');
-                                setShowPromptWorktreeModal(true);
-                              },
-                              className: `${actionButtonClass} text-neutral-400 hover:text-emerald-300`,
-                              title: 'Create Worktree From Prompt'
-                            },
-                            h(Sparkles, { size: 14 })
-                          ),
-                          h(
-                            'button',
-                            {
-                              onClick: () => setConfirmDeleteRepo({ org, repo }),
-                              className: `${actionButtonClass} text-neutral-500 hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-neutral-500`,
-                              title: 'Delete Repository',
-                              disabled: Boolean(isDeletingRepo),
-                              'aria-busy': isDeletingRepo ? 'true' : undefined
-                            },
-                            h(Trash2, { size: 12 })
-                          )
-                        )
-                      ),
-                      h(
-                        'ul',
-                        { className: 'ml-5 mt-1 space-y-[2px]' },
-                        branches.map((branch) => {
-                          const isActiveWorktree =
-                            activeWorktree &&
-                            activeWorktree.org === org &&
-                            activeWorktree.repo === repo &&
-                            activeWorktree.branch === branch;
-                          const isDashboardActive =
-                            branch === 'main' &&
-                            activeRepoDashboard &&
-                            activeRepoDashboard.org === org &&
-                            activeRepoDashboard.repo === repo;
-                          const isActive = Boolean(isActiveWorktree || isDashboardActive);
+                          'ul',
+                          { className: 'ml-5 mt-1 space-y-[2px]' },
+                          branches.map((branch) => {
+                            const isActiveWorktree =
+                              activeWorktree &&
+                              activeWorktree.org === org &&
+                              activeWorktree.repo === repo &&
+                              activeWorktree.branch === branch;
+                            const isDashboardActive =
+                              branch === 'main' &&
+                              activeRepoDashboard &&
+                              activeRepoDashboard.org === org &&
+                              activeRepoDashboard.repo === repo;
+                            const isActive = Boolean(isActiveWorktree || isDashboardActive);
 
-                          let rowClasses = 'text-neutral-500 hover:bg-neutral-800/70 hover:text-neutral-100';
-                          if (branch === 'main') {
-                            rowClasses = 'text-neutral-400 hover:bg-neutral-800/70 hover:text-neutral-100';
-                          }
-                          if (isActive) {
-                            rowClasses = 'bg-neutral-800 text-neutral-100';
-                          }
+                            let rowClasses =
+                              'text-neutral-500 hover:bg-neutral-800/70 hover:text-neutral-100';
+                            if (branch === 'main') {
+                              rowClasses =
+                                'text-neutral-400 hover:bg-neutral-800/70 hover:text-neutral-100';
+                            }
+                            if (isActive) {
+                              rowClasses = 'bg-neutral-800 text-neutral-100';
+                            }
 
-                          return h(
-                            'li',
-                            { key: branch },
-                            h(
-                              'div',
-                              {
-                                className: `flex items-center justify-between rounded-sm px-2 py-2 transition-colors ${rowClasses}`,
-                              },
+                            return h(
+                              'li',
+                              { key: branch },
                               h(
-                                'button',
+                                'div',
                                 {
-                                  type: 'button',
-                                  onClick: () => handleWorktreeSelection(org, repo, branch).catch(() => {}),
-                                  className:
-                                    'flex items-center gap-2 min-w-0 overflow-hidden text-left w-full cursor-pointer',
+                                  className: `flex items-center justify-between rounded-sm px-2 py-2 transition-colors ${rowClasses}`,
                                 },
-                                h(GitBranch, { size: 14, className: 'flex-shrink-0' }),
                                 h(
-                                  'span',
-                                  { className: 'whitespace-nowrap overflow-hidden text-ellipsis text-sm' },
-                                  branch,
+                                  'button',
+                                  {
+                                    type: 'button',
+                                    onClick: () =>
+                                      handleWorktreeSelection(org, repo, branch).catch(() => {}),
+                                    className:
+                                      'flex items-center gap-2 min-w-0 overflow-hidden text-left w-full cursor-pointer',
+                                  },
+                                  h(GitBranch, { size: 14, className: 'flex-shrink-0' }),
+                                  h(
+                                    'span',
+                                    {
+                                      className:
+                                        'whitespace-nowrap overflow-hidden text-ellipsis text-sm',
+                                    },
+                                    branch,
+                                  ),
+                                ),
+                                h(
+                                  'button',
+                                  {
+                                    type: 'button',
+                                    onClick: () => {
+                                      if (branch === 'main') {
+                                        return;
+                                      }
+                                      setConfirmDelete({ org, repo, branch });
+                                    },
+                                    disabled: branch === 'main',
+                                    className: `${actionButtonClass} disabled:cursor-not-allowed disabled:opacity-60 ${
+                                      branch === 'main'
+                                        ? 'text-neutral-700 cursor-not-allowed'
+                                        : 'text-neutral-500 hover:text-red-400'
+                                    }`,
+                                    title:
+                                      branch === 'main'
+                                        ? 'Main branch cannot be removed'
+                                        : 'Delete Worktree',
+                                  },
+                                  h(Trash2, { size: 12 }),
                                 ),
                               ),
-                              h(
-                                'button',
-                                {
-                                  onClick: () => {
-                                    if (branch === 'main') {
-                                      return;
-                                    }
-                                    setConfirmDelete({ org, repo, branch });
-                                  },
-                                  disabled: branch === 'main',
-                                  className: `${actionButtonClass} disabled:cursor-not-allowed disabled:opacity-60 ${
-                                    branch === 'main'
-                                      ? 'text-neutral-700 cursor-not-allowed'
-                                      : 'text-neutral-500 hover:text-red-400'
-                                  }`,
-                                  title: branch === 'main' ? 'Main branch cannot be removed' : 'Delete Worktree',
-                                },
-                                h(Trash2, { size: 12 }),
-                              ),
-                            ),
-                          );
-                        })
-                      )
-                    )
+                            );
+                          }),
+                        ),
+                      );
+                    }),
                   )
-                )
               );
             })
           ),
@@ -2700,6 +2808,28 @@ function LoginScreen({ onAuthenticated }) {
                 ),
                 h(
                   'div',
+                  { className: 'space-y-2 pt-2' },
+                  h(
+                    'label',
+                    { className: 'block text-xs uppercase tracking-wide text-neutral-400' },
+                    'Init command (optional)'
+                  ),
+                  h('textarea', {
+                    value: repoInitCommand,
+                    onChange: event => setRepoInitCommand(event.target.value),
+                    placeholder: 'npm install',
+                    rows: 3,
+                    className:
+                      'w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500/60 resize-y min-h-[92px]'
+                  }),
+                  h(
+                    'p',
+                    { className: 'text-xs text-neutral-500 leading-relaxed' },
+                    'Runs once after each new worktree is created. Leave blank to skip.'
+                  )
+                ),
+                h(
+                  'div',
                   { className: 'flex justify-end gap-2 pt-2' },
                   h(
                     'button',
@@ -2730,6 +2860,88 @@ function LoginScreen({ onAuthenticated }) {
                       : 'Add repository'
                   )
                 )
+              )
+            : null,
+          editInitCommandModal.open
+            ? h(
+                Modal,
+                {
+                  title: `Init command: ${editInitCommandModal.org}/${editInitCommandModal.repo}`,
+                  onClose: () => {
+                    if (editInitCommandModal.saving) {
+                      return;
+                    }
+                    closeEditInitCommandModal();
+                  },
+                },
+                h(
+                  'div',
+                  { className: 'space-y-2' },
+                  h(
+                    'p',
+                    { className: 'text-xs text-neutral-400 leading-relaxed' },
+                    'This command runs after new worktrees for this repository are created.'
+                  ),
+                  h('textarea', {
+                    value: editInitCommandModal.value,
+                    onChange: (event) =>
+                      setEditInitCommandModal((current) => ({
+                        ...current,
+                        value: event.target.value,
+                      })),
+                    rows: 4,
+                    disabled: editInitCommandModal.saving,
+                    className:
+                      'w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500/60 resize-y min-h-[112px]',
+                    placeholder: 'npm install',
+                  }),
+                  h(
+                    'p',
+                    { className: 'text-xs text-neutral-500 leading-relaxed' },
+                    'Leave blank to skip running a setup command.'
+                  ),
+                  editInitCommandModal.error
+                    ? h(
+                        'p',
+                        { className: 'text-xs text-rose-400' },
+                        editInitCommandModal.error,
+                      )
+                    : null,
+                ),
+                h(
+                  'div',
+                  { className: 'flex justify-end gap-2 pt-2' },
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: closeEditInitCommandModal,
+                      disabled: editInitCommandModal.saving,
+                      className:
+                        'px-3 py-2 text-sm text-neutral-400 hover:text-neutral-200 disabled:cursor-not-allowed disabled:opacity-60',
+                    },
+                    'Cancel',
+                  ),
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: handleSaveInitCommand,
+                      disabled: editInitCommandModal.saving,
+                      'aria-busy': editInitCommandModal.saving ? 'true' : undefined,
+                      className:
+                        'px-3 py-2 text-sm bg-emerald-500/80 hover:bg-emerald-400 text-neutral-900 font-medium rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-emerald-500/80',
+                    },
+                    editInitCommandModal.saving
+                      ? h(
+                          'span',
+                          { className: 'inline-flex items-center gap-2' },
+                          renderSpinner('text-neutral-900'),
+                          'Saving…',
+                        )
+                      : 'Save command',
+                  ),
+                ),
               )
             : null,
           gitDiffModal.open

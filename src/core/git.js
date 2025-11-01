@@ -4,8 +4,14 @@ import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
 
 import { resolveDefaultBranch } from './default-branch.js';
+import {
+  getRepositoryInitCommand,
+  normaliseInitCommand,
+  setRepositoryInitCommand,
+} from './repository-config.js';
 
 const execFileAsync = promisify(execFile);
+const INIT_COMMAND_MAX_BUFFER = 1024 * 1024 * 16;
 
 export class GitWorktreeError extends Error {
   constructor(repositoryPath, message, cause) {
@@ -175,7 +181,7 @@ export async function ensureRepository(workdir, org, repo) {
   return { repoRoot, repositoryPath };
 }
 
-export async function cloneRepository(workdir, repositoryUrl) {
+export async function cloneRepository(workdir, repositoryUrl, options = {}) {
   const { org, repo, url } = parseRepositoryUrl(repositoryUrl);
   const repoRoot = path.join(workdir, org, repo);
   const repositoryPath = path.join(repoRoot, 'repository');
@@ -202,6 +208,15 @@ export async function cloneRepository(workdir, repositoryUrl) {
     throw new Error(`Failed to clone repository: ${message.trim()}`);
   }
 
+  if (options && Object.prototype.hasOwnProperty.call(options, 'initCommand')) {
+    const initCommand = normaliseInitCommand(options.initCommand);
+    try {
+      await setRepositoryInitCommand(repoRoot, initCommand);
+    } catch (error) {
+      throw new Error(`Failed to persist repository settings: ${error?.message || error}`);
+    }
+  }
+
   return { org, repo };
 }
 
@@ -215,6 +230,39 @@ async function branchExists(repositoryPath, branch) {
     return true;
   } catch {
     return false;
+  }
+}
+
+async function runRepositoryInitCommand(repoRoot, worktreePath) {
+  let initCommand = '';
+  try {
+    initCommand = await getRepositoryInitCommand(repoRoot);
+  } catch (error) {
+    console.warn(
+      `[terminal-worktree] Failed to read repository config for ${repoRoot}:`,
+      error?.message || error,
+    );
+    initCommand = '';
+  }
+
+  if (!initCommand) {
+    return;
+  }
+
+  const candidateShell = typeof process.env.SHELL === 'string' ? process.env.SHELL.trim() : '';
+  const shell = candidateShell || '/bin/sh';
+
+  try {
+    await execFileAsync(shell, ['-lc', initCommand], {
+      cwd: worktreePath,
+      maxBuffer: INIT_COMMAND_MAX_BUFFER,
+      env: { ...process.env },
+    });
+  } catch (error) {
+    const stderr = error?.stderr ? error.stderr.toString() : '';
+    const stdout = error?.stdout ? error.stdout.toString() : '';
+    const details = stderr || stdout || error?.message || 'Unknown repository init error';
+    throw new Error(`Repository init command failed: ${details.trim()}`);
   }
 }
 
@@ -237,6 +285,7 @@ export async function createWorktree(workdir, org, repo, branch, options = {}) {
     }
   }
 
+  let worktreeAdded = false;
   try {
     const defaultBranch = await resolveDefaultBranch(repositoryPath, {
       override: options.defaultBranchOverride,
@@ -258,7 +307,23 @@ export async function createWorktree(workdir, org, repo, branch, options = {}) {
       args.push(branchName);
     }
     await execFileAsync('git', args, { maxBuffer: 1024 * 1024 });
+    worktreeAdded = true;
+    await runRepositoryInitCommand(repoRoot, targetPath);
   } catch (error) {
+    if (worktreeAdded) {
+      try {
+        await execFileAsync(
+          'git',
+          ['-C', repositoryPath, 'worktree', 'remove', '--force', targetPath],
+          { maxBuffer: 1024 * 1024 },
+        );
+      } catch (cleanupError) {
+        console.warn(
+          `[terminal-worktree] Failed to clean up worktree at ${targetPath} after init command failure:`,
+          cleanupError?.message || cleanupError,
+        );
+      }
+    }
     const stderr = error && error.stderr ? error.stderr.toString() : '';
     const message = stderr || error.message || 'Unknown git error';
     throw new Error(`Failed to create worktree: ${message.trim()}`);
@@ -330,10 +395,20 @@ export async function discoverRepositories(workdir) {
             .filter((branch) => typeof branch === 'string' && branch.length > 0),
         ),
       );
+      let initCommand = '';
+      try {
+        initCommand = await getRepositoryInitCommand(repoRoot);
+      } catch (error) {
+        console.warn(
+          `[terminal-worktree] Failed to load repository config for ${orgName}/${repoName}:`,
+          error?.message || error,
+        );
+        initCommand = '';
+      }
       if (!result[orgName]) {
         result[orgName] = {};
       }
-      result[orgName][repoName] = branches;
+      result[orgName][repoName] = { branches, initCommand };
     }
   }
 

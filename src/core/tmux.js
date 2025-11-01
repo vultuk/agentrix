@@ -84,8 +84,12 @@ export function buildSanitisedWorktreeLookup(structure) {
   const map = new Map();
   Object.entries(structure || {}).forEach(([org, repos]) => {
     const repoEntries = repos && typeof repos === 'object' ? repos : {};
-    Object.entries(repoEntries).forEach(([repo, branches]) => {
-      const branchList = Array.isArray(branches) ? branches : [];
+    Object.entries(repoEntries).forEach(([repo, info]) => {
+      const branchList = Array.isArray(info?.branches)
+        ? info.branches
+        : Array.isArray(info)
+          ? info
+          : [];
       branchList.forEach((branch) => {
         if (!branch) {
           return;
