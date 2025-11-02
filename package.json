@@ -61,5 +61,10 @@
     "tailwindcss": "^4.1.16",
     "vite": "^7.1.12",
     "ws": "^8.17.1"
+  },
+  "devDependencies": {
+    "esbuild-node-loader": "^0.8.0",
+    "esbuild-register": "^3.6.0",
+    "jsdom": "^27.1.0"
   }
 }

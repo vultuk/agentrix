@@ -9,8 +9,6 @@ import {
   GitBranch,
   GitPullRequest,
   Menu,
-  PanelRightClose,
-  PanelRightOpen,
   RefreshCcw,
   Plus,
   Sparkles,
@@ -18,6 +16,8 @@ import {
   Trash2,
   X,
   ScrollText,
+  ListTodo,
+  Loader2,
 } from 'lucide-react';
 
 import 'xterm/css/xterm.css';
@@ -74,6 +74,32 @@ const REPOSITORY_DASHBOARD_POLL_INTERVAL_MS = 60000;
 const SESSION_POLL_INTERVAL_MS = 60000;
 
 const ORGANISATION_COLLAPSE_STORAGE_KEY = 'terminal-worktree:collapsed-organisations';
+
+const TASK_STATUS_LABELS = Object.freeze({
+  pending: 'Pending',
+  running: 'Running',
+  succeeded: 'Completed',
+  failed: 'Failed',
+  skipped: 'Skipped',
+});
+
+const TASK_STATUS_BADGE_CLASSES = Object.freeze({
+  pending: 'bg-neutral-700/60 text-neutral-200',
+  running: 'bg-sky-500/20 text-sky-300',
+  succeeded: 'bg-emerald-500/20 text-emerald-300',
+  failed: 'bg-rose-500/20 text-rose-200',
+  skipped: 'bg-neutral-700/40 text-neutral-300',
+});
+
+const TASK_STATUS_INDICATOR_CLASSES = Object.freeze({
+  pending: 'bg-neutral-500/70',
+  running: 'bg-sky-400',
+  succeeded: 'bg-emerald-400',
+  failed: 'bg-rose-500',
+  skipped: 'bg-neutral-600/80',
+});
+
+const ACTION_BUTTON_CLASS = 'inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors';
 
 function Modal({ title, onClose, children, size = 'md', position = 'center' }) {
         const content = Array.isArray(children) ? children : [children];
@@ -254,6 +280,224 @@ function LoginScreen({ onAuthenticated }) {
         );
       }
 
+function formatLogTimestamp(value) {
+        if (!value) {
+          return '';
+        }
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+          return '';
+        }
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+
+function TaskMenu({ tasks, isOpen, onToggle, hasRunning, menuRef }) {
+        const taskList = Array.isArray(tasks) ? tasks : [];
+        const runningCount = taskList.reduce((total, task) => {
+          if (task && (task.status === 'pending' || task.status === 'running')) {
+            return total + 1;
+          }
+          return total;
+        }, 0);
+
+        const totalCount = taskList.length;
+        const dropdownContent = totalCount
+          ? taskList.map((task) => renderTaskCard(task))
+          : h(
+              'div',
+              { className: 'px-4 py-6 text-sm text-neutral-400 text-center' },
+              'No tasks have been recorded yet.',
+            );
+
+        return h(
+          'div',
+          { className: 'relative', ref: menuRef },
+          h(
+            'button',
+            {
+              type: 'button',
+              onClick: onToggle,
+              className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-neutral-100`,
+              'aria-haspopup': 'true',
+              'aria-expanded': isOpen ? 'true' : 'false',
+              title: runningCount
+                ? `${runningCount} task${runningCount === 1 ? '' : 's'} in progress`
+                : totalCount
+                ? `${totalCount} recent task${totalCount === 1 ? '' : 's'}`
+                : 'No tasks running',
+            },
+            hasRunning
+              ? h(Loader2, { size: 16, className: 'animate-spin text-emerald-400' })
+              : h(ListTodo, { size: 16 }),
+          ),
+          isOpen
+            ? h(
+                'div',
+                {
+                  className:
+                    'absolute right-0 top-full mt-2 w-[24rem] max-h-[70vh] overflow-y-auto rounded-lg border border-neutral-800 bg-neutral-950 shadow-2xl z-40',
+                },
+                h(
+                  'div',
+                  {
+                    className:
+                      'flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-4 py-3',
+                  },
+                  h(
+                    'div',
+                    null,
+                    h('p', { className: 'text-sm font-medium text-neutral-100' }, 'Tasks'),
+                    h(
+                      'p',
+                      { className: 'text-xs text-neutral-400' },
+                      runningCount
+                        ? `${runningCount} running • ${totalCount} total`
+                        : `${totalCount} total`,
+                    ),
+                  ),
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: onToggle,
+                      className: 'rounded-md p-1 text-neutral-400 transition hover:text-neutral-100',
+                      'aria-label': 'Close tasks menu',
+                    },
+                    h(X, { size: 16 }),
+                  ),
+                ),
+                h('div', { className: 'space-y-3 px-3 py-4' }, dropdownContent),
+              )
+            : null,
+        );
+      }
+
+function renderTaskCard(task) {
+        if (!task || typeof task !== 'object') {
+          return null;
+        }
+
+        const status = task.status || 'pending';
+        const badgeClass = TASK_STATUS_BADGE_CLASSES[status] || TASK_STATUS_BADGE_CLASSES.pending;
+        const statusLabel = TASK_STATUS_LABELS[status] || status;
+        const metadata = task.metadata || {};
+        const result = task.result || {};
+        const org = typeof metadata.org === 'string' ? metadata.org : result.org || '';
+        const repo = typeof metadata.repo === 'string' ? metadata.repo : result.repo || '';
+        const branch =
+          (typeof result.branch === 'string' && result.branch) ||
+          (typeof metadata.branch === 'string' && metadata.branch) ||
+          '';
+        const titleParts = [];
+        if (org && repo) {
+          titleParts.push(`${org}/${repo}`);
+        } else {
+          titleParts.push('Automation task');
+        }
+        if (branch) {
+          titleParts.push(`#${branch}`);
+        }
+        const title = titleParts.join(' ');
+        const createdAt = task.createdAt ? formatLogTimestamp(task.createdAt) : '';
+        const steps = Array.isArray(task.steps) ? task.steps : [];
+
+        return h(
+          'div',
+          { key: task.id, className: 'rounded-lg border border-neutral-800/70 bg-neutral-900/55 shadow-inner' },
+          h(
+            'div',
+            { className: 'flex items-center justify-between border-b border-neutral-800/70 px-4 py-3' },
+            h(
+              'div',
+              { className: 'space-y-0.5' },
+              h('p', { className: 'text-sm font-medium text-neutral-100' }, title || `Task ${task.id}`),
+              createdAt
+                ? h('p', { className: 'text-xs text-neutral-400' }, `Started ${createdAt}`)
+                : null,
+            ),
+            h(
+              'span',
+              { className: `rounded-full px-2 py-1 text-xs font-medium ${badgeClass}` },
+              statusLabel,
+            ),
+          ),
+          h(
+            'div',
+            { className: 'space-y-3 px-3 py-3' },
+            steps.length
+              ? steps.map((step, index) => renderTaskStep(step, index))
+              : h('p', { className: 'text-xs text-neutral-400' }, 'No steps reported yet.'),
+            status === 'failed' && task.error && task.error.message
+              ? h(
+                  'div',
+                  {
+                    className:
+                      'rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200',
+                  },
+                  task.error.message,
+                )
+              : null,
+          ),
+        );
+      }
+
+function renderTaskStep(step, index) {
+        if (!step || typeof step !== 'object') {
+          return null;
+        }
+        const status = step.status || 'pending';
+        const indicatorClass =
+          TASK_STATUS_INDICATOR_CLASSES[status] || TASK_STATUS_INDICATOR_CLASSES.pending;
+        const label = step.label || `Step ${index + 1}`;
+        const statusLabel = TASK_STATUS_LABELS[status] || status;
+        const logs = Array.isArray(step.logs) ? step.logs : [];
+        const isDefaultOpen = status === 'running' || status === 'failed';
+
+        return h(
+          'details',
+          {
+            key: step.id || `${label}-${index}`,
+            className: 'group rounded-md border border-neutral-800/60 bg-neutral-900/45',
+            open: isDefaultOpen,
+          },
+          h(
+            'summary',
+            {
+              className:
+                'flex cursor-pointer select-none items-center gap-2 px-3 py-2 text-sm text-neutral-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500/40',
+            },
+            h('span', { className: `h-2.5 w-2.5 flex-shrink-0 rounded-full ${indicatorClass}` }),
+            h(
+              'span',
+              { className: 'flex-1 text-xs font-medium uppercase tracking-wide text-neutral-300' },
+              label,
+            ),
+            h('span', { className: 'text-xs text-neutral-400' }, statusLabel),
+            h(ChevronDown, {
+              size: 14,
+              className: 'text-neutral-500 transition-transform group-open:rotate-180',
+            }),
+          ),
+          h(
+            'div',
+            { className: 'space-y-1 px-3 pb-3 pt-2 text-xs text-neutral-300' },
+            logs.length
+              ? logs.map((log, logIndex) =>
+                  h(
+                    'div',
+                    {
+                      key: log && log.id ? log.id : `${step.id || index}-log-${logIndex}`,
+                      className: 'flex gap-2',
+                    },
+                    h('span', { className: 'min-w-[4.5rem] text-neutral-500' }, formatLogTimestamp(log?.timestamp)),
+                    h('span', { className: 'flex-1' }, log?.message || ''),
+                  ),
+                )
+              : h('p', { className: 'text-neutral-500' }, 'No updates yet.'),
+          ),
+        );
+      }
+
       function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut } = {}) {
         const [width, setWidth] = useState(340);
         const [data, setData] = useState({});
@@ -285,6 +529,15 @@ function LoginScreen({ onAuthenticated }) {
         const [isCreatingPlan, setIsCreatingPlan] = useState(false);
         const [pendingActionLoading, setPendingActionLoading] = useState(null);
         const [openActionMenu, setOpenActionMenu] = useState(null);
+        const [tasks, setTasks] = useState([]);
+        const [isTaskMenuOpen, setIsTaskMenuOpen] = useState(false);
+        const taskMapRef = useRef(new Map());
+        const pendingLaunchesRef = useRef(new Map());
+        const taskMenuRef = useRef(null);
+        const hasRunningTasks = useMemo(
+          () => tasks.some((task) => task && (task.status === 'pending' || task.status === 'running')),
+          [tasks],
+        );
         const [commandConfig, setCommandConfig] = useState(DEFAULT_COMMAND_CONFIG);
         const [editInitCommandModal, setEditInitCommandModal] = useState({
           open: false,
@@ -344,10 +597,10 @@ function LoginScreen({ onAuthenticated }) {
           dashboardPollingRef.current = { timerId: null, controller: null };
         }, []);
 
-        const actionButtonClass = 'inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors';
         const actionMenuRefs = useRef(new Map());
         const githubMenuRef = useRef(null);
         const [isGithubMenuOpen, setIsGithubMenuOpen] = useState(false);
+        const activeWorktreeRef = useRef(null);
 
         const getActionMenuRef = useCallback(
           (action) => (node) => {
@@ -368,6 +621,36 @@ function LoginScreen({ onAuthenticated }) {
           setIsGithubMenuOpen(false);
         }, []);
 
+        const toggleTaskMenu = useCallback(() => {
+          setIsTaskMenuOpen((current) => !current);
+        }, []);
+
+        const closeTaskMenu = useCallback(() => {
+          setIsTaskMenuOpen(false);
+        }, []);
+
+        useEffect(() => {
+          if (!isTaskMenuOpen) {
+            return undefined;
+          }
+          const handlePointer = (event) => {
+            if (taskMenuRef.current && !taskMenuRef.current.contains(event.target)) {
+              closeTaskMenu();
+            }
+          };
+          const handleKeydown = (event) => {
+            if (event.key === 'Escape') {
+              closeTaskMenu();
+            }
+          };
+          document.addEventListener('mousedown', handlePointer);
+          document.addEventListener('keydown', handleKeydown);
+          return () => {
+            document.removeEventListener('mousedown', handlePointer);
+            document.removeEventListener('keydown', handleKeydown);
+          };
+        }, [isTaskMenuOpen, closeTaskMenu]);
+
         const getCommandForLaunch = useCallback(
           (action, dangerousMode = false) => {
             switch (action) {
@@ -386,6 +669,10 @@ function LoginScreen({ onAuthenticated }) {
           },
           [commandConfig]
         );
+
+        useEffect(() => {
+          activeWorktreeRef.current = activeWorktree;
+        }, [activeWorktree]);
 
         const toggleActionMenu = useCallback((action) => {
           setOpenActionMenu((current) => (current === action ? null : action));
@@ -840,6 +1127,7 @@ function LoginScreen({ onAuthenticated }) {
         const sessionMapRef = useRef(new Map());
         const sessionKeyByIdRef = useRef(new Map());
         const knownSessionsRef = useRef(new Set());
+        const openTerminalForWorktreeRef = useRef(null);
         const getWorktreeKey = useCallback((org, repo, branch) => `${org}::${repo}::${branch}`, []);
         const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
 
@@ -998,6 +1286,135 @@ function LoginScreen({ onAuthenticated }) {
           knownSessionsRef.current = next;
         }, []);
 
+        const processPendingTask = useCallback(
+          (task) => {
+            if (!task || typeof task !== 'object' || !task.id) {
+              return;
+            }
+            const pending = pendingLaunchesRef.current.get(task.id);
+            if (!pending) {
+              return;
+            }
+            if (task.removed) {
+              pendingLaunchesRef.current.delete(task.id);
+              return;
+            }
+            if (task.status === 'failed') {
+              pendingLaunchesRef.current.delete(task.id);
+              const message =
+                (task.error && typeof task.error.message === 'string' && task.error.message) ||
+                'Worktree creation failed. Check server logs for details.';
+              console.error('Worktree task failed', task.error || message);
+              window.alert(`Worktree creation failed: ${message}`);
+              return;
+            }
+            if (task.status !== 'succeeded') {
+              return;
+            }
+
+            pendingLaunchesRef.current.delete(task.id);
+
+            const openTerminal = openTerminalForWorktreeRef.current;
+            if (typeof openTerminal !== 'function') {
+              return;
+            }
+
+            const branchCandidates = [
+              task?.result && typeof task.result.branch === 'string' ? task.result.branch.trim() : '',
+              task?.metadata && typeof task.metadata.branch === 'string' ? task.metadata.branch.trim() : '',
+              pending.requestedBranch ? pending.requestedBranch.trim() : '',
+            ];
+            const resolvedBranch = branchCandidates.find((value) => value);
+            if (!resolvedBranch) {
+              window.alert('Worktree creation completed but branch name could not be determined.');
+              return;
+            }
+
+            const worktree = {
+              org: pending.org,
+              repo: pending.repo,
+              branch: resolvedBranch,
+            };
+
+            const previousActive = activeWorktreeRef.current;
+
+            setActiveRepoDashboard(null);
+            clearDashboardPolling();
+            setDashboardError(null);
+            setIsDashboardLoading(false);
+            setActiveWorktree(worktree);
+
+            const worktreeKey = getWorktreeKey(worktree.org, worktree.repo, worktree.branch);
+            const hasKnownSession =
+              sessionMapRef.current.has(worktreeKey) || knownSessionsRef.current.has(worktreeKey);
+
+            const resolvedCommand =
+              pending.kind === 'prompt'
+                ? pending.command
+                : hasKnownSession
+                ? null
+                : getCommandForLaunch(pending.launchOption, pending.dangerousMode);
+
+            void (async () => {
+              try {
+                if (pending.kind === 'prompt') {
+                  await openTerminal(worktree, {
+                    command: pending.command,
+                    prompt: pending.promptValue,
+                  });
+                } else if (resolvedCommand) {
+                  await openTerminal(worktree, { command: resolvedCommand });
+                } else {
+                  await openTerminal(worktree);
+                }
+                setPendingWorktreeAction(null);
+              } catch (error) {
+                if (error && error.message === 'AUTH_REQUIRED') {
+                  setActiveWorktree(previousActive || null);
+                  return;
+                }
+                if (pending.kind === 'prompt') {
+                  console.error('Failed to launch prompt workspace', error);
+                  window.alert('Failed to launch the selected agent. Check server logs for details.');
+                  setPendingWorktreeAction(worktree);
+                } else if (hasKnownSession) {
+                  window.alert('Failed to reconnect to the existing session.');
+                } else {
+                  console.error('Failed to launch the selected option', error);
+                  window.alert('Failed to launch the selected option. Check server logs for details.');
+                  setPendingWorktreeAction(worktree);
+                }
+                setActiveWorktree(previousActive || null);
+                return;
+              }
+
+              if (pending.kind === 'prompt') {
+                setPromptText('');
+                setPromptAgent('codex');
+                setPromptDangerousMode(false);
+                setPromptInputMode('edit');
+                setShowPromptWorktreeModal(false);
+              } else {
+                setBranchName('');
+                setWorktreeLaunchOption('terminal');
+                setLaunchDangerousMode(false);
+                setShowWorktreeModal(false);
+              }
+              setIsMobileMenuOpen(false);
+            })();
+          }, [
+            activeWorktreeRef,
+            clearDashboardPolling,
+            getCommandForLaunch,
+            getWorktreeKey,
+            knownSessionsRef,
+            openTerminalForWorktreeRef,
+            sessionMapRef,
+            setActiveRepoDashboard,
+            setDashboardError,
+            setIsDashboardLoading,
+          ]);
+
         const refreshRepositories = useCallback(async () => {
           try {
             const response = await fetch('/api/repos', { credentials: 'include' });
@@ -1038,37 +1455,50 @@ function LoginScreen({ onAuthenticated }) {
           }
         }, [notifyAuthExpired, syncKnownSessions]);
 
-        useEffect(() => {
-          const stop = createEventStream({
-            onRepos: (payload) => {
-              const reposData = payload && typeof payload === 'object' ? payload.data : null;
-              if (reposData) {
-                applyDataUpdate(reposData);
+        const loadTasks = useCallback(async () => {
+          try {
+            const response = await fetch('/api/tasks', { credentials: 'include' });
+            if (response.status === 401) {
+              notifyAuthExpired();
+              return;
+            }
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+            const body = await response.json();
+            const taskList = Array.isArray(body?.tasks) ? body.tasks : [];
+            const map = new Map();
+            taskList.forEach((task) => {
+              if (task && task.id) {
+                map.set(task.id, task);
               }
-            },
-            onSessions: (payload) => {
-              const sessions = payload && typeof payload === 'object' ? payload.sessions : null;
-              if (sessions) {
-                syncKnownSessions(sessions);
-              }
-            },
-            onConnect: () => {
-              setIsRealtimeConnected(true);
-            },
-            onDisconnect: () => {
-              setIsRealtimeConnected(false);
-            },
-          });
+            });
+            taskMapRef.current = map;
+            const sorted = Array.from(map.values()).sort((a, b) => {
+              const timeA = Date.parse(a?.updatedAt || a?.createdAt || '') || 0;
+              const timeB = Date.parse(b?.updatedAt || b?.createdAt || '') || 0;
+              return timeB - timeA;
+            });
+            setTasks(sorted);
+            taskList.forEach((task) => processPendingTask(task));
+          } catch (error) {
+            console.error('Failed to load tasks', error);
+          }
+        }, [notifyAuthExpired, processPendingTask]);
 
-          return stop;
-        }, [applyDataUpdate, syncKnownSessions]);
+        useEffect(() => {
+          loadTasks();
+        }, [loadTasks]);
+
+        // Event stream effect moved below to include task updates.
 
         useEffect(() => {
           if (!isRealtimeConnected) {
             refreshRepositories();
             loadSessions();
+            loadTasks();
           }
-        }, [isRealtimeConnected, loadSessions, refreshRepositories]);
+        }, [isRealtimeConnected, loadSessions, loadTasks, refreshRepositories]);
 
         useEffect(() => {
           if (isRealtimeConnected) {
@@ -1612,6 +2042,84 @@ function LoginScreen({ onAuthenticated }) {
           }
         }, [connectSocket, disposeSocket, disposeTerminal, setupTerminal, getWorktreeKey, notifyAuthExpired]);
 
+        openTerminalForWorktreeRef.current = openTerminalForWorktree;
+
+        const applyTaskUpdate = useCallback(
+          (payload) => {
+            if (!payload || typeof payload !== 'object') {
+              return;
+            }
+
+            const map = new Map(taskMapRef.current);
+
+            const upsertTask = (task) => {
+              if (!task || typeof task !== 'object' || !task.id) {
+                return;
+              }
+              if (task.removed) {
+                map.delete(task.id);
+                pendingLaunchesRef.current.delete(task.id);
+                return;
+              }
+              map.set(task.id, task);
+              processPendingTask(task);
+            };
+
+            if (Array.isArray(payload.tasks)) {
+              payload.tasks.forEach((task) => {
+                upsertTask(task);
+              });
+            } else if (payload.task) {
+              upsertTask(payload.task);
+            } else {
+              return;
+            }
+
+            taskMapRef.current = map;
+            const sorted = Array.from(map.values()).sort((a, b) => {
+              const timeA = Date.parse(a?.updatedAt || a?.createdAt || '') || 0;
+              const timeB = Date.parse(b?.updatedAt || b?.createdAt || '') || 0;
+              return timeB - timeA;
+            });
+            setTasks(sorted);
+          },
+          [processPendingTask],
+        );
+
+        useEffect(() => {
+          if (!Array.isArray(tasks) || tasks.length === 0) {
+            setIsTaskMenuOpen(false);
+          }
+        }, [tasks]);
+
+        useEffect(() => {
+          const stop = createEventStream({
+            onRepos: (payload) => {
+              const reposData = payload && typeof payload === 'object' ? payload.data : null;
+              if (reposData) {
+                applyDataUpdate(reposData);
+              }
+            },
+            onSessions: (payload) => {
+              const sessions = payload && typeof payload === 'object' ? payload.sessions : null;
+              if (sessions) {
+                syncKnownSessions(sessions);
+              }
+            },
+            onTasks: (payload) => {
+              applyTaskUpdate(payload);
+            },
+            onConnect: () => {
+              setIsRealtimeConnected(true);
+            },
+            onDisconnect: () => {
+              setIsRealtimeConnected(false);
+            },
+          });
+
+          return stop;
+        }, [applyDataUpdate, applyTaskUpdate, syncKnownSessions]);
+
         const handleAddRepo = async () => {
           if (isAddingRepo) {
             return;
@@ -1823,47 +2331,20 @@ function LoginScreen({ onAuthenticated }) {
               throw new Error(`Request failed with status ${response.status}`);
             }
             const body = await response.json();
-            const payload = body && typeof body === 'object' && body.data ? body.data : {};
-            applyDataUpdate(payload);
-            const worktree = { org, repo, branch: trimmedBranch };
-            setActiveRepoDashboard(null);
-            clearDashboardPolling();
-            setDashboardError(null);
-            setIsDashboardLoading(false);
-            const key = getWorktreeKey(org, repo, trimmedBranch);
-            const hasKnownSession =
-              sessionMapRef.current.has(key) || knownSessionsRef.current.has(key);
-            const previousActiveWorktree = activeWorktree;
-            setActiveWorktree(worktree);
-            const command = !hasKnownSession
-              ? getCommandForLaunch(worktreeLaunchOption, launchDangerousMode)
-              : null;
-            try {
-              if (command) {
-                await openTerminalForWorktree(worktree, { command });
-              } else {
-                await openTerminalForWorktree(worktree);
-              }
-              setPendingWorktreeAction(null);
-            } catch (error) {
-              if (error && error.message === 'AUTH_REQUIRED') {
-                setActiveWorktree(previousActiveWorktree || null);
-                return;
-              }
-              if (hasKnownSession) {
-                window.alert('Failed to reconnect to the existing session.');
-              } else {
-                console.error('Failed to launch the selected option', error);
-                window.alert('Failed to launch the selected option. Check server logs for details.');
-                setPendingWorktreeAction(worktree);
-              }
-              setActiveWorktree(previousActiveWorktree || null);
+            const taskId = body && typeof body.taskId === 'string' ? body.taskId : '';
+            if (!taskId) {
+              throw new Error('Server did not return a task identifier.');
             }
-            setIsMobileMenuOpen(false);
-            setBranchName('');
-            setWorktreeLaunchOption('terminal');
-            setLaunchDangerousMode(false);
+            pendingLaunchesRef.current.set(taskId, {
+              kind: 'manual',
+              org,
+              repo,
+              requestedBranch: trimmedBranch,
+              launchOption: worktreeLaunchOption,
+              dangerousMode: launchDangerousMode,
+            });
             setShowWorktreeModal(false);
+            setIsMobileMenuOpen(false);
           } catch (error) {
             console.error('Failed to create worktree', error);
             window.alert('Failed to create worktree. Check server logs for details.');
@@ -1969,45 +2450,22 @@ function LoginScreen({ onAuthenticated }) {
               throw new Error(`Request failed with status ${response.status}`);
             }
             const body = await response.json();
-            const payload = body && typeof body === 'object' && body.data ? body.data : {};
-            applyDataUpdate(payload);
-            const generatedBranch =
-              body && typeof body === 'object' && typeof body.branch === 'string'
-                ? body.branch.trim()
-                : '';
-            if (!generatedBranch) {
-              window.alert('Server did not return a branch name. Check server logs for details.');
-              return;
+            const taskId = body && typeof body.taskId === 'string' ? body.taskId : '';
+            if (!taskId) {
+              throw new Error('Server did not return a task identifier.');
             }
-            const worktree = { org, repo, branch: generatedBranch };
-            const previousActiveWorktree = activeWorktree;
-            setActiveRepoDashboard(null);
-            clearDashboardPolling();
-            setDashboardError(null);
-            setIsDashboardLoading(false);
-            setActiveWorktree(worktree);
-            try {
-              await openTerminalForWorktree(worktree, {
-                command,
-                prompt: promptValue,
-              });
-              setPendingWorktreeAction(null);
-            } catch (error) {
-              if (error && error.message === 'AUTH_REQUIRED') {
-                setActiveWorktree(previousActiveWorktree || null);
-                return;
-              }
-              console.error('Failed to launch prompt workspace', error);
-              window.alert('Failed to launch the selected agent. Check server logs for details.');
-              setActiveWorktree(previousActiveWorktree || null);
-              setPendingWorktreeAction(worktree);
-            }
-            setIsMobileMenuOpen(false);
-            setPromptText('');
-            setPromptAgent('codex');
-            setPromptDangerousMode(false);
-            setPromptInputMode('edit');
+            pendingLaunchesRef.current.set(taskId, {
+              kind: 'prompt',
+              org,
+              repo,
+              requestedBranch: '',
+              command,
+              promptValue,
+              launchOption: promptAgent,
+              dangerousMode: promptDangerousMode,
+            });
             setShowPromptWorktreeModal(false);
+            setIsMobileMenuOpen(false);
           } catch (error) {
             console.error('Failed to create worktree from prompt', error);
             window.alert('Failed to create worktree. Check server logs for details.');
@@ -2253,7 +2711,7 @@ function LoginScreen({ onAuthenticated }) {
                     href: githubRepoUrl,
                     target: '_blank',
                     rel: 'noreferrer noopener',
-                    className: `${actionButtonClass} text-neutral-400 hover:text-neutral-100`,
+                className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-neutral-100`,
                     title: 'Open repository on GitHub',
                   },
                   h(Github, { size: 16 }),
@@ -2263,7 +2721,7 @@ function LoginScreen({ onAuthenticated }) {
                   {
                     type: 'button',
                     onClick: toggleGithubMenu,
-                    className: `${actionButtonClass} text-neutral-400 hover:text-neutral-100`,
+                    className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-neutral-100`,
                     'aria-haspopup': 'true',
                     'aria-expanded': isGithubMenuOpen ? 'true' : 'false',
                     title: 'GitHub quick links',
@@ -2304,7 +2762,7 @@ function LoginScreen({ onAuthenticated }) {
                 {
                   type: 'button',
                   onClick: openPlanHistory,
-                  className: `${actionButtonClass} text-neutral-400 hover:text-neutral-100`,
+                  className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-neutral-100`,
                   title: 'View saved plans',
                 },
                 planModal.open && planModal.loading
@@ -2313,13 +2771,21 @@ function LoginScreen({ onAuthenticated }) {
               )
             : null;
 
+        const taskMenuButton = h(TaskMenu, {
+          tasks,
+          isOpen: isTaskMenuOpen,
+          onToggle: toggleTaskMenu,
+          hasRunning: hasRunningTasks,
+          menuRef: taskMenuRef,
+        });
+
         const gitSidebarButton = activeWorktree
           ? h(
               'button',
               {
                 type: 'button',
                 onClick: toggleGitSidebar,
-                className: `${actionButtonClass} text-neutral-400 hover:text-neutral-100`,
+                className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-neutral-100`,
                 'aria-pressed': isGitSidebarOpen ? 'true' : 'false',
                 'aria-expanded': isGitSidebarOpen ? 'true' : 'false',
                 title: isGitSidebarOpen ? 'Hide Git status sidebar' : 'Show Git status sidebar'
@@ -2420,7 +2886,7 @@ function LoginScreen({ onAuthenticated }) {
                                     saving: false,
                                   });
                                 },
-                                className: `${actionButtonClass} text-neutral-400 hover:text-neutral-200`,
+                                className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-neutral-200`,
                                 title: 'Edit init command',
                               },
                               h(Settings, { size: 14 }),
@@ -2435,7 +2901,7 @@ function LoginScreen({ onAuthenticated }) {
                                   setLaunchDangerousMode(false);
                                   setShowWorktreeModal(true);
                                 },
-                                className: `${actionButtonClass} text-neutral-400 hover:text-neutral-200`,
+                                className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-neutral-200`,
                                 title: 'Create Worktree',
                               },
                               h(GitPullRequest, { size: 14 }),
@@ -2452,7 +2918,7 @@ function LoginScreen({ onAuthenticated }) {
                                   setPromptInputMode('edit');
                                   setShowPromptWorktreeModal(true);
                                 },
-                                className: `${actionButtonClass} text-neutral-400 hover:text-emerald-300`,
+                className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-emerald-300`,
                                 title: 'Create Worktree From Prompt',
                               },
                               h(Sparkles, { size: 14 }),
@@ -2462,7 +2928,7 @@ function LoginScreen({ onAuthenticated }) {
                               {
                                 type: 'button',
                                 onClick: () => setConfirmDeleteRepo({ org, repo }),
-                                className: `${actionButtonClass} text-neutral-500 hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-neutral-500`,
+                              className: `${ACTION_BUTTON_CLASS} text-neutral-500 hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-neutral-500`,
                                 title: 'Delete Repository',
                                 disabled: Boolean(isDeletingRepo),
                                 'aria-busy': isDeletingRepo ? 'true' : undefined,
@@ -2535,7 +3001,7 @@ function LoginScreen({ onAuthenticated }) {
                                       setConfirmDelete({ org, repo, branch });
                                     },
                                     disabled: branch === 'main',
-                                    className: `${actionButtonClass} disabled:cursor-not-allowed disabled:opacity-60 ${
+                                    className: `${ACTION_BUTTON_CLASS} disabled:cursor-not-allowed disabled:opacity-60 ${
                                       branch === 'main'
                                         ? 'text-neutral-700 cursor-not-allowed'
                                         : 'text-neutral-500 hover:text-red-400'
@@ -2638,6 +3104,7 @@ function LoginScreen({ onAuthenticated }) {
                 'div',
                 { className: 'flex items-center gap-2' },
                 githubControls,
+                taskMenuButton,
                 planHistoryButton,
                 gitSidebarButton,
                 h(
@@ -2697,13 +3164,14 @@ function LoginScreen({ onAuthenticated }) {
                 'div',
                 { className: 'flex items-center gap-2' },
                 githubControls,
+                taskMenuButton,
                 h(
                   'button',
                   {
                     type: 'button',
                     onClick: handleDashboardRefresh,
                     disabled: isDashboardLoading,
-                    className: `${actionButtonClass} text-neutral-400 hover:text-neutral-100 disabled:opacity-60 disabled:cursor-not-allowed`,
+                    className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-neutral-100 disabled:opacity-60 disabled:cursor-not-allowed`,
                     title: isDashboardLoading ? 'Refreshing…' : 'Refresh metrics',
                   },
                   isDashboardLoading
@@ -2743,7 +3211,8 @@ function LoginScreen({ onAuthenticated }) {
             },
             h(
               'div',
-              { className: 'flex justify-end px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
+              { className: 'flex justify-end items-center gap-2 px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
+              taskMenuButton,
               h(
                 'button',
                 {

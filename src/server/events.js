@@ -1,6 +1,7 @@
 import { discoverRepositories } from '../core/git.js';
 import { listActiveSessions } from '../core/terminal-sessions.js';
 import { getEventTypes, subscribeToEvents } from '../core/event-bus.js';
+import { listTasks } from '../core/tasks.js';
 
 const HEARTBEAT_INTERVAL_MS = 15000;
 
@@ -11,7 +12,7 @@ function writeEvent(res, { event, data }) {
 }
 
 async function sendInitialSnapshots(res, workdir) {
-  const [reposSnapshot, sessionsSnapshot] = await Promise.all([
+  const [reposSnapshot, sessionsSnapshot, tasksSnapshot] = await Promise.all([
     discoverRepositories(workdir).catch(() => ({})),
     Promise.resolve(listActiveSessions()).then((sessions) =>
       sessions.map((session) => ({
@@ -22,10 +23,14 @@ async function sendInitialSnapshots(res, workdir) {
         usingTmux: session.usingTmux,
       })),
     ),
+    Promise.resolve(listTasks()).catch(() => []),
   ]);
 
   writeEvent(res, { event: getEventTypes().REPOS_UPDATE, data: { data: reposSnapshot } });
   writeEvent(res, { event: getEventTypes().SESSIONS_UPDATE, data: { sessions: sessionsSnapshot } });
+  if (Array.isArray(tasksSnapshot) && tasksSnapshot.length > 0) {
+    writeEvent(res, { event: getEventTypes().TASKS_UPDATE, data: { tasks: tasksSnapshot } });
+  }
 }
 
 export function createEventStreamHandler({ authManager, workdir }) {
@@ -85,6 +90,18 @@ export function createEventStreamHandler({ authManager, workdir }) {
       }
     });
     cleanupFunctions.push(unsubscribeSessions);
+
+    const unsubscribeTasks = subscribeToEvents(getEventTypes().TASKS_UPDATE, (payload) => {
+      try {
+        writeEvent(res, {
+          event: getEventTypes().TASKS_UPDATE,
+          data: payload,
+        });
+      } catch {
+        res.end();
+      }
+    });
+    cleanupFunctions.push(unsubscribeTasks);
 
     req.on('close', () => {
       cleanupFunctions.forEach((fn) => {

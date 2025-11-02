@@ -1,6 +1,7 @@
 export function createEventStream({
   onRepos,
   onSessions,
+  onTasks,
   onConnect,
   onDisconnect,
 } = {}) {
@@ -62,6 +63,18 @@ export function createEventStream({
     }
   }
 
+  function handleTasksEvent(event) {
+    if (typeof onTasks !== 'function') {
+      return;
+    }
+    try {
+      const payload = JSON.parse(event.data);
+      onTasks(payload);
+    } catch (error) {
+      console.error('Failed to parse tasks event', error);
+    }
+  }
+
   function handleConnect() {
     reconnectDelay = 2000;
     if (typeof onConnect === 'function') {
@@ -94,6 +107,7 @@ export function createEventStream({
     source.addEventListener('open', handleConnect);
     source.addEventListener('repos:update', handleReposEvent);
     source.addEventListener('sessions:update', handleSessionsEvent);
+    source.addEventListener('tasks:update', handleTasksEvent);
     source.addEventListener('error', () => {
       handleDisconnect();
       if (eventSource === source) {

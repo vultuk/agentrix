@@ -5,10 +5,13 @@ import {
   ensureRepository,
   getWorktreePath,
   normaliseBranchName,
+  discoverRepositories,
 } from '../core/git.js';
 import { launchAgentProcess } from '../core/agents.js';
+import { runTask } from '../core/tasks.js';
 import { sendJson } from '../utils/http.js';
 import { selectDefaultBranchOverride } from '../core/default-branch.js';
+import { emitReposUpdate } from '../core/event-bus.js';
 
 function extractApiKey(req) {
   const apiKeyHeader = req.headers?.['x-api-key'];
@@ -212,6 +215,9 @@ export function createAutomationHandlers(
     }
   };
 
+  const TASK_TYPE_AUTOMATION = 'automation:launch';
+  const STEP_AUTOMATION = 'automation-request';
+
   async function launch(context) {
     if (!apiKey) {
       sendJson(context.res, 503, { error: 'Automation API is not configured (missing API key)' });
@@ -279,6 +285,7 @@ export function createAutomationHandlers(
     const fail = (status, message, error) => {
       finishFailure(message, error);
       sendJson(context.res, status, { error: message });
+      return true;
     };
 
     logInfo(`[terminal-worktree] Automation request ${requestId} (${routeLabel}) received.`);
@@ -336,44 +343,18 @@ export function createAutomationHandlers(
       return;
     }
 
+
     if (planEnabled && !userPrompt.trim()) {
       fail(400, 'prompt is required when plan is true');
       return;
     }
 
-    let repositoryPath = '';
-    let clonedRepository = false;
-    try {
-      ({ repositoryPath, cloned: clonedRepository } = await ensureRepoExists(workdir, org, repo));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      fail(500, message, error);
+    if (planEnabled && (!planService || !planService.isConfigured)) {
+      fail(
+        503,
+        'Plan generation is not configured. Configure a local LLM command (set planLlm in config.json).',
+      );
       return;
-    }
-
-    let effectivePrompt = userPrompt;
-    if (planEnabled) {
-      if (!planService || !planService.isConfigured) {
-        fail(
-          503,
-          'Plan generation is not configured. Configure a local LLM command (set planLlm in config.json).',
-        );
-        return;
-      }
-      try {
-        effectivePrompt = await planService.createPlanText({
-          prompt: userPrompt,
-          cwd: repositoryPath,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (message === 'prompt is required') {
-          fail(400, message, error);
-        } else {
-          fail(502, message, error);
-        }
-        return;
-      }
     }
 
     let agent;
@@ -388,55 +369,217 @@ export function createAutomationHandlers(
       `[terminal-worktree] Automation request ${requestId} (${routeLabel}) targeting ${org}/${repo}#${branch}.`,
     );
 
-    try {
-      const defaultBranchOverride = selectDefaultBranchOverride(defaultBranches, org, repo);
-      const { worktreePath, created } = await ensureWorktree(workdir, org, repo, branch, {
-        defaultBranchOverride,
-      });
+    const taskMetadata = {
+      automationRequestId: requestId,
+      planEnabled,
+      promptProvided: Boolean(userPrompt.trim()),
+      org,
+      repo,
+      branch,
+      command: agent.key,
+      status: 'pending',
+    };
 
-      const {
-        pid,
-        sessionId,
-        tmuxSessionName,
-        usingTmux,
-        createdSession,
-      } = await launchAgent({
-        command: agent.command,
-        workdir,
-        org,
-        repo,
-        branch,
-        prompt: effectivePrompt,
-      });
+    const STEP_IDS = Object.freeze({
+      ENSURE_REPO: 'ensure-repository',
+      GENERATE_PLAN: 'generate-plan',
+      ENSURE_WORKTREE: 'ensure-worktree',
+      LAUNCH_AGENT: 'launch-agent',
+      REFRESH_REPOS: 'refresh-repositories',
+    });
 
-      finishSuccess(`${org}/${repo}#${branch}`);
+    const STEP_LABELS = Object.freeze({
+      [STEP_IDS.ENSURE_REPO]: 'Ensure repository',
+      [STEP_IDS.GENERATE_PLAN]: 'Generate plan',
+      [STEP_IDS.ENSURE_WORKTREE]: 'Ensure worktree',
+      [STEP_IDS.LAUNCH_AGENT]: 'Launch agent',
+      [STEP_IDS.REFRESH_REPOS]: 'Refresh repositories',
+    });
 
-      sendJson(context.res, 202, {
-        data: {
+    const { id: taskId } = runTask(
+      {
+        type: TASK_TYPE_AUTOMATION,
+        title: `Automation launch for ${org}/${repo}`,
+        metadata: taskMetadata,
+      },
+      async ({ progress, setResult, updateMetadata }) => {
+        const finalData = {
           org,
           repo,
           branch,
-          repositoryPath,
-          worktreePath,
-          clonedRepository,
-          createdWorktree: created,
-          agent: agent.key,
-          agentCommand: agent.command,
-          pid,
-          terminalSessionId: sessionId,
-          terminalSessionCreated: createdSession,
-          tmuxSessionName,
-          terminalUsingTmux: usingTmux,
           plan: planEnabled,
           promptRoute: routeLabel,
           automationRequestId: requestId,
-        },
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      finishFailure(message, error);
-      sendJson(context.res, 500, { error: message });
-    }
+          agent: agent.key,
+          agentCommand: agent.command,
+          repositoryPath: null,
+          worktreePath: null,
+          clonedRepository: false,
+          createdWorktree: false,
+          pid: null,
+          terminalSessionId: null,
+          terminalSessionCreated: false,
+          tmuxSessionName: null,
+          terminalUsingTmux: false,
+        };
+
+        let currentStep = null;
+        const startStep = (id, message) => {
+          currentStep = id;
+          progress.startStep(id, { label: STEP_LABELS[id], message });
+        };
+        const completeStep = (id, message) => {
+          progress.completeStep(id, { label: STEP_LABELS[id], message });
+          if (currentStep === id) {
+            currentStep = null;
+          }
+        };
+        const failCurrentStep = (message) => {
+          if (!currentStep) {
+            return;
+          }
+          progress.failStep(currentStep, { label: STEP_LABELS[currentStep], message });
+          currentStep = null;
+        };
+
+        progress.ensureStep(STEP_IDS.ENSURE_REPO, STEP_LABELS[STEP_IDS.ENSURE_REPO]);
+        progress.ensureStep(STEP_IDS.GENERATE_PLAN, STEP_LABELS[STEP_IDS.GENERATE_PLAN]);
+        progress.ensureStep(STEP_IDS.ENSURE_WORKTREE, STEP_LABELS[STEP_IDS.ENSURE_WORKTREE]);
+        progress.ensureStep(STEP_IDS.LAUNCH_AGENT, STEP_LABELS[STEP_IDS.LAUNCH_AGENT]);
+        progress.ensureStep(STEP_IDS.REFRESH_REPOS, STEP_LABELS[STEP_IDS.REFRESH_REPOS]);
+
+        updateMetadata({ status: 'running' });
+
+        try {
+          startStep(STEP_IDS.ENSURE_REPO, 'Ensuring repository exists.');
+          const { repositoryPath, cloned } = await ensureRepoExists(workdir, org, repo);
+          finalData.repositoryPath = repositoryPath;
+          finalData.clonedRepository = cloned;
+          updateMetadata({ repositoryPath, clonedRepository: cloned });
+          completeStep(
+            STEP_IDS.ENSURE_REPO,
+            cloned ? 'Repository cloned successfully.' : 'Repository is ready.',
+          );
+
+          let effectivePrompt = userPrompt;
+          if (planEnabled) {
+            startStep(STEP_IDS.GENERATE_PLAN, 'Generating plan text.');
+            try {
+              effectivePrompt = await planService.createPlanText({
+                prompt: userPrompt,
+                cwd: repositoryPath,
+              });
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              failCurrentStep(message);
+              updateMetadata({ status: 'failed', error: message });
+              throw error instanceof Error ? error : new Error(message);
+            }
+            completeStep(STEP_IDS.GENERATE_PLAN, 'Plan generated successfully.');
+          } else {
+            progress.skipStep(STEP_IDS.GENERATE_PLAN, {
+              label: STEP_LABELS[STEP_IDS.GENERATE_PLAN],
+              message: 'Plan generation disabled for this request.',
+            });
+          }
+
+          startStep(STEP_IDS.ENSURE_WORKTREE, 'Ensuring worktree is available.');
+          const defaultBranchOverride = selectDefaultBranchOverride(defaultBranches, org, repo);
+          const { worktreePath, created } = await ensureWorktree(workdir, org, repo, branch, {
+            defaultBranchOverride,
+          });
+          finalData.worktreePath = worktreePath;
+          finalData.createdWorktree = created;
+          updateMetadata({ worktreePath, createdWorktree: created });
+          completeStep(
+            STEP_IDS.ENSURE_WORKTREE,
+            created ? 'Worktree created successfully.' : 'Worktree already existed.',
+          );
+
+          startStep(STEP_IDS.REFRESH_REPOS, 'Refreshing repository view.');
+          try {
+            const reposSnapshot = await discoverRepositories(workdir);
+            emitReposUpdate(reposSnapshot);
+            completeStep(STEP_IDS.REFRESH_REPOS, 'Repository view updated.');
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            failCurrentStep(message);
+            updateMetadata({ status: 'failed', error: message });
+            finishFailure(message, error instanceof Error ? error : undefined);
+            throw error instanceof Error ? error : new Error(message);
+          }
+
+          startStep(STEP_IDS.LAUNCH_AGENT, 'Launching agent command.');
+          const {
+            pid,
+            sessionId,
+            tmuxSessionName,
+            usingTmux,
+            createdSession,
+          } = await launchAgent({
+            command: agent.command,
+            workdir,
+            org,
+            repo,
+            branch,
+            prompt: effectivePrompt,
+          });
+
+          finalData.pid = pid;
+          finalData.terminalSessionId = sessionId;
+          finalData.terminalSessionCreated = createdSession;
+          finalData.tmuxSessionName = tmuxSessionName;
+          finalData.terminalUsingTmux = usingTmux;
+
+          updateMetadata({
+            pid,
+            terminalSessionId: sessionId,
+            terminalSessionCreated: createdSession,
+            tmuxSessionName,
+            terminalUsingTmux: usingTmux,
+          });
+
+          completeStep(STEP_IDS.LAUNCH_AGENT, 'Agent launched successfully.');
+
+          finishSuccess(`${org}/${repo}#${branch}`);
+          updateMetadata({ status: 'succeeded' });
+          setResult(finalData);
+          return finalData;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          failCurrentStep(message);
+          updateMetadata({ status: 'failed', error: message });
+          finishFailure(message, error instanceof Error ? error : undefined);
+          if (!(error instanceof Error)) {
+            throw new Error(message);
+          }
+          throw error;
+        }
+      },
+    );
+
+    const queuedData = {
+      org,
+      repo,
+      branch,
+      repositoryPath: null,
+      worktreePath: null,
+      clonedRepository: null,
+      createdWorktree: null,
+      agent: agent.key,
+      agentCommand: agent.command,
+      pid: null,
+      terminalSessionId: null,
+      terminalSessionCreated: false,
+      tmuxSessionName: null,
+      terminalUsingTmux: false,
+      plan: planEnabled,
+      promptRoute: routeLabel,
+      automationRequestId: requestId,
+    };
+
+    sendJson(context.res, 202, { taskId, data: queuedData });
+    return;
   }
 
   return { launch };
