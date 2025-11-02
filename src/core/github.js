@@ -105,10 +105,62 @@ export function createGithubClient({ timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     return results.reduce((total, value) => total + value, 0);
   }
 
+  async function listOpenIssues(org, repo) {
+    const { repoSlug } = normaliseRepo(org, repo);
+    const stdout = await runGh(
+      [
+        'issue',
+        'list',
+        '--repo',
+        repoSlug,
+        '--state',
+        'open',
+        '--json',
+        'number,title,labels,createdAt,url',
+        '--limit',
+        '200',
+      ],
+      { timeoutMs },
+    );
+    const issues = parseJsonArray(stdout, 'Unexpected response when listing issues');
+    return issues
+      .map((issue) => {
+        const number = typeof issue?.number === 'number' ? issue.number : null;
+        if (number === null) {
+          return null;
+        }
+        const title = typeof issue?.title === 'string' ? issue.title : '';
+        const createdAtValue = typeof issue?.createdAt === 'string' ? issue.createdAt : null;
+        let createdAt = null;
+        if (createdAtValue) {
+          const parsedDate = new Date(createdAtValue);
+          if (!Number.isNaN(parsedDate.getTime())) {
+            createdAt = parsedDate.toISOString();
+          }
+        }
+        const labels = Array.isArray(issue?.labels)
+          ? issue.labels
+              .map((label) => (label && typeof label.name === 'string' ? label.name : null))
+              .filter(Boolean)
+          : [];
+        const url = typeof issue?.url === 'string' && issue.url
+          ? issue.url
+          : `https://github.com/${repoSlug}/issues/${number}`;
+        return {
+          number,
+          title,
+          createdAt,
+          labels,
+          url,
+        };
+      })
+      .filter(Boolean);
+  }
+
   return {
     countOpenPullRequests,
     countOpenIssues,
     countRunningWorkflows,
+    listOpenIssues,
   };
 }
-

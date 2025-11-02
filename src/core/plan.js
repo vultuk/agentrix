@@ -83,7 +83,7 @@ function resolveShellInvocation() {
   return { shellPath, shellArgs };
 }
 
-function buildCommandForLlm(llm, promptText) {
+function buildCommandForLlm(llm, promptText, { dangerousMode = false, rawPrompt = false } = {}) {
   const baseCommand = COMMAND_NAMES[llm];
   if (!baseCommand) {
     throw new Error(`No command configured for LLM "${llm}".`);
@@ -92,12 +92,21 @@ function buildCommandForLlm(llm, promptText) {
 
   switch (llm) {
     case 'claude':
-      return buildCommandString(commandPrefix, ['-p', promptText]);
+      return buildCommandString(commandPrefix, [
+        '-p',
+        promptText,
+        ...(dangerousMode ? ['--dangerously-skip-permissions'] : []),
+      ]);
     case 'cursor':
       return buildCommandString(commandPrefix, ['-p', promptText]);
     case 'codex':
     default:
-      return buildCommandString(commandPrefix, ['exec', promptText, '--skip-git-repo-check']);
+      return buildCommandString(commandPrefix, [
+        'exec',
+        promptText,
+        ...(!rawPrompt ? ['--skip-git-repo-check'] : []),
+        ...(dangerousMode ? ['--dangerously-bypass-approvals-and-sandbox'] : []),
+      ]);
   }
 }
 
@@ -319,20 +328,36 @@ export function createPlanService({ defaultLlm, execPlanCommand: customExecutor 
     return developerMessagePromise;
   }
 
-  async function generatePlan({ prompt, llm, cwd } = {}) {
+  async function generatePlan({
+    prompt,
+    llm,
+    cwd,
+    rawPrompt = false,
+    dangerousMode = false,
+  } = {}) {
     if (typeof prompt !== 'string' || !prompt.trim()) {
       throw new Error('prompt is required');
     }
 
-    const developerMessage = await getDeveloperMessage();
-    const promptText = buildPlanPrompt({ developerMessage, userPrompt: prompt });
+    const shouldUseDangerousMode = Boolean(dangerousMode || rawPrompt);
+
+    let promptText;
+    if (rawPrompt) {
+      promptText = prompt;
+    } else {
+      const developerMessage = await getDeveloperMessage();
+      promptText = buildPlanPrompt({ developerMessage, userPrompt: prompt });
+    }
     const requestedLlm = normaliseLlm(llm || chosenLlm);
 
     const controller = new AbortController();
     activeControllers.add(controller);
     let commandPromise;
     try {
-      const command = buildCommandForLlm(requestedLlm, promptText);
+      const command = buildCommandForLlm(requestedLlm, promptText, {
+        dangerousMode: shouldUseDangerousMode,
+        rawPrompt,
+      });
       try {
         commandPromise = Promise.resolve(
           runPlanCommand(command, {

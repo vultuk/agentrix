@@ -44,6 +44,19 @@ test('returns dashboard metrics when repository and github client succeed', asyn
         return 3;
       },
       countOpenIssues: async () => 7,
+      listOpenIssues: async (org, repo) => {
+        assert.equal(org, 'org');
+        assert.equal(repo, 'repo');
+        return [
+          {
+            number: 12,
+            title: 'Fix dashboard layout',
+            createdAt: '2023-12-31T10:00:00.000Z',
+            labels: ['bug', 'frontend'],
+            url: 'https://github.com/org/repo/issues/12',
+          },
+        ];
+      },
       countRunningWorkflows: async () => 2,
     },
     now: () => new Date('2024-01-01T12:00:00Z'),
@@ -63,7 +76,18 @@ test('returns dashboard metrics when repository and github client succeed', asyn
       repo: 'repo',
       fetchedAt: '2024-01-01T12:00:00.000Z',
       pullRequests: { open: 3 },
-      issues: { open: 7 },
+      issues: {
+        open: 7,
+        items: [
+          {
+            number: 12,
+            title: 'Fix dashboard layout',
+            createdAt: '2023-12-31T10:00:00.000Z',
+            labels: ['bug', 'frontend'],
+            url: 'https://github.com/org/repo/issues/12',
+          },
+        ],
+      },
       workflows: { running: 2 },
       worktrees: { local: 5 },
     },
@@ -105,6 +129,7 @@ test('returns 502 on GitHub CLI errors', async () => {
         throw new Error('GitHub CLI command failed');
       },
       countOpenIssues: async () => 0,
+      listOpenIssues: async () => [],
       countRunningWorkflows: async () => 0,
     },
   });
@@ -129,4 +154,3 @@ test('HEAD requests validate repository and exit without body', async () => {
   assert.equal(context.res.body, '');
   assert.equal(context.res.ended, true);
 });
-

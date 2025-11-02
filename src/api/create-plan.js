@@ -19,6 +19,10 @@ export function createPlanHandlers({ planService: providedPlanService } = {}) {
       return;
     }
 
+    const rawPrompt = payload && typeof payload.rawPrompt === 'boolean' ? payload.rawPrompt : false;
+    const dangerousMode =
+      payload && typeof payload.dangerousMode === 'boolean' ? payload.dangerousMode : false;
+
     if (!planService || !planService.isConfigured) {
       sendJson(context.res, 500, {
         error:
@@ -58,7 +62,9 @@ export function createPlanHandlers({ planService: providedPlanService } = {}) {
 
     let planText;
     try {
-      const options = commandCwd ? { prompt, cwd: commandCwd } : { prompt };
+      const options = commandCwd
+        ? { prompt, cwd: commandCwd, rawPrompt, dangerousMode }
+        : { prompt, rawPrompt, dangerousMode };
       planText = await planService.createPlanText(options);
     } catch (error) {
       if (error instanceof Error && error.message === 'prompt is required') {
