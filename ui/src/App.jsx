@@ -7,7 +7,6 @@ import {
   ChevronDown,
   Github,
   GitBranch,
-  GitPullRequest,
   Menu,
   RefreshCcw,
   Plus,
@@ -586,6 +585,89 @@ function renderTaskStep(step, index) {
         const [isDashboardLoading, setIsDashboardLoading] = useState(false);
         const dashboardCacheRef = useRef(new Map());
         const dashboardPollingRef = useRef({ timerId: null, controller: null });
+
+        const getRepoInitCommandValue = (org, repo) => {
+          const repoInfo = data?.[org]?.[repo];
+          if (repoInfo && typeof repoInfo.initCommand === 'string') {
+            return repoInfo.initCommand;
+          }
+          return '';
+        };
+
+        const openRepoSettings = (org, repo, initCommandValue = '') => {
+          if (!org || !repo) {
+            return;
+          }
+          setEditInitCommandModal({
+            open: true,
+            org,
+            repo,
+            value: typeof initCommandValue === 'string' ? initCommandValue : '',
+            error: null,
+            saving: false,
+          });
+        };
+
+        const openPromptModalForRepo = useCallback((org, repo) => {
+          if (!org || !repo) {
+            return;
+          }
+          setSelectedRepo([org, repo]);
+          setPromptText('');
+          setPromptAgent('codex');
+          setPromptDangerousMode(false);
+          setPromptInputMode('edit');
+          setShowPromptWorktreeModal(true);
+          setOpenActionMenu(null);
+          setIsMobileMenuOpen(false);
+        }, [
+          setSelectedRepo,
+          setPromptText,
+          setPromptAgent,
+          setPromptDangerousMode,
+          setPromptInputMode,
+          setShowPromptWorktreeModal,
+          setOpenActionMenu,
+          setIsMobileMenuOpen,
+        ]);
+
+        const openWorktreeModalForRepo = useCallback((org, repo) => {
+          if (!org || !repo) {
+            return;
+          }
+          setSelectedRepo([org, repo]);
+          setBranchName('');
+          setWorktreeLaunchOption('terminal');
+          setLaunchDangerousMode(false);
+          setShowWorktreeModal(true);
+          setOpenActionMenu(null);
+          setIsMobileMenuOpen(false);
+        }, [
+          setSelectedRepo,
+          setBranchName,
+          setWorktreeLaunchOption,
+          setLaunchDangerousMode,
+          setShowWorktreeModal,
+          setOpenActionMenu,
+          setIsMobileMenuOpen,
+        ]);
+
+
+        const reopenRepoSettingsAfterConfirm = (dialogState) => {
+          if (
+            !dialogState ||
+            !dialogState.reopenSettings ||
+            !dialogState.org ||
+            !dialogState.repo
+          ) {
+            return;
+          }
+          const draftValue =
+            typeof dialogState.initCommandDraft === 'string'
+              ? dialogState.initCommandDraft
+              : getRepoInitCommandValue(dialogState.org, dialogState.repo);
+          openRepoSettings(dialogState.org, dialogState.repo, draftValue);
+        };
 
         const clearDashboardPolling = useCallback(() => {
           if (dashboardPollingRef.current.timerId !== null && typeof window !== 'undefined') {
@@ -2194,6 +2276,23 @@ function renderTaskStep(step, index) {
           });
         }, []);
 
+        const requestRepoDeletionFromSettings = useCallback(() => {
+          if (editInitCommandModal.saving || isDeletingRepo) {
+            return;
+          }
+          const { org, repo, value } = editInitCommandModal;
+          if (!org || !repo) {
+            return;
+          }
+          setConfirmDeleteRepo({
+            org,
+            repo,
+            reopenSettings: true,
+            initCommandDraft: value,
+          });
+          closeEditInitCommandModal();
+        }, [closeEditInitCommandModal, editInitCommandModal, isDeletingRepo]);
+
         const handleSaveInitCommand = useCallback(async () => {
           const state = editInitCommandModal;
           if (!state.open || state.saving || !state.org || !state.repo) {
@@ -2840,6 +2939,7 @@ function renderTaskStep(step, index) {
                       const branches = Array.isArray(repoInfo?.branches) ? repoInfo.branches : [];
                       const initCommand =
                         typeof repoInfo?.initCommand === 'string' ? repoInfo.initCommand : '';
+                      const repoMenuKey = `repo-actions:${org}/${repo}`;
                       return h(
                         'li',
                         {
@@ -2869,73 +2969,82 @@ function renderTaskStep(step, index) {
                               repo,
                             ),
                           ),
-                          h(
-                            'div',
-                            { className: 'flex items-center gap-1 flex-shrink-0' },
                             h(
-                              'button',
-                              {
-                                type: 'button',
-                                onClick: () => {
-                                  setEditInitCommandModal({
-                                    open: true,
-                                    org,
-                                    repo,
-                                    value: initCommand,
-                                    error: null,
-                                    saving: false,
-                                  });
+                              'div',
+                              { className: 'flex items-center gap-1 flex-shrink-0' },
+                              h(
+                                'div',
+                                { className: 'relative', ref: getActionMenuRef(repoMenuKey) },
+                                h(
+                                  'button',
+                                  {
+                                    type: 'button',
+                                    onClick: (event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      toggleActionMenu(repoMenuKey);
+                                    },
+                                    'aria-haspopup': 'menu',
+                                    'aria-expanded': openActionMenu === repoMenuKey,
+                                    className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-emerald-300`,
+                                    title: 'Create worktree options',
+                                  },
+                                  h(Sparkles, { size: 14 }),
+                                ),
+                                openActionMenu === repoMenuKey
+                                  ? h(
+                                      'div',
+                                      {
+                                        role: 'menu',
+                                        className:
+                                          'absolute right-0 mt-2 min-w-[180px] overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 py-1 text-sm shadow-lg',
+                                      },
+                                      h(
+                                      'button',
+                                      {
+                                        type: 'button',
+                                        role: 'menuitem',
+                                        onMouseDown: (event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          openPromptModalForRepo(org, repo);
+                                        },
+                                        className:
+                                          'block w-full px-3 py-2 text-left text-neutral-100 transition hover:bg-neutral-800',
+                                      },
+                                      'Create From Prompt',
+                                    ),
+                                      h(
+                                      'button',
+                                      {
+                                        type: 'button',
+                                        role: 'menuitem',
+                                        onMouseDown: (event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          openWorktreeModalForRepo(org, repo);
+                                        },
+                                        className:
+                                          'block w-full px-3 py-2 text-left text-neutral-100 transition hover:bg-neutral-800',
+                                      },
+                                      'Create Worktree',
+                                    ),
+                                    )
+                                  : null,
+                              ),
+                              h(
+                                'button',
+                                {
+                                  type: 'button',
+                                  onClick: () => {
+                                    openRepoSettings(org, repo, initCommand);
+                                  },
+                                  className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-neutral-200`,
+                                  title: 'Edit init command',
                                 },
-                                className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-neutral-200`,
-                                title: 'Edit init command',
-                              },
-                              h(Settings, { size: 14 }),
+                                h(Settings, { size: 14 }),
+                              ),
                             ),
-                            h(
-                              'button',
-                              {
-                                type: 'button',
-                                onClick: () => {
-                                  setSelectedRepo([org, repo]);
-                                  setWorktreeLaunchOption('terminal');
-                                  setLaunchDangerousMode(false);
-                                  setShowWorktreeModal(true);
-                                },
-                                className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-neutral-200`,
-                                title: 'Create Worktree',
-                              },
-                              h(GitPullRequest, { size: 14 }),
-                            ),
-                            h(
-                              'button',
-                              {
-                                type: 'button',
-                                onClick: () => {
-                                  setSelectedRepo([org, repo]);
-                                  setPromptText('');
-                                  setPromptAgent('codex');
-                                  setPromptDangerousMode(false);
-                                  setPromptInputMode('edit');
-                                  setShowPromptWorktreeModal(true);
-                                },
-                className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-emerald-300`,
-                                title: 'Create Worktree From Prompt',
-                              },
-                              h(Sparkles, { size: 14 }),
-                            ),
-                            h(
-                              'button',
-                              {
-                                type: 'button',
-                                onClick: () => setConfirmDeleteRepo({ org, repo }),
-                              className: `${ACTION_BUTTON_CLASS} text-neutral-500 hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-neutral-500`,
-                                title: 'Delete Repository',
-                                disabled: Boolean(isDeletingRepo),
-                                'aria-busy': isDeletingRepo ? 'true' : undefined,
-                              },
-                              h(Trash2, { size: 12 }),
-                            ),
-                          ),
                         ),
                         h(
                           'ul',
@@ -3335,7 +3444,7 @@ function renderTaskStep(step, index) {
             ? h(
                 Modal,
                 {
-                  title: `Init command: ${editInitCommandModal.org}/${editInitCommandModal.repo}`,
+                  title: `Repository settings: ${editInitCommandModal.org}/${editInitCommandModal.repo}`,
                   onClose: () => {
                     if (editInitCommandModal.saving) {
                       return;
@@ -3345,37 +3454,78 @@ function renderTaskStep(step, index) {
                 },
                 h(
                   'div',
-                  { className: 'space-y-2' },
+                  { className: 'space-y-5' },
                   h(
-                    'p',
-                    { className: 'text-xs text-neutral-400 leading-relaxed' },
-                    'This command runs after new worktrees for this repository are created.'
+                    'section',
+                    { className: 'space-y-2' },
+                    h(
+                      'p',
+                      { className: 'text-xs text-neutral-400 leading-relaxed' },
+                      'This command runs after new worktrees for this repository are created.',
+                    ),
+                    h('textarea', {
+                      value: editInitCommandModal.value,
+                      onChange: (event) =>
+                        setEditInitCommandModal((current) => ({
+                          ...current,
+                          value: event.target.value,
+                        })),
+                      rows: 4,
+                      disabled: editInitCommandModal.saving,
+                      className:
+                        'w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500/60 resize-y min-h-[112px]',
+                      placeholder: 'npm install',
+                    }),
+                    h(
+                      'p',
+                      { className: 'text-xs text-neutral-500 leading-relaxed' },
+                      'Leave blank to skip running a setup command.',
+                    ),
+                    editInitCommandModal.error
+                      ? h(
+                          'p',
+                          { className: 'text-xs text-rose-400' },
+                          editInitCommandModal.error,
+                        )
+                      : null,
                   ),
-                  h('textarea', {
-                    value: editInitCommandModal.value,
-                    onChange: (event) =>
-                      setEditInitCommandModal((current) => ({
-                        ...current,
-                        value: event.target.value,
-                      })),
-                    rows: 4,
-                    disabled: editInitCommandModal.saving,
-                    className:
-                      'w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500/60 resize-y min-h-[112px]',
-                    placeholder: 'npm install',
-                  }),
                   h(
-                    'p',
-                    { className: 'text-xs text-neutral-500 leading-relaxed' },
-                    'Leave blank to skip running a setup command.'
-                  ),
-                  editInitCommandModal.error
-                    ? h(
+                    'section',
+                    { className: 'space-y-3 rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-3' },
+                    h(
+                      'div',
+                      { className: 'space-y-1' },
+                      h(
                         'p',
-                        { className: 'text-xs text-rose-400' },
-                        editInitCommandModal.error,
-                      )
-                    : null,
+                        { className: 'text-sm font-semibold text-rose-100' },
+                        'Danger zone',
+                      ),
+                      h(
+                        'p',
+                        { className: 'text-xs text-rose-100/80 leading-relaxed' },
+                        'Deleting this repository removes all worktrees, terminal sessions, and local checkout data.',
+                      ),
+                    ),
+                    h(
+                      'button',
+                      {
+                        type: 'button',
+                        onClick: requestRepoDeletionFromSettings,
+                        disabled: editInitCommandModal.saving || isDeletingRepo,
+                        'aria-busy': isDeletingRepo ? 'true' : undefined,
+                        className:
+                          'inline-flex items-center justify-center gap-2 rounded-md border border-rose-400/60 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-100 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60',
+                      },
+                      isDeletingRepo
+                        ? h(
+                            'span',
+                            { className: 'inline-flex items-center gap-2' },
+                            renderSpinner('text-rose-50'),
+                            'Deleting…',
+                          )
+                        : 'Delete repository',
+                    ),
+                  ),
                 ),
                 h(
                   'div',
@@ -3997,6 +4147,7 @@ function renderTaskStep(step, index) {
                   title: 'Delete repository',
                   onClose: () => {
                     if (!isDeletingRepo) {
+                      reopenRepoSettingsAfterConfirm(confirmDeleteRepo);
                       setConfirmDeleteRepo(null);
                     }
                   }
@@ -4024,6 +4175,7 @@ function renderTaskStep(step, index) {
                       type: 'button',
                       onClick: () => {
                         if (!isDeletingRepo) {
+                          reopenRepoSettingsAfterConfirm(confirmDeleteRepo);
                           setConfirmDeleteRepo(null);
                         }
                       },
