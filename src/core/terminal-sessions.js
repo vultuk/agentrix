@@ -417,7 +417,19 @@ export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
   const bucket = getSessionBucket(key);
   if (bucket) {
     for (const session of bucket.values()) {
-      if (session && !session.closed) {
+      if (!session || session.closed) {
+        continue;
+      }
+      if (session.kind && session.kind !== 'interactive') {
+        continue;
+      }
+      if (!session.kind && !session.usingTmux) {
+        continue;
+      }
+      if (!session.kind && session.usingTmux) {
+        return { session, created: false };
+      }
+      if (session.kind === 'interactive') {
         return { session, created: false };
       }
     }
