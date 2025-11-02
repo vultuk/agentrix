@@ -51,6 +51,36 @@ const PROMPT_AGENT_OPTIONS = Object.freeze([
   { value: 'cursor', label: 'Cursor' }
 ]);
 
+const ISSUE_PLAN_PROMPT_TEMPLATE = `Using the gh command, load the specified GitHub issue and produce a structured plan to resolve or implement it.
+
+1. **Load the issue context**
+   - Retrieve the issue and its comments using:
+     \`gh issue view <ISSUE_NUMBER> --comments --json title,body,comments,author,url\`
+   - Parse and analyse:
+       • The main issue description and intent.  
+       • All comments and discussion for clarifications or context.  
+       • Any related links, dependencies, or blockers.
+
+2. **Analyse and understand**
+   - Determine the core objective or bug to fix.  
+   - Identify the affected components, modules, or systems.  
+   - Extract any proposed solutions or developer notes.  
+   - Spot missing information or ambiguities that require assumption or clarification.
+
+3. **Generate a plan of action**
+   - Draft a clear, technical, and step-by-step plan including:
+       • **Summary:** One-sentence goal of the issue.  
+       • **Analysis:** Understanding of the root cause or feature requirements.  
+       • **Implementation Plan:** Ordered list of code changes, refactors, or new files needed.  
+       • **Testing/Validation:** How to verify success.  
+       • **Potential Risks / Edge Cases.**
+
+4. **Present and confirm**
+   - Output the full plan directly into this chat.  
+   - Wait for confirmation before taking any further automated action.
+
+Ensure the plan is specific, technically sound, and ready for execution.`;
+
 const createEmptyPlanModalState = () => ({
   open: false,
   loading: false,
@@ -847,6 +877,135 @@ function renderTaskStep(step, index) {
             onAuthExpired();
           }
         }, [onAuthExpired]);
+
+        const createPlanFromPrompt = useCallback(
+          async (
+            promptValue,
+            org,
+            repo,
+            {
+              restorePromptOnError = true,
+              rawPrompt = false,
+              dangerousMode = false,
+            } = {},
+          ) => {
+            if (isCreatingPlan) {
+              return;
+            }
+            const originalPrompt = typeof promptValue === 'string' ? promptValue : '';
+            if (!originalPrompt.trim()) {
+              return;
+            }
+            if (!org || !repo) {
+              window.alert('Select a repository before creating a plan.');
+              return;
+            }
+
+            setIsCreatingPlan(true);
+
+            try {
+              flushSync(() => {
+                setPromptText('');
+              });
+
+              const response = await fetch('/api/create-plan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                  prompt: originalPrompt,
+                  org,
+                  repo,
+                  rawPrompt,
+                  dangerousMode,
+                }),
+              });
+
+              if (response.status === 401) {
+                if (restorePromptOnError) {
+                  flushSync(() => {
+                    setPromptText(promptValue);
+                  });
+                }
+                notifyAuthExpired();
+                return;
+              }
+
+              if (!response.ok) {
+                throw new Error(`Request failed with status ${response.status}`);
+              }
+
+              const payload = await response.json();
+              const planText = payload && typeof payload.plan === 'string' ? payload.plan : '';
+              if (!planText.trim()) {
+                throw new Error('Server returned an empty plan. Check server logs for details.');
+              }
+
+              flushSync(() => {
+                setPromptText(planText);
+              });
+            } catch (error) {
+              console.error('Failed to create plan', error);
+              if (restorePromptOnError) {
+                flushSync(() => {
+                  setPromptText(promptValue);
+                });
+              }
+              window.alert('Failed to create plan. Check server logs for details.');
+            } finally {
+              setIsCreatingPlan(false);
+            }
+          },
+          [isCreatingPlan, notifyAuthExpired],
+        );
+
+        const openIssuePlanModal = useCallback(
+          (issue, repoInfo) => {
+            if (!issue || !repoInfo) {
+              return;
+            }
+            const { org, repo } = repoInfo;
+            const issueNumberValue =
+              typeof issue?.number === 'number'
+                ? issue.number
+                : Number.parseInt(issue?.number, 10);
+            if (!org || !repo || Number.isNaN(issueNumberValue)) {
+              return;
+            }
+            const promptValue = ISSUE_PLAN_PROMPT_TEMPLATE.replace(
+              /<ISSUE_NUMBER>/g,
+              String(issueNumberValue),
+            );
+            setSelectedRepo([org, repo]);
+            setPromptText(promptValue);
+            setPromptInputMode('edit');
+            setShowPromptWorktreeModal(true);
+            setOpenActionMenu(null);
+            setIsMobileMenuOpen(false);
+            const schedule =
+              typeof queueMicrotask === 'function'
+                ? queueMicrotask
+                : (callback) => {
+                    setTimeout(callback, 0);
+                  };
+            schedule(() => {
+              void createPlanFromPrompt(promptValue, org, repo, {
+                restorePromptOnError: true,
+                rawPrompt: true,
+                dangerousMode: true,
+              });
+            });
+          },
+          [
+            setSelectedRepo,
+            setPromptText,
+            setPromptInputMode,
+            setShowPromptWorktreeModal,
+            setOpenActionMenu,
+            setIsMobileMenuOpen,
+            createPlanFromPrompt,
+          ],
+        );
 
         useEffect(() => {
           let cancelled = false;
@@ -2453,64 +2612,12 @@ function renderTaskStep(step, index) {
         };
 
         const handleCreatePlan = () => {
-          if (isCreatingPlan) {
-            return;
-          }
-          const hasPrompt = typeof promptText === 'string' && promptText.trim();
-          if (!hasPrompt) {
-            return;
-          }
           if (!selectedRepo) {
             window.alert('Select a repository before creating a plan.');
             return;
           }
-
-          const originalPrompt = promptText;
           const [org, repo] = selectedRepo;
-
-          setIsCreatingPlan(true);
-
-          void (async () => {
-            try {
-              flushSync(() => {
-                setPromptText('');
-              });
-
-              const response = await fetch('/api/create-plan', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ prompt: originalPrompt, org, repo })
-              });
-
-              if (response.status === 401) {
-                notifyAuthExpired();
-                return;
-              }
-
-              if (!response.ok) {
-                throw new Error(`Request failed with status ${response.status}`);
-              }
-
-              const payload = await response.json();
-              const planText = payload && typeof payload.plan === 'string' ? payload.plan : '';
-              if (!planText.trim()) {
-                throw new Error('Server returned an empty plan. Check server logs for details.');
-              }
-
-              flushSync(() => {
-                setPromptText(planText);
-              });
-            } catch (error) {
-              console.error('Failed to create plan', error);
-              flushSync(() => {
-                setPromptText(originalPrompt);
-              });
-              window.alert('Failed to create plan. Check server logs for details.');
-            } finally {
-              setIsCreatingPlan(false);
-            }
-          })();
+          void createPlanFromPrompt(promptText, org, repo);
         };
 
         const handleCreateWorktreeFromPrompt = async () => {
@@ -3308,6 +3415,7 @@ function renderTaskStep(step, index) {
                 data: dashboardData,
                 loading: isDashboardLoading,
                 error: dashboardError,
+                onCreateIssuePlan: openIssuePlanModal,
               }),
             ),
           );

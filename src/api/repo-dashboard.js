@@ -37,9 +37,10 @@ export function createRepoDashboardHandlers(workdir, overrides = {}) {
     }
 
     try {
-      const [openPullRequests, openIssues, runningWorkflows] = await Promise.all([
+      const [openPullRequests, openIssues, openIssueDetails, runningWorkflows] = await Promise.all([
         githubClient.countOpenPullRequests(org, repo),
         githubClient.countOpenIssues(org, repo),
+        githubClient.listOpenIssues(org, repo),
         githubClient.countRunningWorkflows(org, repo),
       ]);
 
@@ -52,7 +53,7 @@ export function createRepoDashboardHandlers(workdir, overrides = {}) {
           repo,
           fetchedAt,
           pullRequests: { open: openPullRequests },
-          issues: { open: openIssues },
+          issues: { open: openIssues, items: openIssueDetails },
           workflows: { running: runningWorkflows },
           worktrees: { local: worktreeCount },
         },
@@ -65,4 +66,3 @@ export function createRepoDashboardHandlers(workdir, overrides = {}) {
 
   return { read };
 }
-

@@ -49,3 +49,39 @@ test('createPlanText returns the raw command output', async () => {
 
   assert.equal(result, rawOutput);
 });
+
+test('createPlanText supports rawPrompt without developer wrappers', async () => {
+  const { createPlanService } = await import(`../plan.js?rawTest=${Date.now()}`);
+
+  const capturedCommands = [];
+  const planService = createPlanService({
+    execPlanCommand: async (command) => {
+      capturedCommands.push(command);
+      return 'plan output';
+    },
+  });
+
+  const rawPrompt = 'Using gh issue view 123 to synthesise a plan.';
+  await planService.createPlanText({ prompt: rawPrompt, rawPrompt: true });
+
+  assert.equal(capturedCommands.length, 1);
+  const rawCommand = capturedCommands[0];
+  assert.ok(rawCommand.includes(rawPrompt));
+  assert.equal(rawCommand.includes('User Request:'), false);
+  assert.equal(rawCommand.includes('Respond with the Codex-ready prompt only.'), false);
+  const dangerousIndex = rawCommand.indexOf('--dangerously-bypass-approvals-and-sandbox');
+  assert.ok(dangerousIndex !== -1, 'raw prompts should execute in dangerous mode');
+  const promptIndex = rawCommand.indexOf(rawPrompt);
+  assert.ok(promptIndex !== -1 && dangerousIndex > promptIndex, 'dangerous flag must follow prompt');
+  assert.equal(rawCommand.includes('--skip-git-repo-check'), false);
+
+  const standardPrompt = 'Normalise plan output for refactor';
+  await planService.createPlanText({ prompt: standardPrompt });
+
+  assert.equal(capturedCommands.length, 2);
+  const wrappedCommand = capturedCommands[1];
+  assert.ok(wrappedCommand.includes('User Request:'));
+  assert.ok(wrappedCommand.includes(standardPrompt));
+  assert.equal(wrappedCommand.includes('--dangerously-bypass-approvals-and-sandbox'), false);
+  assert.ok(wrappedCommand.includes('--skip-git-repo-check'));
+});
