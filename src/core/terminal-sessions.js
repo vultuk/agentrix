@@ -4,11 +4,50 @@ import pty from 'node-pty';
 
 import { MAX_TERMINAL_BUFFER, TMUX_BIN } from '../config/constants.js';
 import { getWorktreePath } from './git.js';
-import { detectTmux, isTmuxAvailable, makeTmuxSessionName, tmuxHasSession } from './tmux.js';
+import {
+  detectTmux,
+  isTmuxAvailable,
+  makeTmuxSessionName,
+  tmuxHasSession,
+} from './tmux.js';
 import { emitSessionsUpdate } from './event-bus.js';
 
-const terminalSessions = new Map();
-const terminalSessionsById = new Map();
+const terminalSessions = new Map(); // Map<worktreeKey, Map<sessionId, Session>>
+const terminalSessionsById = new Map(); // Map<sessionId, Session>
+
+function getSessionBucket(key, create = false) {
+  let bucket = terminalSessions.get(key);
+  if (!bucket && create) {
+    bucket = new Map();
+    terminalSessions.set(key, bucket);
+  }
+  return bucket;
+}
+
+function addSession(session) {
+  const bucket = getSessionBucket(session.key, true);
+  bucket.set(session.id, session);
+  terminalSessionsById.set(session.id, session);
+}
+
+function removeSession(session) {
+  const bucket = terminalSessions.get(session.key);
+  if (bucket) {
+    bucket.delete(session.id);
+    if (bucket.size === 0) {
+      terminalSessions.delete(session.key);
+    }
+  }
+  terminalSessionsById.delete(session.id);
+}
+
+function listSessionsForKey(key) {
+  const bucket = terminalSessions.get(key);
+  if (!bucket) {
+    return [];
+  }
+  return Array.from(bucket.values());
+}
 
 function normaliseSessionInput(input) {
   if (typeof input === 'string') {
@@ -153,8 +192,7 @@ function handleSessionExit(session, code, signal, error) {
     }
   });
   session.watchers.clear();
-  terminalSessions.delete(session.key);
-  terminalSessionsById.delete(session.id);
+  removeSession(session);
   if (session.waiters) {
     session.waiters.forEach((resolve) => resolve());
     session.waiters = [];
@@ -204,11 +242,12 @@ async function terminateSession(session, options = {}) {
 }
 
 export async function disposeSessionByKey(key) {
-  const session = terminalSessions.get(key);
-  if (!session) {
+  const sessions = listSessionsForKey(key);
+  if (sessions.length === 0) {
     return;
   }
-  await terminateSession(session);
+  const tasks = sessions.map((session) => terminateSession(session).catch(() => {}));
+  await Promise.allSettled(tasks);
   emitSessionsUpdate(serialiseSessions(listActiveSessions()));
 }
 
@@ -216,18 +255,19 @@ export async function disposeSessionsForRepository(org, repo) {
   if (!org || !repo) {
     return;
   }
-  const tasks = [];
-  terminalSessions.forEach((session) => {
+  const targets = [];
+  terminalSessionsById.forEach((session) => {
     if (!session || session.closed) {
       return;
     }
     if (session.org === org && session.repo === repo) {
-      tasks.push(terminateSession(session).catch(() => {}));
+      targets.push(session);
     }
   });
-  if (tasks.length === 0) {
+  if (targets.length === 0) {
     return;
   }
+  const tasks = targets.map((session) => terminateSession(session).catch(() => {}));
   await Promise.allSettled(tasks);
   emitSessionsUpdate(serialiseSessions(listActiveSessions()));
 }
@@ -242,7 +282,11 @@ export async function disposeSessionById(sessionId) {
 }
 
 export async function disposeAllSessions() {
-  const closures = Array.from(terminalSessions.values()).map((session) =>
+  const activeSessions = Array.from(terminalSessionsById.values());
+  if (activeSessions.length === 0) {
+    return;
+  }
+  const closures = activeSessions.map((session) =>
     terminateSession(session, { signal: 'SIGTERM', forceAfter: 0 }).catch(() => {}),
   );
   await Promise.allSettled(closures);
@@ -256,7 +300,7 @@ export function getSessionById(sessionId) {
 }
 
 export function listActiveSessions() {
-  return Array.from(terminalSessions.values());
+  return Array.from(terminalSessionsById.values()).filter((session) => session && !session.closed);
 }
 
 export function addSocketWatcher(session, socket) {
@@ -267,19 +311,8 @@ export function addSocketWatcher(session, socket) {
   });
 }
 
-export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
-  const key = makeSessionKey(org, repo, branch);
-  let session = terminalSessions.get(key);
-  if (session && !session.closed) {
-    return { session, created: false };
-  }
-  if (session && session.closed) {
-    terminalSessions.delete(key);
-    terminalSessionsById.delete(session.id);
-  }
-
+async function spawnTerminalProcess({ workdir, org, repo, branch, useTmux }) {
   const { worktreePath } = await getWorktreePath(workdir, org, repo, branch);
-
   const shellCommand = process.env.SHELL || '/bin/bash';
   const args = determineShellArgs(shellCommand);
 
@@ -288,33 +321,37 @@ export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
   let tmuxSessionName = null;
   let tmuxSessionExists = false;
 
-  await detectTmux();
-  if (isTmuxAvailable()) {
-    tmuxSessionName = makeTmuxSessionName(org, repo, branch);
-    tmuxSessionExists = await tmuxHasSession(tmuxSessionName);
-    const tmuxArgs = tmuxSessionExists
-      ? ['attach-session', '-t', tmuxSessionName]
-      : ['new-session', '-s', tmuxSessionName, '-x', '120', '-y', '36'];
+  if (useTmux) {
+    await detectTmux();
+    if (isTmuxAvailable()) {
+      tmuxSessionName = makeTmuxSessionName(org, repo, branch);
+      tmuxSessionExists = await tmuxHasSession(tmuxSessionName);
+      const tmuxArgs = tmuxSessionExists
+        ? ['attach-session', '-t', tmuxSessionName]
+        : ['new-session', '-s', tmuxSessionName, '-x', '120', '-y', '36'];
 
-    if (!tmuxSessionExists) {
-      // Keep the tmux client attached so the PTY stays open on first launch.
-      tmuxArgs.push(shellCommand);
-      if (args.length > 0) {
-        tmuxArgs.push(...args);
+      if (!tmuxSessionExists) {
+        // Keep the tmux client attached so the PTY stays open on first launch.
+        tmuxArgs.push(shellCommand);
+        if (args.length > 0) {
+          tmuxArgs.push(...args);
+        }
       }
-    }
 
-    child = pty.spawn(process.env.TMUX || TMUX_BIN, tmuxArgs, {
-      cwd: worktreePath,
-      env: {
-        ...process.env,
-        TERM: process.env.TERM || 'xterm-256color',
-      },
-      cols: 120,
-      rows: 36,
-    });
-    usingTmux = true;
-  } else {
+      child = pty.spawn(process.env.TMUX || TMUX_BIN, tmuxArgs, {
+        cwd: worktreePath,
+        env: {
+          ...process.env,
+          TERM: process.env.TERM || 'xterm-256color',
+        },
+        cols: 120,
+        rows: 36,
+      });
+      usingTmux = true;
+    }
+  }
+
+  if (!child) {
     child = pty.spawn(shellCommand, args, {
       cwd: worktreePath,
       env: {
@@ -326,7 +363,22 @@ export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
     });
   }
 
-  session = {
+  return {
+    child,
+    usingTmux,
+    tmuxSessionName,
+    tmuxSessionExists,
+    worktreePath,
+  };
+}
+
+async function createTerminalSession(workdir, org, repo, branch, options = {}) {
+  const { useTmux = true, kind = 'interactive' } = options;
+  const key = makeSessionKey(org, repo, branch);
+  const { child, usingTmux, tmuxSessionName, tmuxSessionExists, worktreePath } =
+    await spawnTerminalProcess({ workdir, org, repo, branch, useTmux });
+
+  const session = {
     id: randomUUID(),
     key,
     org,
@@ -343,10 +395,10 @@ export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
     pendingInputs: [],
     ready: false,
     readyTimer: null,
+    kind,
   };
 
-  terminalSessions.set(key, session);
-  terminalSessionsById.set(session.id, session);
+  addSession(session);
 
   child.on('data', (chunk) => handleSessionOutput(session, chunk));
   child.on('exit', (code, signal) => handleSessionExit(session, code, signal));
@@ -358,4 +410,24 @@ export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
 
   const created = usingTmux ? !tmuxSessionExists : true;
   return { session, created };
+}
+
+export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
+  const key = makeSessionKey(org, repo, branch);
+  const bucket = getSessionBucket(key);
+  if (bucket) {
+    for (const session of bucket.values()) {
+      if (session && !session.closed) {
+        return { session, created: false };
+      }
+    }
+  }
+  return createTerminalSession(workdir, org, repo, branch, { useTmux: true, kind: 'interactive' });
+}
+
+export async function createIsolatedTerminalSession(workdir, org, repo, branch) {
+  return createTerminalSession(workdir, org, repo, branch, {
+    useTmux: false,
+    kind: 'automation',
+  });
 }

@@ -32,6 +32,10 @@ beforeEach(() => {
   lastPrompt = null;
 });
 
+async function waitForAutomationTask() {
+  await new Promise((resolve) => setTimeout(resolve, 20));
+}
+
 function createOverrides() {
   return {
     ensureRepositoryExists: async () => ({
@@ -118,6 +122,7 @@ test('defaults plan=true and routes prompt through plan service', async () => {
   });
 
   await handlers.launch(context);
+  await waitForAutomationTask();
 
   assert.equal(context.res.statusCode, 202);
   assert.equal(context.res.ended, true);
@@ -173,6 +178,7 @@ test('respects plan=false and bypasses plan service', async () => {
   });
 
   await handlers.launch(context);
+  await waitForAutomationTask();
 
   assert.equal(context.res.statusCode, 202);
   const payload = JSON.parse(context.res.body);

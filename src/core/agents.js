@@ -1,4 +1,4 @@
-import { getOrCreateTerminalSession, queueSessionInput } from './terminal-sessions.js';
+import { createIsolatedTerminalSession, queueSessionInput } from './terminal-sessions.js';
 import { runTmux } from './tmux.js';
 import { savePlanToWorktree } from './plan-storage.js';
 
@@ -61,7 +61,7 @@ export async function launchAgentProcess({ command, workdir, org, repo, branch, 
 
   const executable = command.trim();
   const promptValue = typeof prompt === 'string' ? prompt : '';
-  const { session, created } = await getOrCreateTerminalSession(workdir, org, repo, branch);
+  const { session, created } = await createIsolatedTerminalSession(workdir, org, repo, branch);
 
   if (session?.worktreePath) {
     try {
