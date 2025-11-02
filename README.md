@@ -167,6 +167,16 @@ launches therefore appear immediately inside the UI terminal. The effective prom
 passthrough) is exported to the session as `TERMINAL_WORKTREE_PROMPT` and appended to the initial
 agent command so automation invocations receive it straight away.
 
+### Task Persistence
+
+Automation launches and other background workflows publish task status updates that power
+`/api/tasks` and the UI dashboard. The backend persists this metadata to
+`<workdir>/.terminal-worktree/tasks.json` using atomic writes so that state survives process
+restarts. During bootstrap the saved snapshot is rehydrated; any task that was still `pending` or
+`running` is marked as `failed` with `error.reason` set to `process_restart`, allowing the UI to show
+that progress was interrupted. Completed tasks remain visible for 15 minutes before being pruned
+from both memory and disk.
+
 ### Plan Artifacts
 
 Automation runs (and prompt-driven worktree creation) persist Markdown plans inside each worktree

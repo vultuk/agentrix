@@ -38,6 +38,7 @@
     "terminal-worktree": "bin/terminal-worktree.js"
   },
   "scripts": {
+    "test": "node --test --test-concurrency=1",
     "start": "node bin/terminal-worktree.js",
     "dev": "node bin/terminal-worktree.js",
     "dev:ui": "node scripts/ensure-ui-deps.js && bun run --filter terminal-worktree-ui dev",

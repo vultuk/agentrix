@@ -1,5 +1,6 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { setImmediate as delayImmediate } from 'node:timers/promises';
 
 import {
   createAutomationHandlers,
@@ -31,6 +32,17 @@ beforeEach(() => {
   resetAutomationPlanMetrics();
   lastPrompt = null;
 });
+
+async function waitFor(conditionFn, timeoutMs = 500) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (conditionFn()) {
+      return;
+    }
+    await delayImmediate();
+  }
+  throw new Error('Timed out waiting for expected condition');
+}
 
 function createOverrides() {
   return {
@@ -118,6 +130,7 @@ test('defaults plan=true and routes prompt through plan service', async () => {
   });
 
   await handlers.launch(context);
+  await waitFor(() => lastPrompt === 'PLAN:Ship the feature');
 
   assert.equal(context.res.statusCode, 202);
   assert.equal(context.res.ended, true);
@@ -173,6 +186,7 @@ test('respects plan=false and bypasses plan service', async () => {
   });
 
   await handlers.launch(context);
+  await waitFor(() => lastPrompt === 'Just run it');
 
   assert.equal(context.res.statusCode, 202);
   const payload = JSON.parse(context.res.body);
