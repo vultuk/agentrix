@@ -86,13 +86,21 @@ export function createTaskStore({
       tasks: Array.isArray(tasks) ? tasks : [],
     };
     const payload = `${JSON.stringify(snapshot, null, 2)}\n`;
-    writeQueue = writeQueue.then(async () => {
+    const task = writeQueue.then(async () => {
       await writeAtomicJSON({ filePath, payload });
     });
-    return writeQueue.catch((error) => {
+    const placeholder = task.catch(() => {});
+    writeQueue = placeholder;
+    try {
+      await task;
+    } catch (error) {
       logger?.error?.('[terminal-worktree] Failed to persist tasks snapshot:', error);
       throw error;
-    });
+    } finally {
+      if (writeQueue === placeholder) {
+        writeQueue = Promise.resolve();
+      }
+    }
   }
 
   return {
