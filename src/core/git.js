@@ -246,7 +246,7 @@ async function runRepositoryInitCommand(repoRoot, worktreePath) {
   }
 
   if (!initCommand) {
-    return;
+    return { ran: false, command: '' };
   }
 
   const candidateShell = typeof process.env.SHELL === 'string' ? process.env.SHELL.trim() : '';
@@ -258,6 +258,7 @@ async function runRepositoryInitCommand(repoRoot, worktreePath) {
       maxBuffer: INIT_COMMAND_MAX_BUFFER,
       env: { ...process.env },
     });
+    return { ran: true, command: initCommand };
   } catch (error) {
     const stderr = error?.stderr ? error.stderr.toString() : '';
     const stdout = error?.stdout ? error.stdout.toString() : '';
@@ -267,6 +268,7 @@ async function runRepositoryInitCommand(repoRoot, worktreePath) {
 }
 
 export async function createWorktree(workdir, org, repo, branch, options = {}) {
+  const { defaultBranchOverride, progress } = options || {};
   const branchName = normaliseBranchName(branch);
   if (!branchName) {
     throw new Error('Branch name cannot be empty');
@@ -285,18 +287,59 @@ export async function createWorktree(workdir, org, repo, branch, options = {}) {
     }
   }
 
-  let worktreeAdded = false;
+  const describeError = (error, fallback = 'Unknown git error') => {
+    const stderr = error && error.stderr ? error.stderr.toString() : '';
+    const stdout = error && error.stdout ? error.stdout.toString() : '';
+    return (stderr || stdout || error?.message || fallback).trim();
+  };
+
+  progress?.ensureStep('sync-default-branch', 'Sync default branch');
+  progress?.ensureStep('create-worktree', 'Create worktree');
+  progress?.ensureStep('run-init-script', 'Run init script');
+
+  progress?.startStep('sync-default-branch', {
+    label: 'Sync default branch',
+    message: 'Preparing repository and syncing default branch.',
+  });
+
+  let defaultBranch = '';
   try {
-    const defaultBranch = await resolveDefaultBranch(repositoryPath, {
-      override: options.defaultBranchOverride,
+    defaultBranch = await resolveDefaultBranch(repositoryPath, {
+      override: defaultBranchOverride,
     });
+    if (defaultBranch) {
+      progress?.logStep('sync-default-branch', `Resolved default branch: ${defaultBranch}`);
+    }
     await execFileAsync('git', ['-C', repositoryPath, 'checkout', defaultBranch], {
       maxBuffer: 1024 * 1024,
     });
+    progress?.logStep(
+      'sync-default-branch',
+      `Checked out default branch ${defaultBranch}.`,
+    );
     await execFileAsync('git', ['-C', repositoryPath, 'pull', '--ff-only', 'origin', defaultBranch], {
       maxBuffer: 1024 * 1024,
     });
+    progress?.completeStep('sync-default-branch', {
+      label: 'Sync default branch',
+      message: `Default branch ${defaultBranch} is up to date.`,
+    });
+  } catch (error) {
+    const message = describeError(error);
+    progress?.failStep('sync-default-branch', {
+      label: 'Sync default branch',
+      message,
+    });
+    throw new Error(`Failed to create worktree: ${message}`);
+  }
 
+  progress?.startStep('create-worktree', {
+    label: 'Create worktree',
+    message: `Adding worktree at ${targetPath}`,
+  });
+
+  let worktreeAdded = false;
+  try {
     const exists = await branchExists(repositoryPath, branchName);
     const args = ['-C', repositoryPath, 'worktree', 'add'];
     if (!exists) {
@@ -308,8 +351,45 @@ export async function createWorktree(workdir, org, repo, branch, options = {}) {
     }
     await execFileAsync('git', args, { maxBuffer: 1024 * 1024 });
     worktreeAdded = true;
-    await runRepositoryInitCommand(repoRoot, targetPath);
+    progress?.completeStep('create-worktree', {
+      label: 'Create worktree',
+      message: exists
+        ? `Attached existing branch ${branchName} to ${targetPath}.`
+        : `Created new branch ${branchName} at ${targetPath}.`,
+    });
   } catch (error) {
+    const message = describeError(error);
+    progress?.failStep('create-worktree', {
+      label: 'Create worktree',
+      message,
+    });
+    throw new Error(`Failed to create worktree: ${message}`);
+  }
+
+  progress?.startStep('run-init-script', {
+    label: 'Run init script',
+    message: 'Checking for repository init command.',
+  });
+
+  try {
+    const initResult = await runRepositoryInitCommand(repoRoot, targetPath);
+    if (!initResult?.ran) {
+      progress?.skipStep('run-init-script', {
+        label: 'Run init script',
+        message: 'No init command configured for this repository.',
+      });
+    } else {
+      progress?.completeStep('run-init-script', {
+        label: 'Run init script',
+        message: 'Init command completed successfully.',
+      });
+    }
+  } catch (error) {
+    const message = describeError(error, 'Repository init command failed');
+    progress?.failStep('run-init-script', {
+      label: 'Run init script',
+      message,
+    });
     if (worktreeAdded) {
       try {
         await execFileAsync(
@@ -324,9 +404,7 @@ export async function createWorktree(workdir, org, repo, branch, options = {}) {
         );
       }
     }
-    const stderr = error && error.stderr ? error.stderr.toString() : '';
-    const message = stderr || error.message || 'Unknown git error';
-    throw new Error(`Failed to create worktree: ${message.trim()}`);
+    throw new Error(`Failed to create worktree: ${message}`);
   }
 }
 

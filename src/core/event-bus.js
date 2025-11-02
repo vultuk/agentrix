@@ -5,6 +5,7 @@ const eventBus = new EventEmitter();
 const EVENTS = Object.freeze({
   REPOS_UPDATE: 'repos:update',
   SESSIONS_UPDATE: 'sessions:update',
+  TASKS_UPDATE: 'tasks:update',
 });
 
 eventBus.setMaxListeners(50);
@@ -15,6 +16,10 @@ export function emitReposUpdate(payload) {
 
 export function emitSessionsUpdate(payload) {
   eventBus.emit(EVENTS.SESSIONS_UPDATE, payload);
+}
+
+export function emitTasksUpdate(payload) {
+  eventBus.emit(EVENTS.TASKS_UPDATE, payload);
 }
 
 export function subscribeToEvents(event, listener) {

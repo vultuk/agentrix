@@ -11,6 +11,7 @@ import { createConfigHandlers } from '../api/config.js';
 import { createPlanHandlers } from '../api/create-plan.js';
 import { createPlanArtifactHandlers } from '../api/plans.js';
 import { createEventStreamHandler } from './events.js';
+import { createTaskHandlers } from '../api/tasks.js';
 
 export function createRouter({
   authManager,
@@ -48,6 +49,7 @@ export function createRouter({
   const gitStatusHandlers = createGitStatusHandlers(workdir);
   const planArtifactHandlers = createPlanArtifactHandlers(workdir);
   const eventStreamHandler = createEventStreamHandler({ authManager, workdir });
+  const taskHandlers = createTaskHandlers();
 
   const routes = new Map([
     [
@@ -181,6 +183,13 @@ export function createRouter({
         handlers: { GET: eventStreamHandler },
       },
     ],
+    [
+      '/api/tasks',
+      {
+        requiresAuth: true,
+        handlers: { GET: taskHandlers.list, HEAD: taskHandlers.list },
+      },
+    ],
   ]);
 
   function handleMethodNotAllowed(res, allowedMethods = []) {
@@ -194,6 +203,33 @@ export function createRouter({
 
   return async function route(req, res) {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    if (url.pathname.startsWith('/api/tasks/')) {
+      if (!authManager.isAuthenticated(req)) {
+        sendJson(res, 401, { error: 'Authentication required' });
+        return true;
+      }
+      if (req.method && !['GET', 'HEAD'].includes(req.method.toUpperCase())) {
+        handleMethodNotAllowed(res, ['GET', 'HEAD']);
+        return true;
+      }
+      const taskId = url.pathname.slice('/api/tasks/'.length);
+      if (!taskId) {
+        sendJson(res, 404, { error: 'Task not found' });
+        return true;
+      }
+      const context = {
+        req,
+        res,
+        url,
+        method: req.method?.toUpperCase() || 'GET',
+        params: { id: taskId },
+        workdir,
+        readJsonBody: () => readJsonBody(req),
+      };
+      await taskHandlers.read(context, taskId);
+      return true;
+    }
+
     const route = routes.get(url.pathname);
     if (!route) {
       return false;
