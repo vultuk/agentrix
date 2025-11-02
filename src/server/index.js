@@ -13,6 +13,8 @@ import { createCookieManager } from './cookies.js';
 import { createAgentCommands } from '../config/agent-commands.js';
 import { createBranchNameGenerator } from '../core/branch-name.js';
 import { createPlanService } from '../core/plan.js';
+import { configureTaskPersistence, flushTaskPersistence } from '../core/tasks.js';
+import { createTaskStore } from '../core/task-store.js';
 
 export async function startServer({
   uiPath,
@@ -35,6 +37,12 @@ export async function startServer({
 
   const uiProvider = await createUiProvider(uiPath);
   const resolvedWorkdir = workdir ? await resolveWorkdir(workdir) : process.cwd();
+  const taskStore = createTaskStore({ root: resolvedWorkdir, logger: console });
+  await configureTaskPersistence({
+    loadSnapshot: () => taskStore.loadSnapshot(),
+    saveSnapshot: (snapshot) => taskStore.saveSnapshot(snapshot),
+    logger: console,
+  });
   const resolvedPassword =
     typeof password === 'string' && password.length > 0 ? password : generateRandomPassword();
   const authManager = createAuthManager(resolvedPassword);
@@ -156,6 +164,7 @@ export async function startServer({
     });
 
     const closeTasks = [
+      flushTaskPersistence(),
       disposeAllSessions(),
       closeWebSockets(),
       serverClose,
