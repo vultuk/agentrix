@@ -39,6 +39,22 @@ function parseJsonArray(payload, contextMessage) {
   throw createGithubError(contextMessage);
 }
 
+function parseJsonObject(payload, contextMessage) {
+  const text = typeof payload === 'string' ? payload.trim() : '';
+  if (!text) {
+    throw createGithubError(contextMessage);
+  }
+  try {
+    const data = JSON.parse(text);
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      return data;
+    }
+  } catch (error) {
+    throw createGithubError(contextMessage, error);
+  }
+  throw createGithubError(contextMessage);
+}
+
 async function runGh(args, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   try {
     const { stdout } = await execFileAsync('gh', args, {
@@ -157,10 +173,108 @@ export function createGithubClient({ timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
       .filter(Boolean);
   }
 
+  async function getIssue(org, repo, issueNumber) {
+    const { repoSlug } = normaliseRepo(org, repo);
+    const parsedNumber =
+      typeof issueNumber === 'number'
+        ? issueNumber
+        : Number.parseInt(typeof issueNumber === 'string' ? issueNumber.trim() : '', 10);
+
+    if (!Number.isInteger(parsedNumber) || parsedNumber <= 0) {
+      throw createGithubError('Issue number must be a positive integer');
+    }
+
+    const stdout = await runGh(
+      [
+        'issue',
+        'view',
+        String(parsedNumber),
+        '--repo',
+        repoSlug,
+        '--json',
+        'number,title,body,author,createdAt,updatedAt,labels,url,state',
+      ],
+      { timeoutMs },
+    );
+
+    const issue = parseJsonObject(stdout, 'Unexpected response when reading issue details');
+    const title = typeof issue?.title === 'string' ? issue.title : '';
+    const body = typeof issue?.body === 'string' ? issue.body : '';
+
+    const createdAtValue = typeof issue?.createdAt === 'string' ? issue.createdAt : null;
+    const updatedAtValue = typeof issue?.updatedAt === 'string' ? issue.updatedAt : null;
+
+    function normaliseDate(value) {
+      if (!value) {
+        return null;
+      }
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        return null;
+      }
+      return parsed.toISOString();
+    }
+
+    const authorData =
+      issue && typeof issue.author === 'object' && issue.author !== null ? issue.author : null;
+    let author = null;
+    if (authorData) {
+      const login = typeof authorData.login === 'string' && authorData.login ? authorData.login : null;
+      const name = typeof authorData.name === 'string' && authorData.name ? authorData.name : null;
+      const profileUrl =
+        typeof authorData.url === 'string' && authorData.url ? authorData.url : null;
+      const avatarUrl =
+        typeof authorData.avatarUrl === 'string' && authorData.avatarUrl ? authorData.avatarUrl : null;
+      if (login || name || profileUrl || avatarUrl) {
+        author = {
+          login,
+          name,
+          url: profileUrl,
+          avatarUrl,
+        };
+      }
+    }
+
+    const labels = Array.isArray(issue?.labels)
+      ? issue.labels
+          .map((label) => {
+            if (!label || typeof label.name !== 'string' || !label.name) {
+              return null;
+            }
+            const color = typeof label.color === 'string' && label.color ? label.color : null;
+            return { name: label.name, color };
+          })
+          .filter(Boolean)
+      : [];
+
+    const url =
+      typeof issue?.url === 'string' && issue.url
+        ? issue.url
+        : `https://github.com/${repoSlug}/issues/${parsedNumber}`;
+
+    const state =
+      typeof issue?.state === 'string' && issue.state
+        ? issue.state.toLowerCase()
+        : 'open';
+
+    return {
+      number: parsedNumber,
+      title,
+      body,
+      author,
+      createdAt: normaliseDate(createdAtValue),
+      updatedAt: normaliseDate(updatedAtValue),
+      labels,
+      url,
+      state,
+    };
+  }
+
   return {
     countOpenPullRequests,
     countOpenIssues,
     countRunningWorkflows,
     listOpenIssues,
+    getIssue,
   };
 }

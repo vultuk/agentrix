@@ -116,6 +116,99 @@
   border-top: 1px solid #27272a;
 }
 
+.issue-markdown {
+  font-family: inherit;
+  color: #e5e7eb;
+  line-height: 1.6;
+}
+
+.issue-markdown > * {
+  margin: 0;
+}
+
+.issue-markdown > * + * {
+  margin-top: 1rem;
+}
+
+.issue-markdown h1,
+.issue-markdown h2,
+.issue-markdown h3,
+.issue-markdown h4,
+.issue-markdown h5,
+.issue-markdown h6 {
+  color: #f4f4f5;
+  font-weight: 600;
+}
+
+.issue-markdown h1 {
+  font-size: 1.4rem;
+}
+
+.issue-markdown h2 {
+  font-size: 1.25rem;
+}
+
+.issue-markdown h3 {
+  font-size: 1.1rem;
+}
+
+.issue-markdown p,
+.issue-markdown li {
+  color: inherit;
+}
+
+.issue-markdown a {
+  color: #34d399;
+  text-decoration: none;
+}
+
+.issue-markdown a:hover {
+  text-decoration: underline;
+}
+
+.issue-markdown ul,
+.issue-markdown ol {
+  padding-left: 1.25rem;
+}
+
+.issue-markdown li + li {
+  margin-top: 0.35rem;
+}
+
+.issue-markdown blockquote {
+  border-left: 3px solid #52525b;
+  padding-left: 0.75rem;
+  color: #d1d5db;
+  font-style: italic;
+}
+
+.issue-markdown code {
+  background-color: rgba(82, 82, 91, 0.4);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.875em;
+  padding: 0.15rem 0.35rem;
+}
+
+.issue-markdown pre {
+  background-color: #111827;
+  border-radius: 10px;
+  padding: 0.75rem;
+  overflow-x: auto;
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.issue-markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.issue-markdown hr {
+  border: none;
+  border-top: 1px solid #27272a;
+}
+
 .diff-viewer {
   max-height: min(70vh, 800px);
   border: 1px solid rgba(63, 63, 70, 0.6);
