@@ -9,6 +9,8 @@ import {
 import { listActiveSessions, makeSessionKey } from '../core/terminal-sessions.js';
 import { sendJson } from '../utils/http.js';
 
+const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value);
+
 export function createSessionHandlers(workdir) {
   async function list(context) {
     if (context.method === 'HEAD') {
@@ -44,7 +46,10 @@ export function createSessionHandlers(workdir) {
         return;
       }
       existing.idle = existing.idle && idle;
-      if (lastActivityAtMs && (!existing.lastActivityAtMs || lastActivityAtMs > existing.lastActivityAtMs)) {
+      if (
+        isFiniteNumber(lastActivityAtMs) &&
+        (!isFiniteNumber(existing.lastActivityAtMs) || lastActivityAtMs > existing.lastActivityAtMs)
+      ) {
         existing.lastActivityAtMs = lastActivityAtMs;
       }
     });
@@ -108,7 +113,9 @@ export function createSessionHandlers(workdir) {
       repo: entry.repo,
       branch: entry.branch,
       idle: Boolean(entry.idle),
-      lastActivityAt: entry.lastActivityAtMs ? new Date(entry.lastActivityAtMs).toISOString() : null,
+      lastActivityAt: isFiniteNumber(entry.lastActivityAtMs)
+        ? new Date(entry.lastActivityAtMs).toISOString()
+        : null,
     }));
 
     sendJson(context.res, 200, { sessions });

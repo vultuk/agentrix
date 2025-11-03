@@ -412,6 +412,12 @@ async function spawnTerminalProcess({ workdir, org, repo, branch, useTmux }) {
     ...process.env,
     TERM: process.env.TERM || 'xterm-256color',
   };
+  if (baseEnv.TMUX) {
+    delete baseEnv.TMUX;
+  }
+  if (baseEnv.TMUX_PANE) {
+    delete baseEnv.TMUX_PANE;
+  }
 
   if (useTmux) {
     await detectTmux();
@@ -431,12 +437,6 @@ async function spawnTerminalProcess({ workdir, org, repo, branch, useTmux }) {
       }
 
       const tmuxEnv = { ...baseEnv };
-      if (tmuxEnv.TMUX) {
-        delete tmuxEnv.TMUX;
-      }
-      if (tmuxEnv.TMUX_PANE) {
-        delete tmuxEnv.TMUX_PANE;
-      }
 
       child = pty.spawn(TMUX_BIN, tmuxArgs, {
         cwd: worktreePath,

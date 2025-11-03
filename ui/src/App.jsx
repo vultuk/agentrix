@@ -134,6 +134,21 @@ const ACKNOWLEDGEMENT_ACTIVITY_TOLERANCE_MS = 1500;
 
 const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value);
 
+const parseActivityTimestamp = (value) => {
+  if (isFiniteNumber(value)) {
+    return value;
+  }
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isFinite(time) ? time : null;
+  }
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+};
+
 function normaliseIdleAcknowledgementEntry(value) {
   if (value && typeof value === 'object') {
     const acknowledgedAt = isFiniteNumber(value.acknowledgedAt) ? value.acknowledgedAt : Date.now();
@@ -168,11 +183,7 @@ function getMetadataLastActivityMs(metadata) {
   if (isFiniteNumber(metadata.lastActivityAtMs)) {
     return metadata.lastActivityAtMs;
   }
-  if (typeof metadata.lastActivityAt !== 'string') {
-    return null;
-  }
-  const parsed = Date.parse(metadata.lastActivityAt);
-  return Number.isNaN(parsed) ? null : parsed;
+  return parseActivityTimestamp(metadata.lastActivityAt);
 }
 
 function isIdleAcknowledgementCurrent(metadata, acknowledgement) {
@@ -1611,15 +1622,7 @@ function renderTaskStep(step, index) {
               }
               const key = `${org}::${repo}::${branch}`;
               const idle = Boolean(item.idle);
-              let lastActivityAtMs = null;
-              if (typeof item.lastActivityAt === 'number' && Number.isFinite(item.lastActivityAt)) {
-                lastActivityAtMs = item.lastActivityAt;
-              } else if (typeof item.lastActivityAt === 'string') {
-                const parsed = Date.parse(item.lastActivityAt);
-                if (!Number.isNaN(parsed)) {
-                  lastActivityAtMs = parsed;
-                }
-              }
+              const lastActivityAtMs = parseActivityTimestamp(item.lastActivityAt);
               const existing = aggregated.get(key);
               if (!existing) {
                 aggregated.set(key, {
@@ -1632,7 +1635,10 @@ function renderTaskStep(step, index) {
                 return;
               }
               existing.idle = existing.idle && idle;
-              if (lastActivityAtMs && (!existing.lastActivityAtMs || lastActivityAtMs > existing.lastActivityAtMs)) {
+              if (
+                isFiniteNumber(lastActivityAtMs) &&
+                (!isFiniteNumber(existing.lastActivityAtMs) || lastActivityAtMs > existing.lastActivityAtMs)
+              ) {
                 existing.lastActivityAtMs = lastActivityAtMs;
               }
             });
@@ -1649,7 +1655,7 @@ function renderTaskStep(step, index) {
               branch: value.branch,
               idle: value.idle,
               lastActivityAtMs,
-              lastActivityAt: lastActivityAtMs ? new Date(lastActivityAtMs).toISOString() : null,
+              lastActivityAt: isFiniteNumber(lastActivityAtMs) ? new Date(lastActivityAtMs).toISOString() : null,
             });
           });
 
@@ -1664,13 +1670,10 @@ function renderTaskStep(step, index) {
               return;
             }
             const entry = normaliseIdleAcknowledgementEntry(value);
-            const metadataLastActivityMs = getMetadataLastActivityMs(metadata);
-            if (
-              isFiniteNumber(metadataLastActivityMs) &&
-              metadataLastActivityMs > entry.acknowledgedAt + ACKNOWLEDGEMENT_ACTIVITY_TOLERANCE_MS
-            ) {
+            if (!isIdleAcknowledgementCurrent(metadata, entry)) {
               return;
             }
+            const metadataLastActivityMs = getMetadataLastActivityMs(metadata);
             if (isFiniteNumber(metadataLastActivityMs)) {
               entry.lastSeenActivityMs = metadataLastActivityMs;
             }
