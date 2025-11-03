@@ -251,9 +251,15 @@ async function runRepositoryInitCommand(repoRoot, worktreePath) {
 
   const candidateShell = typeof process.env.SHELL === 'string' ? process.env.SHELL.trim() : '';
   const shell = candidateShell || '/bin/sh';
+  const shellName = path.basename(shell);
+  const shellArgs = ['-l', '-c', initCommand];
+
+  if (['bash', 'zsh', 'fish'].includes(shellName)) {
+    shellArgs.splice(1, 0, '-i');
+  }
 
   try {
-    await execFileAsync(shell, ['-lc', initCommand], {
+    await execFileAsync(shell, shellArgs, {
       cwd: worktreePath,
       maxBuffer: INIT_COMMAND_MAX_BUFFER,
       env: { ...process.env },
