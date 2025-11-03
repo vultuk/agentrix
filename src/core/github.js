@@ -255,7 +255,7 @@ export function createGithubClient({ timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     const state =
       typeof issue?.state === 'string' && issue.state
         ? issue.state.toLowerCase()
-        : 'open';
+        : null;
 
     return {
       number: parsedNumber,

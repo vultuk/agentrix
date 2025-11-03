@@ -29,29 +29,29 @@ const SANITIZE_SCHEMA = {
     ...defaultSchema.attributes,
     code: [
       ...(defaultSchema?.attributes?.code || []),
-      ['className'],
+      'className',
     ],
     pre: [
       ...(defaultSchema?.attributes?.pre || []),
-      ['className'],
+      'className',
     ],
     span: [
       ...(defaultSchema?.attributes?.span || []),
-      ['className'],
+      'className',
     ],
     a: [
       ...(defaultSchema?.attributes?.a || []),
-      ['target'],
-      ['rel'],
+      'target',
+      'rel',
     ],
     img: [
       ...(defaultSchema?.attributes?.img || []),
-      ['alt'],
-      ['src'],
-      ['title'],
-      ['width'],
-      ['height'],
-      ['loading'],
+      'alt',
+      'src',
+      'title',
+      'width',
+      'height',
+      'loading',
     ],
   },
 };
@@ -390,7 +390,7 @@ function IssueSlideOver({
                                   {
                                     href: item.href,
                                     target: '_blank',
-                                    rel: 'noreferrer',
+                                    rel: 'noopener noreferrer',
                                     className:
                                       'mt-1 inline-flex items-center gap-1 text-neutral-200 underline-offset-4 transition hover:text-emerald-300 hover:underline',
                                   },
@@ -428,7 +428,7 @@ function IssueSlideOver({
                           ? `https://github.com/${repository.org}/${repository.repo}/issues/${issueNumber}`
                           : '#'),
                       target: '_blank',
-                      rel: 'noreferrer',
+                      rel: 'noopener noreferrer',
                       className:
                         'inline-flex items-center gap-1 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-1 text-xs font-medium text-neutral-200 transition hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-500',
                     },
@@ -452,7 +452,7 @@ function IssueSlideOver({
                                 ...rest,
                                 href,
                                 target: '_blank',
-                                rel: 'noreferrer',
+                                rel: 'noopener noreferrer',
                                 className:
                                   'text-emerald-300 underline-offset-4 transition hover:text-emerald-200 hover:underline',
                               },
