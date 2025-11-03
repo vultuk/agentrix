@@ -18,16 +18,35 @@ export function createSessionHandlers(workdir) {
       return;
     }
 
-    const sessions = [];
-    const seenKeys = new Set();
+    const sessionLookup = new Map();
 
     listActiveSessions().forEach((session) => {
-      const key = makeSessionKey(session.org, session.repo, session.branch);
-      if (seenKeys.has(key)) {
+      if (!session || !session.org || !session.repo || !session.branch) {
         return;
       }
-      sessions.push({ org: session.org, repo: session.repo, branch: session.branch });
-      seenKeys.add(key);
+      const key = makeSessionKey(session.org, session.repo, session.branch);
+      const lastActivityAtMs =
+        typeof session.lastActivityAt === 'number'
+          ? session.lastActivityAt
+          : session.lastActivityAt instanceof Date
+          ? session.lastActivityAt.getTime()
+          : null;
+      const idle = Boolean(session.idle);
+      const existing = sessionLookup.get(key);
+      if (!existing) {
+        sessionLookup.set(key, {
+          org: session.org,
+          repo: session.repo,
+          branch: session.branch,
+          idle,
+          lastActivityAtMs,
+        });
+        return;
+      }
+      existing.idle = existing.idle && idle;
+      if (lastActivityAtMs && (!existing.lastActivityAtMs || lastActivityAtMs > existing.lastActivityAtMs)) {
+        existing.lastActivityAtMs = lastActivityAtMs;
+      }
     });
 
     await detectTmux();
@@ -70,14 +89,27 @@ export function createSessionHandlers(workdir) {
             return;
           }
           const key = makeSessionKey(actual.org, actual.repo, actual.branch);
-          if (seenKeys.has(key)) {
+          if (sessionLookup.has(key)) {
             return;
           }
-          sessions.push({ org: actual.org, repo: actual.repo, branch: actual.branch });
-          seenKeys.add(key);
+          sessionLookup.set(key, {
+            org: actual.org,
+            repo: actual.repo,
+            branch: actual.branch,
+            idle: false,
+            lastActivityAtMs: null,
+          });
         });
       }
     }
+
+    const sessions = Array.from(sessionLookup.values()).map((entry) => ({
+      org: entry.org,
+      repo: entry.repo,
+      branch: entry.branch,
+      idle: Boolean(entry.idle),
+      lastActivityAt: entry.lastActivityAtMs ? new Date(entry.lastActivityAtMs).toISOString() : null,
+    }));
 
     sendJson(context.res, 200, { sessions });
   }

@@ -130,6 +130,66 @@ const TASK_STATUS_INDICATOR_CLASSES = Object.freeze({
 
 const ACTION_BUTTON_CLASS = 'inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors';
 
+const ACKNOWLEDGEMENT_ACTIVITY_TOLERANCE_MS = 1500;
+
+const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value);
+
+function normaliseIdleAcknowledgementEntry(value) {
+  if (value && typeof value === 'object') {
+    const acknowledgedAt = isFiniteNumber(value.acknowledgedAt) ? value.acknowledgedAt : Date.now();
+    const lastSeenActivityMs = isFiniteNumber(value.lastSeenActivityMs)
+      ? value.lastSeenActivityMs
+      : null;
+    if (
+      acknowledgedAt === value.acknowledgedAt &&
+      lastSeenActivityMs === value.lastSeenActivityMs
+    ) {
+      return value;
+    }
+    return { acknowledgedAt, lastSeenActivityMs };
+  }
+  if (isFiniteNumber(value)) {
+    return { acknowledgedAt: value, lastSeenActivityMs: null };
+  }
+  return { acknowledgedAt: Date.now(), lastSeenActivityMs: null };
+}
+
+function createIdleAcknowledgementEntry(lastActivityAtMs) {
+  return {
+    acknowledgedAt: Date.now(),
+    lastSeenActivityMs: isFiniteNumber(lastActivityAtMs) ? lastActivityAtMs : null,
+  };
+}
+
+function getMetadataLastActivityMs(metadata) {
+  if (!metadata) {
+    return null;
+  }
+  if (isFiniteNumber(metadata.lastActivityAtMs)) {
+    return metadata.lastActivityAtMs;
+  }
+  if (typeof metadata.lastActivityAt !== 'string') {
+    return null;
+  }
+  const parsed = Date.parse(metadata.lastActivityAt);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function isIdleAcknowledgementCurrent(metadata, acknowledgement) {
+  if (!acknowledgement) {
+    return false;
+  }
+  const entry = normaliseIdleAcknowledgementEntry(acknowledgement);
+  if (!isFiniteNumber(entry.acknowledgedAt)) {
+    return false;
+  }
+  const metadataLastActivityMs = getMetadataLastActivityMs(metadata);
+  if (!isFiniteNumber(metadataLastActivityMs)) {
+    return true;
+  }
+  return metadataLastActivityMs <= entry.acknowledgedAt + ACKNOWLEDGEMENT_ACTIVITY_TOLERANCE_MS;
+}
+
 function Modal({ title, onClose, children, size = 'md', position = 'center' }) {
         const content = Array.isArray(children) ? children : [children];
         const alignmentClass = position === 'top' ? 'items-start' : 'items-center';
@@ -1368,9 +1428,34 @@ function renderTaskStep(step, index) {
         const sessionMapRef = useRef(new Map());
         const sessionKeyByIdRef = useRef(new Map());
         const knownSessionsRef = useRef(new Set());
+        const sessionMetadataRef = useRef(new Map());
+        const [sessionMetadataSnapshot, setSessionMetadataSnapshot] = useState(() => new Map());
+        const idleAcknowledgementsRef = useRef(new Map());
+        const [idleAcknowledgementsSnapshot, setIdleAcknowledgementsSnapshot] = useState(() => new Map());
         const openTerminalForWorktreeRef = useRef(null);
         const getWorktreeKey = useCallback((org, repo, branch) => `${org}::${repo}::${branch}`, []);
         const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
+        const removeTrackedSession = useCallback(
+          (key) => {
+            if (!key) {
+              return;
+            }
+            knownSessionsRef.current.delete(key);
+            if (sessionMetadataRef.current.has(key)) {
+              const nextMetadata = new Map(sessionMetadataRef.current);
+              nextMetadata.delete(key);
+              sessionMetadataRef.current = nextMetadata;
+              setSessionMetadataSnapshot(new Map(nextMetadata));
+            }
+            if (idleAcknowledgementsRef.current.has(key)) {
+              const nextAcknowledgements = new Map(idleAcknowledgementsRef.current);
+              nextAcknowledgements.delete(key);
+              idleAcknowledgementsRef.current = nextAcknowledgements;
+              setIdleAcknowledgementsSnapshot(new Map(nextAcknowledgements));
+            }
+          },
+          [setIdleAcknowledgementsSnapshot, setSessionMetadataSnapshot],
+        );
 
         const gitSidebarKey = activeWorktree
           ? getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch)
@@ -1506,25 +1591,94 @@ function renderTaskStep(step, index) {
             if (!branches.includes(branchKey)) {
               sessionMapRef.current.delete(key);
               sessionKeyByIdRef.current.delete(session);
-              knownSessionsRef.current.delete(key);
+              removeTrackedSession(key);
             }
           });
-        }, [normaliseRepositoryPayload]);
+        }, [normaliseRepositoryPayload, removeTrackedSession]);
 
         const syncKnownSessions = useCallback((sessions) => {
-          const next = new Set();
+          const aggregated = new Map();
           if (Array.isArray(sessions)) {
             sessions.forEach((item) => {
               if (!item || typeof item !== 'object') {
                 return;
               }
-              const { org, repo, branch } = item;
-              if (org && repo && branch) {
-                next.add(`${org}::${repo}::${branch}`);
+              const org = typeof item.org === 'string' ? item.org : null;
+              const repo = typeof item.repo === 'string' ? item.repo : null;
+              const branch = typeof item.branch === 'string' ? item.branch : null;
+              if (!org || !repo || !branch) {
+                return;
+              }
+              const key = `${org}::${repo}::${branch}`;
+              const idle = Boolean(item.idle);
+              let lastActivityAtMs = null;
+              if (typeof item.lastActivityAt === 'number' && Number.isFinite(item.lastActivityAt)) {
+                lastActivityAtMs = item.lastActivityAt;
+              } else if (typeof item.lastActivityAt === 'string') {
+                const parsed = Date.parse(item.lastActivityAt);
+                if (!Number.isNaN(parsed)) {
+                  lastActivityAtMs = parsed;
+                }
+              }
+              const existing = aggregated.get(key);
+              if (!existing) {
+                aggregated.set(key, {
+                  org,
+                  repo,
+                  branch,
+                  idle,
+                  lastActivityAtMs,
+                });
+                return;
+              }
+              existing.idle = existing.idle && idle;
+              if (lastActivityAtMs && (!existing.lastActivityAtMs || lastActivityAtMs > existing.lastActivityAtMs)) {
+                existing.lastActivityAtMs = lastActivityAtMs;
               }
             });
           }
-          knownSessionsRef.current = next;
+
+          const nextKnownSessions = new Set();
+          const nextMetadata = new Map();
+          aggregated.forEach((value, key) => {
+            const lastActivityAtMs = isFiniteNumber(value.lastActivityAtMs) ? value.lastActivityAtMs : null;
+            nextKnownSessions.add(key);
+            nextMetadata.set(key, {
+              org: value.org,
+              repo: value.repo,
+              branch: value.branch,
+              idle: value.idle,
+              lastActivityAtMs,
+              lastActivityAt: lastActivityAtMs ? new Date(lastActivityAtMs).toISOString() : null,
+            });
+          });
+
+          knownSessionsRef.current = nextKnownSessions;
+          sessionMetadataRef.current = nextMetadata;
+          setSessionMetadataSnapshot(new Map(nextMetadata));
+
+          const nextAcknowledgements = new Map();
+          idleAcknowledgementsRef.current.forEach((value, key) => {
+            const metadata = nextMetadata.get(key);
+            if (!metadata) {
+              return;
+            }
+            const entry = normaliseIdleAcknowledgementEntry(value);
+            const metadataLastActivityMs = getMetadataLastActivityMs(metadata);
+            if (
+              isFiniteNumber(metadataLastActivityMs) &&
+              metadataLastActivityMs > entry.acknowledgedAt + ACKNOWLEDGEMENT_ACTIVITY_TOLERANCE_MS
+            ) {
+              return;
+            }
+            if (isFiniteNumber(metadataLastActivityMs)) {
+              entry.lastSeenActivityMs = metadataLastActivityMs;
+            }
+            nextAcknowledgements.set(key, entry);
+          });
+
+          idleAcknowledgementsRef.current = nextAcknowledgements;
+          setIdleAcknowledgementsSnapshot(new Map(nextAcknowledgements));
         }, []);
 
         const processPendingTask = useCallback(
@@ -2026,7 +2180,7 @@ function renderTaskStep(step, index) {
             window.removeEventListener('resize', handler);
             window.removeEventListener('orientationchange', handler);
           };
-        }, [sendResize]);
+        }, [removeTrackedSession, sendResize]);
 
         useEffect(() => {
           if (!terminalContainerRef.current) {
@@ -2183,9 +2337,9 @@ function renderTaskStep(step, index) {
               setTerminalStatus('closed');
               const key = sessionKeyByIdRef.current.get(newSessionId);
               if (key) {
-                knownSessionsRef.current.delete(key);
                 sessionMapRef.current.delete(key);
                 sessionKeyByIdRef.current.delete(newSessionId);
+                removeTrackedSession(key);
               }
             } else if (payload.type === 'init') {
               if (!initSuppressedRef.current && payload.log && terminalRef.current) {
@@ -2201,9 +2355,9 @@ function renderTaskStep(step, index) {
               setTerminalStatus('error');
               const key = sessionKeyByIdRef.current.get(newSessionId);
               if (key) {
-                knownSessionsRef.current.delete(key);
                 sessionMapRef.current.delete(key);
                 sessionKeyByIdRef.current.delete(newSessionId);
+                removeTrackedSession(key);
               }
             }
           });
@@ -2518,7 +2672,7 @@ function renderTaskStep(step, index) {
               if (orgKey === org && repoKey === repo) {
                 sessionMapRef.current.delete(key);
                 sessionKeyByIdRef.current.delete(session);
-                knownSessionsRef.current.delete(key);
+                removeTrackedSession(key);
               }
             });
             setActiveWorktree(current => {
@@ -2709,7 +2863,7 @@ function renderTaskStep(step, index) {
               sessionMapRef.current.delete(key);
               sessionKeyByIdRef.current.delete(session);
             }
-            knownSessionsRef.current.delete(key);
+            removeTrackedSession(key);
             if (
               activeWorktree &&
               activeWorktree.org === org &&
@@ -2766,10 +2920,36 @@ function renderTaskStep(step, index) {
             }
             if (sessionMapRef.current.has(key) || knownSessionsRef.current.has(key)) {
               setActiveWorktree(worktree);
+              let acknowledgementSet = false;
+              let previousAcknowledgement;
+              const metadata = sessionMetadataRef.current.get(key);
+              if (metadata && metadata.idle) {
+                previousAcknowledgement = idleAcknowledgementsRef.current.has(key)
+                  ? idleAcknowledgementsRef.current.get(key)
+                  : undefined;
+                const nextAcknowledgements = new Map(idleAcknowledgementsRef.current);
+                nextAcknowledgements.set(
+                  key,
+                  createIdleAcknowledgementEntry(getMetadataLastActivityMs(metadata)),
+                );
+                idleAcknowledgementsRef.current = nextAcknowledgements;
+                setIdleAcknowledgementsSnapshot(new Map(nextAcknowledgements));
+                acknowledgementSet = true;
+              }
               try {
                 await openTerminalForWorktree(worktree);
                 setPendingWorktreeAction(null);
               } catch (error) {
+                if (acknowledgementSet) {
+                  const revertAcknowledgements = new Map(idleAcknowledgementsRef.current);
+                  if (previousAcknowledgement === undefined) {
+                    revertAcknowledgements.delete(key);
+                  } else {
+                    revertAcknowledgements.set(key, previousAcknowledgement);
+                  }
+                  idleAcknowledgementsRef.current = revertAcknowledgements;
+                  setIdleAcknowledgementsSnapshot(new Map(revertAcknowledgements));
+                }
                 if (error && error.message === 'AUTH_REQUIRED') {
                   return;
                 }
@@ -3168,12 +3348,26 @@ function renderTaskStep(step, index) {
                               activeRepoDashboard.org === org &&
                               activeRepoDashboard.repo === repo;
                             const isActive = Boolean(isActiveWorktree || isDashboardActive);
+                            const worktreeKey = `${org}::${repo}::${branch}`;
+                            const metadata = sessionMetadataSnapshot.get(worktreeKey);
+                            const isIdle = Boolean(metadata?.idle);
+                            const acknowledgementEntry = idleAcknowledgementsSnapshot.get(worktreeKey);
+                            const isAcknowledged = isIdleAcknowledgementCurrent(
+                              metadata,
+                              acknowledgementEntry,
+                            );
+                            const shouldHighlightIdle =
+                              branch !== 'main' && isIdle && !isAcknowledged && !isActive;
 
                             let rowClasses =
                               'text-neutral-500 hover:bg-neutral-800/70 hover:text-neutral-100';
                             if (branch === 'main') {
                               rowClasses =
                                 'text-neutral-400 hover:bg-neutral-800/70 hover:text-neutral-100';
+                            }
+                            if (shouldHighlightIdle) {
+                              rowClasses =
+                                'text-emerald-400 hover:bg-neutral-800/70 hover:text-emerald-200';
                             }
                             if (isActive) {
                               rowClasses = 'bg-neutral-800 text-neutral-100';
