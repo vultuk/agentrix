@@ -15,13 +15,23 @@ async function sendInitialSnapshots(res, workdir) {
   const [reposSnapshot, sessionsSnapshot, tasksSnapshot] = await Promise.all([
     discoverRepositories(workdir).catch(() => ({})),
     Promise.resolve(listActiveSessions()).then((sessions) =>
-      sessions.map((session) => ({
-        id: session.id,
-        org: session.org,
-        repo: session.repo,
-        branch: session.branch,
-        usingTmux: session.usingTmux,
-      })),
+      sessions.map((session) => {
+        const lastActivityAtMs =
+          typeof session.lastActivityAt === 'number'
+            ? session.lastActivityAt
+            : session.lastActivityAt instanceof Date
+            ? session.lastActivityAt.getTime()
+            : null;
+        return {
+          id: session.id,
+          org: session.org,
+          repo: session.repo,
+          branch: session.branch,
+          usingTmux: session.usingTmux,
+          idle: Boolean(session.idle),
+          lastActivityAt: lastActivityAtMs ? new Date(lastActivityAtMs).toISOString() : null,
+        };
+      }),
     ),
     Promise.resolve(listTasks()).catch(() => []),
   ]);

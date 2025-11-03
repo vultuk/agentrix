@@ -12,8 +12,29 @@ import {
 } from './tmux.js';
 import { emitSessionsUpdate } from './event-bus.js';
 
+const IDLE_TIMEOUT_MS = 90 * 1000;
+const IDLE_SWEEP_INTERVAL_MS = 5 * 1000;
+
 const terminalSessions = new Map(); // Map<worktreeKey, Map<sessionId, Session>>
 const terminalSessionsById = new Map(); // Map<sessionId, Session>
+let idleMonitorTimer = null;
+
+function ensureIdleMonitor() {
+  if (idleMonitorTimer) {
+    return;
+  }
+  idleMonitorTimer = setInterval(runIdleSweep, IDLE_SWEEP_INTERVAL_MS);
+}
+
+function stopIdleMonitorIfInactive() {
+  if (!idleMonitorTimer) {
+    return;
+  }
+  if (terminalSessionsById.size === 0) {
+    clearInterval(idleMonitorTimer);
+    idleMonitorTimer = null;
+  }
+}
 
 function getSessionBucket(key, create = false) {
   let bucket = terminalSessions.get(key);
@@ -28,6 +49,7 @@ function addSession(session) {
   const bucket = getSessionBucket(session.key, true);
   bucket.set(session.id, session);
   terminalSessionsById.set(session.id, session);
+  ensureIdleMonitor();
 }
 
 function removeSession(session) {
@@ -39,6 +61,7 @@ function removeSession(session) {
     }
   }
   terminalSessionsById.delete(session.id);
+  stopIdleMonitorIfInactive();
 }
 
 function listSessionsForKey(key) {
@@ -77,6 +100,19 @@ function flushPendingInputs(session) {
   });
 }
 
+function noteSessionActivity(session) {
+  if (!session || session.closed) {
+    return false;
+  }
+  const now = Date.now();
+  session.lastActivityAt = now;
+  if (session.idle) {
+    session.idle = false;
+    return true;
+  }
+  return false;
+}
+
 function markSessionReady(session) {
   if (!session || session.ready) {
     return;
@@ -100,15 +136,19 @@ export function queueSessionInput(session, input) {
   if (!value) {
     return;
   }
+  const becameActive = noteSessionActivity(session);
   if (session.ready) {
     try {
       session.process.write(value);
     } catch {
       // ignore write errors
     }
-    return;
+  } else {
+    session.pendingInputs.push(value);
   }
-  session.pendingInputs.push(value);
+  if (becameActive) {
+    emitSessionsUpdate(serialiseSessions(listActiveSessions()));
+  }
 }
 
 function trimLogBuffer(log) {
@@ -147,19 +187,66 @@ function broadcast(session, event, payload) {
 
 function handleSessionOutput(session, chunk) {
   markSessionReady(session);
+  const becameActive = noteSessionActivity(session);
   const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
   session.log = trimLogBuffer((session.log || '') + text);
   broadcast(session, 'output', { chunk: text });
+  if (becameActive) {
+    emitSessionsUpdate(serialiseSessions(listActiveSessions()));
+  }
 }
 
 function serialiseSessions(sessions) {
-  return sessions.map((session) => ({
-    id: session.id,
-    org: session.org,
-    repo: session.repo,
-    branch: session.branch,
-    usingTmux: session.usingTmux,
-  }));
+  return sessions.map((session) => {
+    const lastActivityAtMs =
+      typeof session.lastActivityAt === 'number'
+        ? session.lastActivityAt
+        : session.lastActivityAt instanceof Date
+        ? session.lastActivityAt.getTime()
+        : null;
+    return {
+      id: session.id,
+      org: session.org,
+      repo: session.repo,
+      branch: session.branch,
+      usingTmux: session.usingTmux,
+      idle: Boolean(session.idle),
+      lastActivityAt: lastActivityAtMs ? new Date(lastActivityAtMs).toISOString() : null,
+    };
+  });
+}
+
+function runIdleSweep() {
+  if (terminalSessionsById.size === 0) {
+    stopIdleMonitorIfInactive();
+    return;
+  }
+  const now = Date.now();
+  let changed = false;
+
+  terminalSessionsById.forEach((session) => {
+    if (!session || session.closed) {
+      return;
+    }
+    const last =
+      typeof session.lastActivityAt === 'number'
+        ? session.lastActivityAt
+        : session.lastActivityAt instanceof Date
+        ? session.lastActivityAt.getTime()
+        : null;
+    if (!last) {
+      session.lastActivityAt = now;
+      return;
+    }
+    if (!session.idle && now - last >= IDLE_TIMEOUT_MS) {
+      session.idle = true;
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    emitSessionsUpdate(serialiseSessions(listActiveSessions()));
+  }
 }
 
 function handleSessionExit(session, code, signal, error) {
@@ -292,6 +379,7 @@ export async function disposeAllSessions() {
   await Promise.allSettled(closures);
   terminalSessions.clear();
   terminalSessionsById.clear();
+  stopIdleMonitorIfInactive();
   emitSessionsUpdate([]);
 }
 
@@ -320,6 +408,16 @@ async function spawnTerminalProcess({ workdir, org, repo, branch, useTmux }) {
   let usingTmux = false;
   let tmuxSessionName = null;
   let tmuxSessionExists = false;
+  const baseEnv = {
+    ...process.env,
+    TERM: process.env.TERM || 'xterm-256color',
+  };
+  if (baseEnv.TMUX) {
+    delete baseEnv.TMUX;
+  }
+  if (baseEnv.TMUX_PANE) {
+    delete baseEnv.TMUX_PANE;
+  }
 
   if (useTmux) {
     await detectTmux();
@@ -338,12 +436,11 @@ async function spawnTerminalProcess({ workdir, org, repo, branch, useTmux }) {
         }
       }
 
-      child = pty.spawn(process.env.TMUX || TMUX_BIN, tmuxArgs, {
+      const tmuxEnv = { ...baseEnv };
+
+      child = pty.spawn(TMUX_BIN, tmuxArgs, {
         cwd: worktreePath,
-        env: {
-          ...process.env,
-          TERM: process.env.TERM || 'xterm-256color',
-        },
+        env: tmuxEnv,
         cols: 120,
         rows: 36,
       });
@@ -354,10 +451,7 @@ async function spawnTerminalProcess({ workdir, org, repo, branch, useTmux }) {
   if (!child) {
     child = pty.spawn(shellCommand, args, {
       cwd: worktreePath,
-      env: {
-        ...process.env,
-        TERM: process.env.TERM || 'xterm-256color',
-      },
+      env: baseEnv,
       cols: 120,
       rows: 36,
     });
@@ -396,6 +490,8 @@ async function createTerminalSession(workdir, org, repo, branch, options = {}) {
     ready: false,
     readyTimer: null,
     kind,
+    lastActivityAt: Date.now(),
+    idle: false,
   };
 
   addSession(session);
@@ -415,12 +511,16 @@ async function createTerminalSession(workdir, org, repo, branch, options = {}) {
 export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
   const key = makeSessionKey(org, repo, branch);
   const bucket = getSessionBucket(key);
+  let automationCandidate = null;
   if (bucket) {
     for (const session of bucket.values()) {
       if (!session || session.closed) {
         continue;
       }
       if (session.kind && session.kind !== 'interactive') {
+        if (!automationCandidate && session.kind === 'automation') {
+          automationCandidate = session;
+        }
         continue;
       }
       if (!session.kind && !session.usingTmux) {
@@ -433,6 +533,9 @@ export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
         return { session, created: false };
       }
     }
+  }
+  if (automationCandidate) {
+    return { session: automationCandidate, created: false };
   }
   return createTerminalSession(workdir, org, repo, branch, { useTmux: true, kind: 'interactive' });
 }
