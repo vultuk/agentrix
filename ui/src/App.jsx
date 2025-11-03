@@ -3544,17 +3544,31 @@ function renderTaskStep(step, index) {
               { className: 'flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
               h(
                 'div',
-                null,
+                { className: 'min-w-0' },
                 h(
                   'div',
-                  { className: 'text-xs text-neutral-500' },
+                  {
+                    className: 'text-xs text-neutral-500 truncate',
+                    title: `${activeWorktree.org}/${activeWorktree.repo}`,
+                  },
                   `${activeWorktree.org}/${activeWorktree.repo}`,
                 ),
-                h('div', { className: 'text-sm text-neutral-300 flex items-center gap-2' }, h('span', null, activeWorktree.branch)),
+                h(
+                  'div',
+                  { className: 'text-sm text-neutral-300 flex items-center gap-2 min-w-0' },
+                  h(
+                    'span',
+                    {
+                      className: 'block truncate',
+                      title: activeWorktree.branch,
+                    },
+                    activeWorktree.branch,
+                  ),
+                ),
               ),
               h(
                 'div',
-                { className: 'flex items-center gap-2' },
+                { className: 'flex items-center gap-2 flex-shrink-0' },
                 githubControls,
                 taskMenuButton,
                 planHistoryButton,
