@@ -2,6 +2,7 @@ import { createAuthHandlers } from '../api/auth.js';
 import { createAutomationHandlers } from '../api/automation.js';
 import { createRepoHandlers } from '../api/repos.js';
 import { createRepoDashboardHandlers } from '../api/repo-dashboard.js';
+import { createRepoIssueHandlers } from '../api/repo-issue.js';
 import { createSessionHandlers } from '../api/sessions.js';
 import { createTerminalHandlers } from '../api/terminal.js';
 import { createWorktreeHandlers } from '../api/worktrees.js';
@@ -41,6 +42,7 @@ export function createRouter({
   });
   const repoHandlers = createRepoHandlers(workdir);
   const repoDashboardHandlers = createRepoDashboardHandlers(workdir);
+  const repoIssueHandlers = createRepoIssueHandlers(workdir);
   const sessionHandlers = createSessionHandlers(workdir);
   const worktreeHandlers = createWorktreeHandlers(workdir, branchNameGenerator, defaultBranches);
   const terminalHandlers = createTerminalHandlers(workdir);
@@ -97,6 +99,13 @@ export function createRouter({
       {
         requiresAuth: true,
         handlers: { GET: repoDashboardHandlers.read, HEAD: repoDashboardHandlers.read },
+      },
+    ],
+    [
+      '/api/repos/issue',
+      {
+        requiresAuth: true,
+        handlers: { GET: repoIssueHandlers.read, HEAD: repoIssueHandlers.read },
       },
     ],
     [
