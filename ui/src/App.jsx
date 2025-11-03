@@ -635,6 +635,9 @@ function renderTaskStep(step, index) {
         const pendingLaunchesRef = useRef(new Map());
         const taskMenuRef = useRef(null);
         const mobileMenuButtonRef = useRef(null);
+        const registerMobileMenuButton = useCallback((node) => {
+          mobileMenuButtonRef.current = node;
+        }, []);
         const hasRunningTasks = useMemo(
           () => tasks.some((task) => task && (task.status === 'pending' || task.status === 'running')),
           [tasks],
@@ -820,7 +823,7 @@ function renderTaskStep(step, index) {
           if (mobileMenuButtonRef.current) {
             mobileMenuButtonRef.current.focus();
           }
-        }, [mobileMenuButtonRef, setIsMobileMenuOpen]);
+        }, [setIsMobileMenuOpen]);
 
         useEffect(() => {
           if (!isMobileMenuOpen) {
@@ -3560,7 +3563,7 @@ function renderTaskStep(step, index) {
                   'button',
                   {
                     type: 'button',
-                    ref: mobileMenuButtonRef,
+                    ref: registerMobileMenuButton,
                     onClick: () => setIsMobileMenuOpen(true),
                     className:
                       'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]',
@@ -3632,7 +3635,7 @@ function renderTaskStep(step, index) {
                   'button',
                   {
                     type: 'button',
-                    ref: mobileMenuButtonRef,
+                    ref: registerMobileMenuButton,
                     onClick: () => setIsMobileMenuOpen(true),
                     className:
                       'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]',
@@ -3669,7 +3672,7 @@ function renderTaskStep(step, index) {
                 'button',
                 {
                   type: 'button',
-                  ref: mobileMenuButtonRef,
+                  ref: registerMobileMenuButton,
                   onClick: () => setIsMobileMenuOpen(true),
                   className:
                     'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]',
