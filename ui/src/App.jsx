@@ -3561,7 +3561,6 @@ function renderTaskStep(step, index) {
                     {
                       className: 'block truncate',
                       title: activeWorktree.branch,
-                      'aria-label': activeWorktree.branch,
                     },
                     activeWorktree.branch,
                   ),
