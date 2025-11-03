@@ -104,7 +104,8 @@ export default function RepositoryDashboard({
     h(
       'div',
       {
-        className: 'grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 content-start',
+        className:
+          'grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-4 lg:grid-cols-4 content-start',
       },
       metrics.map((metric) =>
         h(
