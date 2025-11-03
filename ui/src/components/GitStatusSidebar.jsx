@@ -207,8 +207,11 @@ export default function GitStatusSidebar({
   const [loadState, setLoadState] = useState('idle');
   const [error, setError] = useState(null);
   const [sections, setSections] = useState(DEFAULT_SECTION_VISIBILITY);
-  const [viewportWidth, setViewportWidth] = useState(() => (typeof window === 'undefined' ? null : window.innerWidth));
+  const [viewportWidth, setViewportWidth] = useState(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredSidebarWidth());
+  const persistedSidebarWidthRef = useRef(
+    Number.isFinite(sidebarWidth) ? Math.round(sidebarWidth) : null,
+  );
   const abortRef = useRef(null);
   const initialisedRef = useRef(false);
   const worktreeKey = worktree ? `${worktree.org}/${worktree.repo}:${worktree.branch}` : null;
@@ -228,30 +231,40 @@ export default function GitStatusSidebar({
     if (typeof window === 'undefined') {
       return;
     }
-    const handleResize = () => {
+    const updateViewportWidth = () => {
       setViewportWidth(window.innerWidth);
     };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    updateViewportWidth();
+    window.addEventListener('resize', updateViewportWidth);
+    return () => window.removeEventListener('resize', updateViewportWidth);
   }, []);
 
-  useEffect(() => {
-    setSidebarWidth((current) => clampWidth(current, minSidebarWidth, maxSidebarWidth));
-  }, [minSidebarWidth, maxSidebarWidth]);
-
-  useEffect(() => {
-    if (!isOpen || typeof window === 'undefined') {
+  const persistSidebarWidth = useCallback((value) => {
+    if (typeof window === 'undefined') {
       return;
     }
-    if (!Number.isFinite(sidebarWidth) || sidebarWidth <= 0) {
+    if (!Number.isFinite(value) || value <= 0) {
+      return;
+    }
+    const rounded = Math.round(value);
+    if (persistedSidebarWidthRef.current === rounded) {
       return;
     }
     try {
-      window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(Math.round(sidebarWidth)));
+      window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(rounded));
+      persistedSidebarWidthRef.current = rounded;
     } catch {
       // Ignore persistence failures (e.g. storage quota, private mode)
     }
-  }, [isOpen, sidebarWidth]);
+  }, []);
+
+  useEffect(() => {
+    const clamped = clampWidth(sidebarWidth, minSidebarWidth, maxSidebarWidth);
+    if (clamped !== sidebarWidth) {
+      setSidebarWidth(clamped);
+      persistSidebarWidth(clamped);
+    }
+  }, [minSidebarWidth, maxSidebarWidth, sidebarWidth, persistSidebarWidth]);
 
   useEffect(() => {
     initialisedRef.current = false;
@@ -445,8 +458,8 @@ export default function GitStatusSidebar({
     [onOpenDiff],
   );
 
-  const handleResize = useCallback(
-    (_event, _direction, elementRef) => {
+  const applyWidthFromElement = useCallback(
+    (elementRef, { persist = false } = {}) => {
       if (!elementRef) {
         return;
       }
@@ -461,8 +474,25 @@ export default function GitStatusSidebar({
         }
         return current;
       });
+      if (persist) {
+        persistSidebarWidth(nextWidth);
+      }
     },
-    [maxSidebarWidth, minSidebarWidth],
+    [maxSidebarWidth, minSidebarWidth, persistSidebarWidth],
+  );
+
+  const handleResize = useCallback(
+    (_event, _direction, elementRef) => {
+      applyWidthFromElement(elementRef);
+    },
+    [applyWidthFromElement],
+  );
+
+  const handleResizeStop = useCallback(
+    (_event, _direction, elementRef) => {
+      applyWidthFromElement(elementRef, { persist: true });
+    },
+    [applyWidthFromElement],
   );
 
   const desktopWidth = isOpen ? sidebarWidth : 0;
@@ -483,7 +513,7 @@ export default function GitStatusSidebar({
         left: isOpen,
       }}
       onResize={handleResize}
-      onResizeStop={handleResize}
+      onResizeStop={handleResizeStop}
       handleStyles={{
         left: {
           width: '12px',
