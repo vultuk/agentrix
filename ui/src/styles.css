@@ -127,6 +127,7 @@
 
 @media (min-height: 1024px) {
   .diff-viewer {
+    /* Leave space for modal header, action bar, and outer padding */
     max-height: min(90vh, calc(100vh - 160px));
   }
 }
