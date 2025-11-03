@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { Resizable } from 're-resizable';
 import {
   ChevronDown,
   RefreshCcw,
@@ -22,6 +23,38 @@ const DEFAULT_SECTION_VISIBILITY = Object.freeze({
   untracked: false,
   commits: false,
 });
+
+const SIDEBAR_WIDTH_STORAGE_KEY = 'terminal-worktree:git-sidebar-width';
+const DEFAULT_DESKTOP_WIDTH = 360;
+const MIN_DESKTOP_WIDTH = 320;
+const MAX_DESKTOP_WIDTH = 720;
+const MIN_TERMINAL_WIDTH = 500;
+
+function clampWidth(value, min = MIN_DESKTOP_WIDTH, max = MAX_DESKTOP_WIDTH) {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+  return Math.min(Math.max(value, min), max);
+}
+
+function readStoredSidebarWidth() {
+  if (typeof window === 'undefined') {
+    return DEFAULT_DESKTOP_WIDTH;
+  }
+  try {
+    const raw = window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_DESKTOP_WIDTH;
+    }
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) {
+      return DEFAULT_DESKTOP_WIDTH;
+    }
+    return clampWidth(parsed);
+  } catch {
+    return DEFAULT_DESKTOP_WIDTH;
+  }
+}
 
 function formatCount(value) {
   if (!Number.isFinite(value)) {
@@ -174,9 +207,64 @@ export default function GitStatusSidebar({
   const [loadState, setLoadState] = useState('idle');
   const [error, setError] = useState(null);
   const [sections, setSections] = useState(DEFAULT_SECTION_VISIBILITY);
+  const [viewportWidth, setViewportWidth] = useState(null);
+  const [sidebarWidth, setSidebarWidth] = useState(() => readStoredSidebarWidth());
+  const persistedSidebarWidthRef = useRef(
+    Number.isFinite(sidebarWidth) ? Math.round(sidebarWidth) : null,
+  );
   const abortRef = useRef(null);
   const initialisedRef = useRef(false);
   const worktreeKey = worktree ? `${worktree.org}/${worktree.repo}:${worktree.branch}` : null;
+  const maxSidebarWidth = useMemo(() => {
+    if (!viewportWidth || viewportWidth <= 0) {
+      return MAX_DESKTOP_WIDTH;
+    }
+    const available = viewportWidth - MIN_TERMINAL_WIDTH;
+    if (available <= 0) {
+      return MIN_DESKTOP_WIDTH;
+    }
+    return Math.min(MAX_DESKTOP_WIDTH, Math.max(MIN_DESKTOP_WIDTH, available));
+  }, [viewportWidth]);
+  const minSidebarWidth = useMemo(() => Math.min(MIN_DESKTOP_WIDTH, maxSidebarWidth), [maxSidebarWidth]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const updateViewportWidth = () => {
+      setViewportWidth(window.innerWidth);
+    };
+    updateViewportWidth();
+    window.addEventListener('resize', updateViewportWidth);
+    return () => window.removeEventListener('resize', updateViewportWidth);
+  }, []);
+
+  const persistSidebarWidth = useCallback((value) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    if (!Number.isFinite(value) || value <= 0) {
+      return;
+    }
+    const rounded = Math.round(value);
+    if (persistedSidebarWidthRef.current === rounded) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(rounded));
+      persistedSidebarWidthRef.current = rounded;
+    } catch {
+      // Ignore persistence failures (e.g. storage quota, private mode)
+    }
+  }, []);
+
+  useEffect(() => {
+    const clamped = clampWidth(sidebarWidth, minSidebarWidth, maxSidebarWidth);
+    if (clamped !== sidebarWidth) {
+      setSidebarWidth(clamped);
+      persistSidebarWidth(clamped);
+    }
+  }, [minSidebarWidth, maxSidebarWidth, sidebarWidth, persistSidebarWidth]);
 
   useEffect(() => {
     initialisedRef.current = false;
@@ -370,18 +458,85 @@ export default function GitStatusSidebar({
     [onOpenDiff],
   );
 
-  const desktopWidth = isOpen ? 360 : 0;
+  const applyWidthFromElement = useCallback(
+    (elementRef, { persist = false } = {}) => {
+      if (!elementRef) {
+        return;
+      }
+      const rect = elementRef.getBoundingClientRect();
+      if (!rect || !Number.isFinite(rect.width)) {
+        return;
+      }
+      const nextWidth = clampWidth(rect.width, minSidebarWidth, maxSidebarWidth);
+      setSidebarWidth((current) => {
+        if (!Number.isFinite(current) || Math.abs(current - nextWidth) > 0.5) {
+          return nextWidth;
+        }
+        return current;
+      });
+      if (persist) {
+        persistSidebarWidth(nextWidth);
+      }
+    },
+    [maxSidebarWidth, minSidebarWidth, persistSidebarWidth],
+  );
+
+  const handleResize = useCallback(
+    (_event, _direction, elementRef) => {
+      applyWidthFromElement(elementRef);
+    },
+    [applyWidthFromElement],
+  );
+
+  const handleResizeStop = useCallback(
+    (_event, _direction, elementRef) => {
+      applyWidthFromElement(elementRef, { persist: true });
+    },
+    [applyWidthFromElement],
+  );
+
+  const desktopWidth = isOpen ? sidebarWidth : 0;
 
   const desktopPanel = (
-    <div
-      className={`hidden h-full flex-col border-l border-neutral-800 bg-neutral-900/95 text-neutral-100 shadow-lg transition-[width,opacity] duration-200 ease-out lg:flex lg:flex-shrink-0 lg:overflow-hidden font-sans ${
-        isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
-      }`}
-      style={{ width: `${desktopWidth}px` }}
-      aria-hidden={isOpen ? 'false' : 'true'}
+    <Resizable
+      size={{ width: desktopWidth, height: '100%' }}
+      minWidth={isOpen ? minSidebarWidth : 0}
+      maxWidth={isOpen ? maxSidebarWidth : 0}
+      enable={{
+        top: false,
+        right: false,
+        bottom: false,
+        topRight: false,
+        bottomRight: false,
+        bottomLeft: false,
+        topLeft: false,
+        left: isOpen,
+      }}
+      onResize={handleResize}
+      onResizeStop={handleResizeStop}
+      handleStyles={{
+        left: {
+          width: '12px',
+          cursor: isOpen ? 'ew-resize' : 'default',
+        },
+      }}
+      handleComponent={{
+        left: isOpen ? (
+          <div aria-hidden="true" className="flex h-full w-full items-center justify-center">
+            <span className="h-12 w-px rounded bg-neutral-700/60 transition-colors group-hover:bg-neutral-500/70" />
+          </div>
+        ) : null,
+      }}
+      className="group hidden h-full lg:flex lg:flex-shrink-0"
     >
-      <aside className="flex h-full min-h-0 flex-col">
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div
+        className={`flex h-full w-full flex-col overflow-hidden border-l border-neutral-800 bg-neutral-900/95 text-neutral-100 shadow-lg transition-opacity duration-200 ease-out font-sans ${
+          isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+        aria-hidden={isOpen ? 'false' : 'true'}
+      >
+        <aside className="flex h-full min-h-0 flex-col">
+          <div className="flex-1 overflow-y-auto px-4 py-4">
           {loadState === 'loading' && !status ? (
             <div className="space-y-3">
               <div className="h-4 animate-pulse rounded bg-neutral-800/70" />
@@ -467,12 +622,13 @@ export default function GitStatusSidebar({
               </section>
             </div>
           ) : null}
-        </div>
-        <footer className="border-t border-neutral-800 px-4 py-2 text-[11px] text-neutral-500">
-          {lastUpdated ? `Last updated ${lastUpdated}` : 'Awaiting first refresh…'}
-        </footer>
-      </aside>
-    </div>
+          </div>
+          <footer className="border-t border-neutral-800 px-4 py-2 text-[11px] text-neutral-500">
+            {lastUpdated ? `Last updated ${lastUpdated}` : 'Awaiting first refresh…'}
+          </footer>
+        </aside>
+      </div>
+    </Resizable>
   );
 
   const mobilePanel = (
