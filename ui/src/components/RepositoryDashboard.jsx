@@ -167,7 +167,7 @@ export default function RepositoryDashboard({
             'div',
             {
               className:
-                'space-y-2 rounded-lg border border-neutral-800 bg-neutral-925/90 p-4 max-h-[50vh] overflow-y-auto',
+                'space-y-2 rounded-lg border border-neutral-800 bg-neutral-925/90 p-4 max-h-[50vh] lg:max-h-[75vh] xl:max-h-[calc(100vh-240px)] overflow-y-auto',
             },
             issues.map((issue, index) => {
               const key =
