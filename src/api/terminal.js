@@ -6,7 +6,8 @@ import {
 import { launchAgentProcess } from '../core/agents.js';
 import { sendJson } from '../utils/http.js';
 
-export function createTerminalHandlers(workdir) {
+export function createTerminalHandlers(workdir, options = {}) {
+  const mode = typeof options.mode === 'string' ? options.mode : 'auto';
   async function open(context) {
     let payload;
     try {
@@ -69,7 +70,9 @@ export function createTerminalHandlers(workdir) {
         return;
       }
 
-      const { session, created } = await getOrCreateTerminalSession(workdir, org, repo, branch);
+      const { session, created } = await getOrCreateTerminalSession(workdir, org, repo, branch, {
+        mode,
+      });
       if (command) {
         const commandInput = /[\r\n]$/.test(command) ? command : `${command}\r`;
         queueSessionInput(session, commandInput);

@@ -69,6 +69,9 @@ node bin/terminal-worktree.js \
 - `-w, --workdir <path>` – Root directory that holds `org/repo` folders (default: process CWD)
 - `-P, --password <string>` – UI password (default: secure random string generated at startup)
 - `--default-branch <name>` – Override the sync branch when repositories use a non-`main` default
+- `--terminal-session-mode <auto|tmux|pty>` – Select the terminal backend (`auto` tries tmux, falls back to PTY)
+- `--force-tmux` – Shortcut for `--terminal-session-mode tmux`; errors if tmux is unavailable
+- `--no-tmux` – Shortcut for `--terminal-session-mode pty`; disables tmux usage entirely
 - `--show-password` – Print the resolved password even if it was set via config or flag
 - `--ngrok-api-key <token>` – Authtoken used to establish a public ngrok tunnel
 - `--ngrok-domain <domain>` – Reserved ngrok domain exposed when tunnelling (requires `--ngrok-api-key`)
@@ -118,7 +121,8 @@ configuration might look like:
 Supported keys mirror the CLI flags (`port`, `host`, `ui`, `workdir`, `password`, individual
 `*Command` entries, plus `ngrokApiKey`/`ngrokDomain` or `ngrok.apiKey` / `ngrok.domain`). The
 automation API key can be supplied as `automation.apiKey`, `automationApiKey`, or `apiKey`. Leave
-the file absent to continue using only CLI arguments.
+the file absent to continue using only CLI arguments. Use `terminalSessionMode` to persist the
+preferred terminal backend (`auto`, `tmux`, or `pty`).
 
 Run `terminal-worktree --port 4001 --workdir /srv/worktrees --save` to save the provided values into
 the config file without starting the server.

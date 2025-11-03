@@ -30,6 +30,7 @@ export async function startServer({
   planLlm,
   defaultBranches,
   cookieSecure,
+  terminalSessionMode = 'auto',
 } = {}) {
   if (!uiPath) {
     throw new Error('Missing required option: uiPath');
@@ -65,6 +66,7 @@ export async function startServer({
     planService,
     defaultBranches,
     cookieManager,
+    terminalSessionMode,
   });
 
   const server = http.createServer(async (req, res) => {

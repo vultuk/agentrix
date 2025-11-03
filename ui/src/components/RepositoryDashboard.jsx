@@ -474,6 +474,8 @@ export default function RepositoryDashboard({
           cacheRef: issueCacheRef,
           inFlightRef,
           registerReturnFocus,
+          onCreatePlan: onCreateIssuePlan,
+          canCreatePlans,
         })
       : null,
   );
