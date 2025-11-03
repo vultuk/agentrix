@@ -125,6 +125,12 @@
   box-sizing: border-box;
 }
 
+@media (min-height: 1024px) {
+  .diff-viewer {
+    max-height: min(90vh, calc(100vh - 160px));
+  }
+}
+
 .diff-viewer .d2h-wrapper {
   background-color: transparent;
   color: inherit;
