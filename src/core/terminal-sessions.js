@@ -399,7 +399,7 @@ export function addSocketWatcher(session, socket) {
   });
 }
 
-async function spawnTerminalProcess({ workdir, org, repo, branch, useTmux }) {
+async function spawnTerminalProcess({ workdir, org, repo, branch, useTmux, requireTmux = false }) {
   const { worktreePath } = await getWorktreePath(workdir, org, repo, branch);
   const shellCommand = process.env.SHELL || '/bin/bash';
   const args = determineShellArgs(shellCommand);
@@ -445,6 +445,10 @@ async function spawnTerminalProcess({ workdir, org, repo, branch, useTmux }) {
         rows: 36,
       });
       usingTmux = true;
+    } else if (requireTmux) {
+      throw new Error(
+        'tmux is required for terminal sessions but was not detected on PATH. Install tmux or start the server with --no-tmux.',
+      );
     }
   }
 
@@ -467,10 +471,10 @@ async function spawnTerminalProcess({ workdir, org, repo, branch, useTmux }) {
 }
 
 async function createTerminalSession(workdir, org, repo, branch, options = {}) {
-  const { useTmux = true, kind = 'interactive' } = options;
+  const { useTmux = true, kind = 'interactive', requireTmux = false } = options;
   const key = makeSessionKey(org, repo, branch);
   const { child, usingTmux, tmuxSessionName, tmuxSessionExists, worktreePath } =
-    await spawnTerminalProcess({ workdir, org, repo, branch, useTmux });
+    await spawnTerminalProcess({ workdir, org, repo, branch, useTmux, requireTmux });
 
   const session = {
     id: randomUUID(),
@@ -508,7 +512,13 @@ async function createTerminalSession(workdir, org, repo, branch, options = {}) {
   return { session, created };
 }
 
-export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
+export async function getOrCreateTerminalSession(workdir, org, repo, branch, options = {}) {
+  const rawMode = typeof options.mode === 'string' ? options.mode.toLowerCase() : 'auto';
+  const mode = rawMode === 'tmux' || rawMode === 'pty' ? rawMode : 'auto';
+  const allowTmuxSessions = mode !== 'pty';
+  const allowPlainSessions = mode !== 'tmux';
+  const requireTmux = mode === 'tmux';
+
   const key = makeSessionKey(org, repo, branch);
   const bucket = getSessionBucket(key);
   let automationCandidate = null;
@@ -523,13 +533,29 @@ export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
         }
         continue;
       }
-      if (!session.kind && !session.usingTmux) {
-        continue;
-      }
-      if (!session.kind && session.usingTmux) {
+      const sessionUsesTmux = Boolean(session.usingTmux);
+      if (!session.kind) {
+        if (!sessionUsesTmux) {
+          if (mode === 'pty') {
+            return { session, created: false };
+          }
+          continue;
+        }
+        if (!allowTmuxSessions) {
+          continue;
+        }
         return { session, created: false };
       }
       if (session.kind === 'interactive') {
+        if (sessionUsesTmux) {
+          if (!allowTmuxSessions) {
+            continue;
+          }
+          return { session, created: false };
+        }
+        if (!allowPlainSessions) {
+          continue;
+        }
         return { session, created: false };
       }
     }
@@ -537,7 +563,17 @@ export async function getOrCreateTerminalSession(workdir, org, repo, branch) {
   if (automationCandidate) {
     return { session: automationCandidate, created: false };
   }
-  return createTerminalSession(workdir, org, repo, branch, { useTmux: true, kind: 'interactive' });
+  if (allowTmuxSessions) {
+    return createTerminalSession(workdir, org, repo, branch, {
+      useTmux: true,
+      kind: 'interactive',
+      requireTmux,
+    });
+  }
+  return createTerminalSession(workdir, org, repo, branch, {
+    useTmux: false,
+    kind: 'interactive',
+  });
 }
 
 export async function createIsolatedTerminalSession(workdir, org, repo, branch) {

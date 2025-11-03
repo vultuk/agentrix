@@ -2,9 +2,8 @@ import React from 'react';
 import { X, ExternalLink } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeSanitize from 'rehype-sanitize';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
-import { defaultSchema } from 'hast-util-sanitize';
 
 import { useIssueDetails, buildIssueCacheKey } from '../hooks/useIssueDetails.js';
 
@@ -110,6 +109,8 @@ function IssueSlideOver({
   cacheRef,
   inFlightRef,
   registerReturnFocus,
+  onCreatePlan,
+  canCreatePlans = false,
 }) {
   const [refreshToken, setRefreshToken] = useState(0);
   const panelRef = useRef(null);
@@ -122,6 +123,11 @@ function IssueSlideOver({
     inFlightRef,
     refreshToken,
   });
+  const issueDetails = issueState?.data?.issue ?? null;
+  const fetchedAt =
+    issueState?.data?.fetchedAt && typeof issueState.data.fetchedAt === 'string'
+      ? issueState.data.fetchedAt
+      : null;
 
   useEffect(() => {
     if (!open) {
@@ -207,6 +213,19 @@ function IssueSlideOver({
     setRefreshToken((token) => token + 1);
   }, [cacheRef, inFlightRef, repository, issueNumber]);
 
+  const handleCreatePlanClick = useCallback(() => {
+    if (!canCreatePlans || typeof onCreatePlan !== 'function') {
+      return;
+    }
+    if (!issueDetails || !repository) {
+      return;
+    }
+    onCreatePlan(issueDetails, repository);
+    if (typeof onClose === 'function') {
+      onClose();
+    }
+  }, [canCreatePlans, onCreatePlan, issueDetails, repository, onClose]);
+
   useEffect(() => {
     if (!open || typeof registerReturnFocus !== 'function') {
       return;
@@ -216,7 +235,7 @@ function IssueSlideOver({
 
   const metadataItems = useMemo(() => {
     const items = [];
-    const issue = issueState?.data?.issue;
+    const issue = issueDetails;
     if (issue?.author) {
       items.push({
         key: 'author',
@@ -247,22 +266,20 @@ function IssueSlideOver({
         value: issue.state.charAt(0).toUpperCase() + issue.state.slice(1),
       });
     }
-    if (issueState?.data?.fetchedAt) {
+    if (fetchedAt) {
       items.push({
         key: 'fetched',
         label: 'Fetched',
-        value: formatDateTime(issueState.data.fetchedAt),
+        value: formatDateTime(fetchedAt),
       });
     }
     return items;
-  }, [issueState]);
+  }, [issueDetails, fetchedAt]);
 
-  const labels = Array.isArray(issueState?.data?.issue?.labels)
-    ? issueState.data.issue.labels
-    : [];
+  const labels = Array.isArray(issueDetails?.labels) ? issueDetails.labels : [];
 
   const markdownContent =
-    typeof issueState?.data?.issue?.body === 'string' ? issueState.data.issue.body : '';
+    typeof issueDetails?.body === 'string' ? issueDetails.body : '';
 
   if (!open) {
     return null;
@@ -304,14 +321,14 @@ function IssueSlideOver({
             h(
               'p',
               { className: 'text-xs font-medium uppercase tracking-wide text-neutral-400' },
-              `Issue #${issueState?.data?.issue?.number ?? issueNumber ?? '—'}`,
+              `Issue #${issueDetails?.number ?? issueNumber ?? '—'}`,
             ),
             h(
               'h2',
               { className: 'text-lg font-semibold leading-snug text-neutral-50' },
               issueState.status === 'loading'
                 ? 'Loading issue details…'
-                : issueState?.data?.issue?.title || 'Issue details unavailable',
+                : issueDetails?.title || 'Issue details unavailable',
             ),
           ),
           h(
@@ -423,7 +440,7 @@ function IssueSlideOver({
                     'a',
                     {
                       href:
-                        issueState?.data?.issue?.url ||
+                        issueDetails?.url ||
                         (repository
                           ? `https://github.com/${repository.org}/${repository.repo}/issues/${issueNumber}`
                           : '#'),
@@ -435,6 +452,18 @@ function IssueSlideOver({
                     h(ExternalLink, { size: 14, 'aria-hidden': true }),
                     'Open on GitHub',
                   ),
+                  canCreatePlans
+                    ? h(
+                        'button',
+                        {
+                          type: 'button',
+                          onClick: handleCreatePlanClick,
+                          className:
+                            'inline-flex items-center justify-center gap-2 rounded-md border border-emerald-700/60 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200 transition-colors hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/60',
+                        },
+                        'Create Plan',
+                      )
+                    : null,
                 ),
                 markdownContent
                   ? h(
@@ -458,36 +487,58 @@ function IssueSlideOver({
                               },
                               children,
                             ),
-                          code: ({ inline, className, children, ...props }) =>
-                            inline
-                              ? h(
-                                  'code',
-                                  {
-                                    ...props,
-                                    className: classNames(
-                                      'rounded bg-neutral-800 px-1.5 py-[2px] font-mono text-[0.85em] text-neutral-100',
-                                      className,
-                                    ),
-                                  },
-                                  children,
-                                )
-                              : h(
-                                  'pre',
-                                  {
-                                    className: classNames(
-                                      'overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-900/80 p-4 text-sm text-neutral-100',
-                                      className,
-                                    ),
-                                  },
-                                  h(
-                                    'code',
-                                    {
-                                      ...props,
-                                      className: classNames('hljs', className),
-                                    },
-                                    children,
+                          code: ({ className, children, node, ...props }) => {
+                            const textContent =
+                              Array.isArray(node?.children)
+                                ? node.children
+                                    .filter((child) => typeof child.value === 'string')
+                                    .map((child) => child.value)
+                                    .join('')
+                                : typeof children === 'string'
+                                  ? children
+                                  : Array.isArray(children)
+                                    ? children.filter((value) => typeof value === 'string').join('')
+                                    : '';
+                            const startLine = node?.position?.start?.line;
+                            const endLine = node?.position?.end?.line;
+                            const isSingleLine = typeof startLine === 'number' && typeof endLine === 'number'
+                              ? startLine === endLine
+                              : true;
+                            const hasLineBreak = typeof textContent === 'string' && textContent.includes('\n');
+                            const isInline = isSingleLine && !hasLineBreak;
+
+                            if (isInline) {
+                              return h(
+                                'code',
+                                {
+                                  ...props,
+                                  className: classNames(
+                                    'rounded bg-neutral-800 px-1.5 py-[2px] font-mono text-[0.85em] text-neutral-100',
+                                    className,
                                   ),
+                                },
+                                children,
+                              );
+                            }
+
+                            return h(
+                              'pre',
+                              {
+                                className: classNames(
+                                  'overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-900/80 p-4 text-sm text-neutral-100',
+                                  className,
                                 ),
+                              },
+                              h(
+                                'code',
+                                {
+                                  ...props,
+                                  className: classNames('hljs', className),
+                                },
+                                children,
+                              ),
+                            );
+                          },
                           img: ({ alt, ...props }) =>
                             h('img', {
                               ...props,

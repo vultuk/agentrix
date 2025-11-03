@@ -23,6 +23,7 @@ export function createRouter({
   planService,
   defaultBranches,
   cookieManager,
+  terminalSessionMode = 'auto',
 }) {
   if (!authManager) {
     throw new Error('authManager is required');
@@ -45,7 +46,7 @@ export function createRouter({
   const repoIssueHandlers = createRepoIssueHandlers(workdir);
   const sessionHandlers = createSessionHandlers(workdir);
   const worktreeHandlers = createWorktreeHandlers(workdir, branchNameGenerator, defaultBranches);
-  const terminalHandlers = createTerminalHandlers(workdir);
+  const terminalHandlers = createTerminalHandlers(workdir, { mode: terminalSessionMode });
   const configHandlers = createConfigHandlers(agentCommands);
   const planHandlers = createPlanHandlers({ planService });
   const gitStatusHandlers = createGitStatusHandlers(workdir);

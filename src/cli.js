@@ -17,6 +17,7 @@ const BUNDLED_UI_PATH = fileURLToPath(new URL('../ui/dist', import.meta.url));
 const CONFIG_DIR_NAME = '.terminal-worktree';
 const CONFIG_FILE_NAME = 'config.json';
 const VALID_BRANCH_LLMS = new Set(['codex', 'claude', 'cursor']);
+const VALID_TERMINAL_SESSION_MODES = new Set(['auto', 'tmux', 'pty']);
 
 function printPlansHelp() {
   const helpText = `Usage: terminal-worktree plans <command> [options]
@@ -271,6 +272,23 @@ function pickSupportedLlm(sources, configPath) {
   return undefined;
 }
 
+function coerceTerminalSessionMode(value, name, configPath) {
+  const stringValue = coerceString(value, name, configPath);
+  if (stringValue === undefined) {
+    return undefined;
+  }
+  const lower = stringValue.toLowerCase();
+  if (!VALID_TERMINAL_SESSION_MODES.has(lower)) {
+    warnConfig(
+      `Ignoring invalid ${name} in ${configPath || 'config'}; expected one of ${[
+        ...VALID_TERMINAL_SESSION_MODES,
+      ].join(', ')}.`,
+    );
+    return undefined;
+  }
+  return lower;
+}
+
 function normalizeConfig(rawConfig, configPath) {
   if (!rawConfig || typeof rawConfig !== 'object') {
     if (rawConfig !== undefined) {
@@ -454,6 +472,15 @@ function normalizeConfig(rawConfig, configPath) {
     normalized.planLlm = planLlm;
   }
 
+  const terminalSessionMode = coerceTerminalSessionMode(
+    rawConfig.terminalSessionMode,
+    'terminalSessionMode',
+    configPath,
+  );
+  if (terminalSessionMode !== undefined) {
+    normalized.terminalSessionMode = terminalSessionMode;
+  }
+
   const ideCommand = pickString(
     [
       { value: rawConfig.ideCommand, name: 'ideCommand' },
@@ -579,6 +606,9 @@ Options:
   -P, --password <string>  Password for login (default: randomly generated)
       --default-branch <name>  Override default branch used when syncing repositories
       --cookie-secure <mode>  Set session cookie security (true, false, auto)
+      --terminal-session-mode <mode>  Terminal backend preference: auto, tmux, pty (default: auto)
+      --force-tmux         Shortcut for --terminal-session-mode tmux (fail if tmux unavailable)
+      --no-tmux            Shortcut for --terminal-session-mode pty (disable tmux usage)
       --show-password     Print the resolved password even if provided via config or flag
       --codex-command <cmd>   Command executed when launching Codex (default: codex)
       --claude-command <cmd>  Command executed when launching Claude (default: claude)
@@ -605,16 +635,17 @@ function parseArgs(argv) {
     cookieSecure: false,
     defaultBranch: false,
     showPassword: false,
-    codexCommand: false,
-    claudeCommand: false,
-    cursorCommand: false,
-    ideCommand: false,
-    vscodeCommand: false,
-    ngrokApiKey: false,
-    ngrokDomain: false,
-    openaiApiKey: false,
-    save: false,
-  };
+  codexCommand: false,
+  claudeCommand: false,
+  cursorCommand: false,
+  ideCommand: false,
+  vscodeCommand: false,
+  ngrokApiKey: false,
+  ngrokDomain: false,
+  openaiApiKey: false,
+  terminalSessionMode: false,
+  save: false,
+};
 
   const args = {
     port: DEFAULT_PORT,
@@ -630,18 +661,45 @@ function parseArgs(argv) {
     cursorCommand: null,
     ideCommand: null,
     vscodeCommand: null,
-    ngrokApiKey: null,
-    ngrokDomain: null,
-    openaiApiKey: null,
-    save: false,
-    help: false,
-    version: false,
-  };
+  ngrokApiKey: null,
+  ngrokDomain: null,
+  openaiApiKey: null,
+  terminalSessionMode: null,
+  save: false,
+  help: false,
+  version: false,
+};
 
   Object.defineProperty(args, '_provided', {
     value: provided,
     enumerable: false,
   });
+
+  let terminalSessionModeSource = null;
+  function setTerminalSessionMode(rawValue, sourceToken) {
+    if (typeof rawValue !== 'string' || rawValue.trim().length === 0) {
+      throw new Error(`Expected mode value after ${sourceToken}`);
+    }
+    const normalized = rawValue.trim().toLowerCase();
+    if (!VALID_TERMINAL_SESSION_MODES.has(normalized)) {
+      throw new Error(
+        `Invalid terminal session mode "${rawValue}". Expected one of: ${[
+          ...VALID_TERMINAL_SESSION_MODES,
+        ].join(', ')}`,
+      );
+    }
+    if (provided.terminalSessionMode) {
+      if (args.terminalSessionMode !== normalized) {
+        throw new Error(
+          `Conflicting terminal session mode options (${terminalSessionModeSource} and ${sourceToken})`,
+        );
+      }
+      return;
+    }
+    args.terminalSessionMode = normalized;
+    provided.terminalSessionMode = true;
+    terminalSessionModeSource = sourceToken;
+  }
 
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
@@ -702,6 +760,22 @@ function parseArgs(argv) {
         }
         args.cookieSecure = trimmed;
         provided.cookieSecure = true;
+        break;
+      }
+      case '--terminal-session-mode': {
+        const value = argv[++i];
+        if (!value) {
+          throw new Error(`Expected mode value after ${token}`);
+        }
+        setTerminalSessionMode(value, token);
+        break;
+      }
+      case '--force-tmux': {
+        setTerminalSessionMode('tmux', token);
+        break;
+      }
+      case '--no-tmux': {
+        setTerminalSessionMode('pty', token);
         break;
       }
       case '--default-branch': {
@@ -921,6 +995,9 @@ async function main(argv = process.argv.slice(2)) {
     : fileConfig.openaiApiKey ?? null;
   const finalBranchNameLlm = fileConfig.branchNameLlm ?? null;
   const finalPlanLlm = fileConfig.planLlm ?? null;
+  const finalTerminalSessionMode = provided.terminalSessionMode
+    ? args.terminalSessionMode
+    : fileConfig.terminalSessionMode ?? 'auto';
 
   if ((finalNgrokApiKey && !finalNgrokDomain) || (finalNgrokDomain && !finalNgrokApiKey)) {
     process.stderr.write(
@@ -991,6 +1068,9 @@ async function main(argv = process.argv.slice(2)) {
     }
     if (finalPlanLlm) {
       configToSave.planLlm = finalPlanLlm;
+    }
+    if (provided.terminalSessionMode || fileConfig.terminalSessionMode !== undefined) {
+      configToSave.terminalSessionMode = finalTerminalSessionMode;
     }
 
     const commandsConfig = {};
@@ -1063,6 +1143,7 @@ async function main(argv = process.argv.slice(2)) {
       planLlm: finalPlanLlm ?? undefined,
       defaultBranches: defaultBranchConfig,
       cookieSecure: finalCookieSecure,
+      terminalSessionMode: finalTerminalSessionMode,
     });
 
     const localAddress = host === '0.0.0.0' ? 'localhost' : host;
