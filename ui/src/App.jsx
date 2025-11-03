@@ -634,6 +634,10 @@ function renderTaskStep(step, index) {
         const taskMapRef = useRef(new Map());
         const pendingLaunchesRef = useRef(new Map());
         const taskMenuRef = useRef(null);
+        const mobileMenuButtonRef = useRef(null);
+        const registerMobileMenuButton = useCallback((node) => {
+          mobileMenuButtonRef.current = node;
+        }, []);
         const hasRunningTasks = useMemo(
           () => tasks.some((task) => task && (task.status === 'pending' || task.status === 'running')),
           [tasks],
@@ -811,6 +815,31 @@ function renderTaskStep(step, index) {
         const closeTaskMenu = useCallback(() => {
           setIsTaskMenuOpen(false);
         }, []);
+
+        const closeMobileMenu = useCallback(() => {
+          flushSync(() => {
+            setIsMobileMenuOpen(false);
+          });
+          if (mobileMenuButtonRef.current) {
+            mobileMenuButtonRef.current.focus();
+          }
+        }, [setIsMobileMenuOpen]);
+
+        useEffect(() => {
+          if (!isMobileMenuOpen) {
+            return undefined;
+          }
+          const handleKeyDown = (event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              closeMobileMenu();
+            }
+          };
+          window.addEventListener('keydown', handleKeyDown);
+          return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+          };
+        }, [isMobileMenuOpen, closeMobileMenu]);
 
         useEffect(() => {
           if (!isTaskMenuOpen) {
@@ -3474,16 +3503,26 @@ function renderTaskStep(step, index) {
           {
             className: `lg:hidden fixed inset-0 z-40 bg-neutral-950/95 backdrop-blur-md transition-transform duration-150 ease-out ${
               isMobileMenuOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 pointer-events-none'
-            }`
+            }`,
+            onPointerDown: (event) => {
+              if (event.target === event.currentTarget) {
+                closeMobileMenu();
+              }
+            }
           },
           h(
             'div',
-            { className: 'h-full w-[88vw] max-w-sm border-r border-neutral-800 bg-neutral-925 relative' },
+            {
+              className: 'h-full w-[88vw] max-w-sm border-r border-neutral-800 bg-neutral-925 relative',
+              role: 'dialog',
+              'aria-modal': 'true',
+              'aria-label': 'Repository navigation'
+            },
             sidebarContent,
             h(
               'button',
               {
-                onClick: () => setIsMobileMenuOpen(false),
+                onClick: closeMobileMenu,
                 className: 'absolute top-3 right-3 text-neutral-400 hover:text-neutral-100 transition-colors'
               },
               h(X, { size: 16 })
@@ -3524,6 +3563,7 @@ function renderTaskStep(step, index) {
                   'button',
                   {
                     type: 'button',
+                    ref: registerMobileMenuButton,
                     onClick: () => setIsMobileMenuOpen(true),
                     className:
                       'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]',
@@ -3595,6 +3635,7 @@ function renderTaskStep(step, index) {
                   'button',
                   {
                     type: 'button',
+                    ref: registerMobileMenuButton,
                     onClick: () => setIsMobileMenuOpen(true),
                     className:
                       'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]',
@@ -3631,6 +3672,7 @@ function renderTaskStep(step, index) {
                 'button',
                 {
                   type: 'button',
+                  ref: registerMobileMenuButton,
                   onClick: () => setIsMobileMenuOpen(true),
                   className:
                     'lg:hidden inline-flex items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 px-2.5 py-2 text-sm text-neutral-300 shadow-sm transition active:scale-[0.97]',
