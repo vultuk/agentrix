@@ -2,6 +2,8 @@
  * Modal-related types and interfaces
  */
 
+import type { PlanModalState as PlanModalStateShape } from './plan.js';
+
 // Add Repository Modal
 export interface AddRepositoryModalProps {
   showAddRepoModal: boolean;
@@ -49,17 +51,7 @@ export interface GitDiffModalProps {
 }
 
 // Plan History Modal
-export interface PlanModalState {
-  open: boolean;
-  loading: boolean;
-  error: string | null;
-  context: any;
-  plans: any[];
-  selectedPlanId: string | null;
-  content: string;
-  contentLoading: boolean;
-  contentError: string | null;
-}
+export type PlanModalState = PlanModalStateShape;
 
 export interface PlanHistoryModalProps {
   planModal: PlanModalState;
@@ -162,4 +154,3 @@ export interface ModalContainerProps
     ConfirmDeleteWorktreeModalProps,
     ConfirmDeleteRepoModalProps,
     PendingActionModalProps {}
-

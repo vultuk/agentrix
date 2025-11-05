@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import Modal from '../../../../components/Modal.js';
 import { renderSpinner } from '../../../../components/Spinner.js';
 import { renderMarkdown } from '../../../../utils/markdown.js';
+import type { PlanHistoryEntry, PlanModalContext } from '../../../../types/plan.js';
 
 const { createElement: h } = React;
 
@@ -9,8 +10,8 @@ interface PlanHistoryModalProps {
   isOpen: boolean;
   loading: boolean;
   error: string | null;
-  context: { org: string; repo: string; branch?: string } | null;
-  plans: any[];
+  context: PlanModalContext | null;
+  plans: PlanHistoryEntry[];
   selectedPlanId: string | null;
   content: string;
   contentLoading: boolean;
@@ -48,7 +49,7 @@ export default function PlanHistoryModal({
   }
 
   const selectedPlan = useMemo(
-    () => plans.find((plan: any) => plan.id === selectedPlanId) || null,
+    () => plans.find((plan: PlanHistoryEntry) => plan.id === selectedPlanId) || null,
     [plans, selectedPlanId]
   );
 
@@ -95,7 +96,7 @@ export default function PlanHistoryModal({
                 ? h(
                     'div',
                     { className: 'space-y-2 max-h-[320px] overflow-y-auto pr-1' },
-                    plans.map((plan: any) => {
+                    plans.map((plan) => {
                       const isActive = plan.id === selectedPlanId;
                       const timestampLabel = formatPlanTimestamp(plan.createdAt);
                       return h(
@@ -169,4 +170,3 @@ export default function PlanHistoryModal({
     )
   );
 }
-
