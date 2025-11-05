@@ -12,12 +12,124 @@ import {
   isIdleAcknowledgementCurrent 
 } from '../../../utils/activity.js';
 
+interface PendingNotification {
+  key: string;
+  title: string;
+  options?: NotificationOptions;
+}
+
 export function useSessionManagement() {
   const knownSessionsRef = useRef(new Set<string>());
   const sessionMetadataRef = useRef(new Map<string, any>());
   const [sessionMetadataSnapshot, setSessionMetadataSnapshot] = useState(() => new Map<string, any>());
   const idleAcknowledgementsRef = useRef(new Map<string, any>());
   const [idleAcknowledgementsSnapshot, setIdleAcknowledgementsSnapshot] = useState(() => new Map<string, any>());
+  const idleNotificationMarkersRef = useRef(new Map<string, number | null>());
+  const pendingNotificationsRef = useRef<PendingNotification[]>([]);
+  const notificationRequestRef = useRef<Promise<NotificationPermission> | null>(null);
+
+  const flushNotificationQueue = useCallback(() => {
+    if (typeof window === 'undefined' || typeof window.Notification !== 'function') {
+      pendingNotificationsRef.current = [];
+      return;
+    }
+    if (window.Notification.permission !== 'granted') {
+      return;
+    }
+    const queue = pendingNotificationsRef.current;
+    pendingNotificationsRef.current = [];
+    queue.forEach(({ title, options }) => {
+      try {
+        // Using tag in options ensures subsequent notifications replace the previous one.
+        new window.Notification(title, options);
+      } catch {
+        // Ignore notification errors (e.g. browser restrictions).
+      }
+    });
+  }, []);
+
+  const enqueueNotification = useCallback((notification: PendingNotification) => {
+    const queue = pendingNotificationsRef.current;
+    const existingIndex = queue.findIndex((item) => item.key === notification.key);
+    if (existingIndex >= 0) {
+      queue[existingIndex] = notification;
+    } else {
+      queue.push(notification);
+    }
+  }, []);
+
+  const requestNotificationPermissionIfNeeded = useCallback(() => {
+    if (typeof window === 'undefined' || typeof window.Notification !== 'function') {
+      pendingNotificationsRef.current = [];
+      return Promise.resolve<'denied'>('denied');
+    }
+    const permission = window.Notification.permission;
+    if (permission === 'granted' || permission === 'denied') {
+      if (permission === 'granted') {
+        flushNotificationQueue();
+      } else {
+        pendingNotificationsRef.current = [];
+      }
+      return Promise.resolve(permission);
+    }
+    if (notificationRequestRef.current) {
+      return notificationRequestRef.current;
+    }
+    try {
+      const requestResult = window.Notification.requestPermission();
+      const permissionPromise =
+        requestResult instanceof Promise ? requestResult : Promise.resolve(requestResult);
+      notificationRequestRef.current = permissionPromise
+        .then((result) => {
+          notificationRequestRef.current = null;
+          if (result === 'granted') {
+            flushNotificationQueue();
+          } else {
+            pendingNotificationsRef.current = [];
+          }
+          return result;
+        })
+        .catch(() => {
+          notificationRequestRef.current = null;
+          pendingNotificationsRef.current = [];
+          return 'denied';
+        });
+      return notificationRequestRef.current;
+    } catch {
+      pendingNotificationsRef.current = [];
+      return Promise.resolve<'denied'>('denied');
+    }
+  }, [flushNotificationQueue]);
+
+  const deliverIdleNotification = useCallback(
+    (key: string, org: string, repo: string, branch: string) => {
+      if (typeof window === 'undefined' || typeof window.Notification !== 'function') {
+        return;
+      }
+      const title = 'Worktree idle';
+      const notificationOptions: NotificationOptions = {
+        body: `${org}/${repo}: ${branch} work has finished.`,
+        tag: key,
+      };
+
+      const permission = window.Notification.permission;
+      if (permission === 'granted') {
+        flushNotificationQueue();
+        try {
+          new window.Notification(title, notificationOptions);
+        } catch {
+          // Ignore notification errors.
+        }
+        return;
+      }
+      if (permission === 'denied') {
+        return;
+      }
+      enqueueNotification({ key, title, options: notificationOptions });
+      void requestNotificationPermissionIfNeeded();
+    },
+    [enqueueNotification, flushNotificationQueue, requestNotificationPermissionIfNeeded],
+  );
 
   const removeTrackedSession = useCallback(
     (key: string) => {
@@ -42,6 +154,10 @@ export function useSessionManagement() {
   );
 
   const syncKnownSessions = useCallback((sessions: any[]) => {
+    const previousMetadata = sessionMetadataRef.current;
+    const previousAcknowledgements = idleAcknowledgementsRef.current;
+    const previousNotificationMarkers = idleNotificationMarkersRef.current;
+    const nextNotificationMarkers = new Map<string, number | null>();
     const aggregated = new Map<string, any>();
     if (Array.isArray(sessions)) {
       sessions.forEach((item: any) => {
@@ -91,11 +207,31 @@ export function useSessionManagement() {
         lastActivityAtMs,
         lastActivityAt: isFiniteNumber(lastActivityAtMs) ? new Date(lastActivityAtMs).toISOString() : null,
       });
+
+      const previous = previousMetadata.get(key);
+      const previousIdle = Boolean(previous?.idle);
+      const previousNotifiedMarker = previousNotificationMarkers.has(key)
+        ? previousNotificationMarkers.get(key) ?? null
+        : null;
+      const acknowledgementEntry = previousAcknowledgements.get(key);
+      const acknowledgementCurrent = isIdleAcknowledgementCurrent(value, acknowledgementEntry);
+      const shouldNotify =
+        value.branch !== 'main' && value.idle && !acknowledgementCurrent;
+      if (shouldNotify) {
+        const activityMarker = isFiniteNumber(lastActivityAtMs) ? lastActivityAtMs : null;
+        const hasNotifiedBefore = previousNotificationMarkers.has(key);
+        const isSameActivity = hasNotifiedBefore && previousNotifiedMarker === activityMarker;
+        nextNotificationMarkers.set(key, activityMarker);
+        if (!previousIdle || !hasNotifiedBefore || !isSameActivity) {
+          deliverIdleNotification(key, value.org, value.repo, value.branch);
+        }
+      }
     });
 
     knownSessionsRef.current = nextKnownSessions;
     sessionMetadataRef.current = nextMetadata;
     setSessionMetadataSnapshot(new Map(nextMetadata));
+    idleNotificationMarkersRef.current = nextNotificationMarkers;
 
     const nextAcknowledgements = new Map<string, any>();
     idleAcknowledgementsRef.current.forEach((value, key) => {
@@ -116,7 +252,7 @@ export function useSessionManagement() {
 
     idleAcknowledgementsRef.current = nextAcknowledgements;
     setIdleAcknowledgementsSnapshot(new Map(nextAcknowledgements));
-  }, []);
+  }, [deliverIdleNotification]);
 
   const acknowledgeIdleSession = useCallback((org: string, repo: string, branch: string) => {
     const key = `${org}::${repo}::${branch}`;
@@ -145,4 +281,3 @@ export function useSessionManagement() {
     acknowledgeIdleSession,
   };
 }
-
