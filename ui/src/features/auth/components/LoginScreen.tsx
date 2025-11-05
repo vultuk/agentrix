@@ -58,7 +58,7 @@ export default function LoginScreen({ onAuthenticated }: LoginScreenProps) {
         } catch {}
         setError(message);
       } catch {
-        setError('Unable to reach the server. Ensure terminal-worktree is running.');
+        setError('Unable to reach the server. Ensure agentrix is running.');
       } finally {
         setIsSubmitting(false);
       }
@@ -81,7 +81,7 @@ export default function LoginScreen({ onAuthenticated }: LoginScreenProps) {
       h(
         'div',
         { className: 'space-y-1' },
-        h('h1', { className: 'text-lg font-semibold text-neutral-50' }, 'terminal-worktree'),
+        h('h1', { className: 'text-lg font-semibold text-neutral-50' }, 'agentrix'),
         h(
           'p',
           { className: 'text-sm text-neutral-400' },

@@ -47,9 +47,9 @@ try {
 } catch (error: unknown) {
   const err = error as { code?: string };
   if (err?.code !== 'MODULE_NOT_FOUND' && err?.code !== 'ERR_MODULE_NOT_FOUND') {
-    console.error('[terminal-worktree] Failed to load optional dependency "mime-types":', error);
+    console.error('[agentrix] Failed to load optional dependency "mime-types":', error);
   } else {
-    console.warn('[terminal-worktree] Optional dependency "mime-types" not found; using built-in MIME map.');
+    console.warn('[agentrix] Optional dependency "mime-types" not found; using built-in MIME map.');
   }
 }
 
@@ -177,7 +177,7 @@ async function createDirectoryProvider(resolvedPath: string): Promise<UiProvider
     } catch (error: unknown) {
       const err = error as { code?: string };
       if (err && err.code !== 'ENOENT') {
-        console.error('[terminal-worktree] Failed to serve UI asset:', error);
+        console.error('[agentrix] Failed to serve UI asset:', error);
         res.statusCode = 500;
         res.end('Internal Server Error');
         return;

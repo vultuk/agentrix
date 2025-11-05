@@ -97,7 +97,7 @@ export async function startServer({
 
       await uiProvider.serve(req, res);
     } catch (error) {
-      console.error('[terminal-worktree] Request handling error:', error);
+      console.error('[agentrix] Request handling error:', error);
       if (!res.headersSent) {
         res.statusCode = 500;
         res.end('Internal Server Error');
@@ -190,7 +190,7 @@ export async function startServer({
         branchNameGenerator
           .dispose()
           .catch((error) =>
-            console.error('[terminal-worktree] Failed to dispose branch name generator:', error),
+            console.error('[agentrix] Failed to dispose branch name generator:', error),
           ),
       );
     }
@@ -199,7 +199,7 @@ export async function startServer({
         planService
           .dispose()
           .catch((error) =>
-            console.error('[terminal-worktree] Failed to dispose plan service:', error),
+            console.error('[agentrix] Failed to dispose plan service:', error),
           ),
       );
     }
@@ -208,7 +208,7 @@ export async function startServer({
         ngrokListener
           .close()
           .catch((err: unknown) =>
-            console.error('[terminal-worktree] Failed to close ngrok tunnel:', err),
+            console.error('[agentrix] Failed to close ngrok tunnel:', err),
           ),
       );
     }

@@ -4,7 +4,7 @@ import { listPlansForWorktree, readPlanFromWorktree } from '../core/plan-storage
 import type { PlansOptions } from './types.js';
 
 export function printPlansHelp(): void {
-  const helpText = `Usage: terminal-worktree plans <command> [options]
+  const helpText = `Usage: agentrix plans <command> [options]
 
 Commands:
   list    List saved plans for a worktree

@@ -61,7 +61,7 @@ export function useGitSidebar(activeWorktree: Worktree | null, getWorktreeKey: (
     });
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
-        new CustomEvent('terminal-worktree:git-sidebar-toggle', {
+        new CustomEvent('agentrix:git-sidebar-toggle', {
           detail: {
             worktree: gitSidebarKey,
             open: nextOpen,

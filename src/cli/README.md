@@ -18,7 +18,7 @@ The CLI is now organized into focused, single-responsibility modules:
   - Single responsibility: transform `string[]` → `ParsedArgs`
 
 - **`config.ts`** - Configuration file management
-  - Loads config from `~/.terminal-worktree/config.json`
+  - Loads config from `~/.agentrix/config.json`
   - Normalizes various config formats (supports aliases and nested structures)
   - Saves config back to disk
   - Single responsibility: file config I/O and normalization

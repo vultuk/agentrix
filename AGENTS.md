@@ -1,6 +1,6 @@
-# Terminal-Worktree Agent Handbook
+# Agentrix Agent Handbook
 
-This handbook captures the working knowledge required to extend or maintain the `terminal-worktree`
+This handbook captures the working knowledge required to extend or maintain the `agentrix`
 console application now that the project has been restructured into a modular TypeScript backend and a modern
 React frontend.
 
@@ -15,7 +15,7 @@ React frontend.
 - **TypeScript** – Full strict-mode TypeScript with comprehensive type safety. All source files are `.ts`.
 
 ## 2. File Layout Highlights
-- `bin/terminal-worktree.js` – CLI entry point (imports compiled `dist/cli.js`).
+- `bin/agentrix.js` – CLI entry point (imports compiled `dist/cli.js`).
 - `src/cli.ts` – Modular CLI organized under `src/cli/` with focused modules.
 - `src/cli/` – CLI modules: arg parsing, config management, validation, command handlers.
 - `src/server/` – HTTP server bootstrap, routing, WebSocket wiring, UI serving.
@@ -139,7 +139,7 @@ ui/src/
 ## 4. CLI Usage
 
 ```bash
-node bin/terminal-worktree.js [options]
+node bin/agentrix.js [options]
 ```
 
 Arguments (see `src/cli.ts` and `src/cli/` modules):

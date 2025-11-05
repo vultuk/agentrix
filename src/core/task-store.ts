@@ -62,7 +62,7 @@ export function createTaskStore({
   }
 
   const resolvedRoot = resolve(root);
-  const storageDirectory = join(resolvedRoot, '.terminal-worktree');
+  const storageDirectory = join(resolvedRoot, '.agentrix');
   const filePath = join(storageDirectory, filename);
   let writeQueue: Promise<void> = Promise.resolve();
 
@@ -86,7 +86,7 @@ export function createTaskStore({
         return [];
       }
       logger?.warn?.(
-        '[terminal-worktree] Failed to load persisted tasks snapshot:',
+        '[agentrix] Failed to load persisted tasks snapshot:',
         err.message || err
       );
       return [];
@@ -108,7 +108,7 @@ export function createTaskStore({
     try {
       await task;
     } catch (error: unknown) {
-      logger?.error?.('[terminal-worktree] Failed to persist tasks snapshot:', error);
+      logger?.error?.('[agentrix] Failed to persist tasks snapshot:', error);
       throw error;
     } finally {
       if (writeQueue === placeholder) {

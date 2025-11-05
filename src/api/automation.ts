@@ -158,7 +158,7 @@ export function createAutomationHandlers(
         sendJson(ctx.res as unknown as ServerResponse, error.status, { error: error.message });
         return;
       }
-      log.error('[terminal-worktree] Automation validation failed unexpectedly.', error);
+      log.error('[agentrix] Automation validation failed unexpectedly.', error);
       sendJson(ctx.res as unknown as ServerResponse, 500, { error: 'Unexpected error while validating automation request' });
       return;
     }
@@ -181,7 +181,7 @@ export function createAutomationHandlers(
       finishMetrics(metricsKey, true, durationMs);
       const suffix = detail ? `: ${detail}` : '';
       log.info(
-        `[terminal-worktree] Automation request ${requestId} (${routeLabel}) completed in ${durationMs}ms${suffix}`,
+        `[agentrix] Automation request ${requestId} (${routeLabel}) completed in ${durationMs}ms${suffix}`,
       );
     };
 
@@ -190,17 +190,17 @@ export function createAutomationHandlers(
       finishMetrics(metricsKey, false, durationMs);
       if (error) {
         log.error(
-          `[terminal-worktree] Automation request ${requestId} (${routeLabel}) failed after ${durationMs}ms: ${message}`,
+          `[agentrix] Automation request ${requestId} (${routeLabel}) failed after ${durationMs}ms: ${message}`,
           error,
         );
       } else {
         log.error(
-          `[terminal-worktree] Automation request ${requestId} (${routeLabel}) failed after ${durationMs}ms: ${message}`,
+          `[agentrix] Automation request ${requestId} (${routeLabel}) failed after ${durationMs}ms: ${message}`,
         );
       }
     };
 
-    log.info(`[terminal-worktree] Automation request ${requestId} (${routeLabel}) received.`);
+    log.info(`[agentrix] Automation request ${requestId} (${routeLabel}) received.`);
 
     if (planEnabled && !prompt.trim()) {
       const message = 'prompt is required when plan is true';
@@ -241,7 +241,7 @@ export function createAutomationHandlers(
         finishFailure: finishFailure as never,
         onBranchResolved: (branch: string) => {
           log.info(
-            `[terminal-worktree] Automation request ${requestId} (${routeLabel}) targeting ${org}/${repo}#${branch}.`,
+            `[agentrix] Automation request ${requestId} (${routeLabel}) targeting ${org}/${repo}#${branch}.`,
           );
         },
       })) as unknown as { taskId: string; queuedData: unknown };

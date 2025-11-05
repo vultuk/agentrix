@@ -28,24 +28,24 @@ async function preparePromptEnvironment(session: TerminalSession, prompt: string
     const target = `=${session.tmuxSessionName}`;
     try {
       if (value) {
-        await runTmux(['set-environment', '-t', target, 'TERMINAL_WORKTREE_PROMPT', value]);
+        await runTmux(['set-environment', '-t', target, 'AGENTRIX_PROMPT', value]);
       } else {
-        await runTmux(['set-environment', '-u', '-t', target, 'TERMINAL_WORKTREE_PROMPT']);
+        await runTmux(['set-environment', '-u', '-t', target, 'AGENTRIX_PROMPT']);
       }
       return null;
     } catch (error: unknown) {
       const err = error as { message?: string };
       console.warn(
-        '[terminal-worktree] Failed to set tmux environment variable:',
+        '[agentrix] Failed to set tmux environment variable:',
         err?.message || error
       );
     }
   }
 
   if (!value) {
-    return 'unset TERMINAL_WORKTREE_PROMPT';
+    return 'unset AGENTRIX_PROMPT';
   }
-  return `export TERMINAL_WORKTREE_PROMPT=${shellQuote(value)}`;
+  return `export AGENTRIX_PROMPT=${shellQuote(value)}`;
 }
 
 export interface LaunchAgentParams {
@@ -100,7 +100,7 @@ export async function launchAgentProcess({
     } catch (error: unknown) {
       const err = error as { message?: string };
       console.warn(
-        '[terminal-worktree] Failed to persist automation plan:',
+        '[agentrix] Failed to persist automation plan:',
         err?.message || error
       );
     }

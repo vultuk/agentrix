@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const CONFIG_FILENAME = '.terminal-worktree.json';
+const CONFIG_FILENAME = '.agentrix.json';
 
 export interface RepositoryConfig {
   initCommand: string;
@@ -41,7 +41,7 @@ export async function loadRepositoryConfig(repoRoot: string): Promise<Repository
     } catch (error: unknown) {
       const err = error as { message?: string };
       console.warn(
-        `[terminal-worktree] Failed to parse repository config at ${configPath}:`,
+        `[agentrix] Failed to parse repository config at ${configPath}:`,
         err?.message || error
       );
       return { ...DEFAULT_CONFIG };

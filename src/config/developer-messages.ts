@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-const CONFIG_DIR_NAME = '.terminal-worktree';
+const CONFIG_DIR_NAME = '.agentrix';
 const CACHE = new Map<string, string>();
 
 function getDeveloperMessagePath(slug: string): string | null {
@@ -39,7 +39,7 @@ export async function loadDeveloperMessage(slug: string, fallback: string = ''):
     const err = error as { code?: string; message?: string };
     if (err && err.code !== 'ENOENT') {
       console.warn(
-        `[terminal-worktree] Failed to read developer message override at ${filePath}:`,
+        `[agentrix] Failed to read developer message override at ${filePath}:`,
         err?.message || error
       );
     }
