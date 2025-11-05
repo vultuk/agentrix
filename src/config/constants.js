@@ -1,9 +1,0 @@
-export const DEFAULT_HOST = '0.0.0.0';
-export const DEFAULT_PORT = 3414;
-export const MAX_TERMINAL_BUFFER = 200000;
-export const PASSWORD_LENGTH = 12;
-export const SESSION_COOKIE_NAME = 'terminal_worktree_session';
-export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 8;
-export const TMUX_BIN = 'tmux';
-export const TMUX_SESSION_PREFIX = 'tw-';
-export const MAX_REQUEST_BODY_SIZE = 1024 * 1024;
