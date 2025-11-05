@@ -8,7 +8,7 @@ import { isAuthenticationError } from '../../../services/api/api-client.js';
 
 interface UseTaskManagementOptions {
   onAuthExpired?: () => void;
-  onTaskComplete?: (task: any) => void;
+  onTaskComplete?: (task: any, pending: any) => void;
 }
 
 export function useTaskManagement({ onAuthExpired, onTaskComplete }: UseTaskManagementOptions = {}) {
@@ -42,11 +42,10 @@ export function useTaskManagement({ onAuthExpired, onTaskComplete }: UseTaskMana
         return;
       }
 
-      pendingLaunchesRef.current.delete(task.id);
-
       if (onTaskComplete) {
-        onTaskComplete(task);
+        onTaskComplete(task, pending);
       }
+      pendingLaunchesRef.current.delete(task.id);
     },
     [onTaskComplete],
   );
@@ -131,4 +130,3 @@ export function useTaskManagement({ onAuthExpired, onTaskComplete }: UseTaskMana
     processPendingTask,
   };
 }
-

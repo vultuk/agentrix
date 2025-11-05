@@ -11,6 +11,7 @@ import { useTerminalManagement } from '../../terminal/hooks/useTerminalManagemen
 import { useSessionManagement } from '../../terminal/hooks/useSessionManagement.js';
 import { useGitSidebar } from '../../github/hooks/useGitSidebar.js';
 import { useTaskManagement } from '../../tasks/hooks/useTaskManagement.js';
+import { usePendingTaskProcessor } from '../../tasks/hooks/usePendingTaskProcessor.js';
 import { useRepositoryData } from '../hooks/useRepositoryData.js';
 import { useDashboard } from '../../github/hooks/useDashboard.js';
 import { useEventStream } from '../../../hooks/useEventStream.js';
@@ -53,6 +54,8 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     getWorktreeKey,
   } = browserState;
   
+  const pendingTaskProcessorRef = useRef<((task: any, pending: any) => void) | null>(null);
+  
   // Mobile menu ref
   const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const registerMobileMenuButton = useCallback((node: HTMLButtonElement | null) => {
@@ -84,8 +87,14 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     setActiveRepoDashboard: dashboard.setActiveRepoDashboard,
   });
   
+  const handleTaskComplete = useCallback((task: any, pending: any) => {
+    // handleTaskComplete relies on pendingTaskProcessorRef being assigned later in the render cycle.
+    // The ref indirection avoids dependency churn while preserving a stable callback signature.
+    pendingTaskProcessorRef.current?.(task, pending);
+  }, []);
+  
   // Use task management hook
-  const taskMgmt = useTaskManagement({ onAuthExpired });
+  const taskMgmt = useTaskManagement({ onAuthExpired, onTaskComplete: handleTaskComplete });
   
   // Use Git sidebar hook
   const gitSidebar = useGitSidebar(repoData.activeWorktree, getWorktreeKey);
@@ -308,6 +317,33 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   }, [diffMgmt, modals]);
 
   const openTerminalForWorktreeRef = useRef<((worktree: Worktree, options?: any) => Promise<any>) | null>(null);
+  
+  const { processPendingTask: processPendingWorktree } = usePendingTaskProcessor({
+    getWorktreeKey,
+    getCommandForLaunch,
+    sessionMapRef,
+    knownSessionsRef,
+    openTerminalForWorktreeRef,
+    activeWorktreeRef,
+    clearDashboardPolling,
+    setActiveRepoDashboard,
+    setDashboardError: dashboard.setDashboardError,
+    setIsDashboardLoading: dashboard.setIsDashboardLoading,
+    setActiveWorktree,
+    setPendingWorktreeAction,
+    setIsMobileMenuOpen: menus.setIsMobileMenuOpen,
+    closePromptModal: modals.closePromptModal,
+    closeWorktreeModal: modals.closeWorktreeModal,
+    pendingLaunchesRef,
+  });
+  useEffect(() => {
+    pendingTaskProcessorRef.current = (task: any, pending: any) => {
+      processPendingWorktree(task, pending);
+    };
+    return () => {
+      pendingTaskProcessorRef.current = null;
+    };
+  }, [processPendingWorktree]);
   
   // Destructure Git sidebar values
   const isGitSidebarOpen = gitSidebar.isGitSidebarOpen;
