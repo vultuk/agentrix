@@ -109,7 +109,12 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   const planMgmt = usePlanManagement({ onAuthExpired });
   
   // Use diff management hook
-  const diffMgmt = useDiffManagement({ activeWorktree: repoData.activeWorktree, onAuthExpired });
+  const {
+    autoCloseDiff,
+    closeDiffModal,
+    openGitDiff,
+    toggleDiffView: toggleDiffViewInternal,
+  } = useDiffManagement({ activeWorktree: repoData.activeWorktree, onAuthExpired });
   
   // Destructure hook values for easier reference
   const terminalContainerRef = terminal.terminalContainerRef;
@@ -288,24 +293,26 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     [fetchPlanContent, modals.planModal.context]
   );
 
+  const setGitDiffModal = modals.setGitDiffModal;
+
   useEffect(() => {
-    diffMgmt.autoCloseDiff(modals.setGitDiffModal);
-  }, [activeWorktree, diffMgmt, modals]);
+    autoCloseDiff(setGitDiffModal);
+  }, [autoCloseDiff, setGitDiffModal, activeWorktree?.org, activeWorktree?.repo, activeWorktree?.branch]);
 
   const handleCloseGitDiff = useCallback(() => {
-    diffMgmt.closeDiffModal(modals.setGitDiffModal);
-  }, [diffMgmt, modals]);
+    closeDiffModal(setGitDiffModal);
+  }, [closeDiffModal, setGitDiffModal]);
 
   const handleOpenGitDiff = useCallback(
     ({ item }: { item: any }) => {
-      diffMgmt.openGitDiff(item, modals.setGitDiffModal);
+      openGitDiff(item, setGitDiffModal);
     },
-    [diffMgmt, modals],
+    [openGitDiff, setGitDiffModal],
   );
 
   const toggleDiffView = useCallback(() => {
-    diffMgmt.toggleDiffView(modals.setGitDiffModal);
-  }, [diffMgmt, modals]);
+    toggleDiffViewInternal(setGitDiffModal);
+  }, [toggleDiffViewInternal, setGitDiffModal]);
 
   const openTerminalForWorktreeRef = useRef<((worktree: Worktree, options?: any) => Promise<any>) | null>(null);
   
