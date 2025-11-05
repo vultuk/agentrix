@@ -1,28 +1,30 @@
 # Terminal-Worktree Agent Handbook
 
 This handbook captures the working knowledge required to extend or maintain the `terminal-worktree`
-console application now that the project has been restructured into a modular backend and a modern
+console application now that the project has been restructured into a modular TypeScript backend and a modern
 React frontend.
 
 ## 1. Architecture Overview
-- **Backend** – ES module Node.js service under `src/` responsible for authentication, Git
+- **Backend** – TypeScript ES module Node.js service under `src/` responsible for authentication, Git
   orchestration, worktree lifecycle, and PTY-backed terminal sessions (with optional tmux
   attachment). HTTP endpoints are organised by feature area under `src/api/`, domain logic under
   `src/core/`, shared helpers in `src/utils/`, and server/bootstrap code in `src/server/`.
 - **Frontend** – Vite + React application in `ui/` built with TailwindCSS/PostCSS and xterm.js. The
   production build lives in `ui/dist/` and is served by the backend. During development the Vite dev
   server (`npm run dev:ui`) provides hot reloading.
+- **TypeScript** – Full strict-mode TypeScript with comprehensive type safety. All source files are `.ts`.
 
 ## 2. File Layout Highlights
-- `bin/terminal-worktree.js` – CLI entry point (imports `src/cli.js`).
-- `src/cli.js` – argument parsing, server startup, shutdown orchestration.
-- `src/server/index.js` – HTTP server bootstrap, routing, WebSocket wiring.
-- `src/server/ui.js` – static asset serving (supports single files and built directories).
-- `src/api/*` – request handlers (`auth`, `repos`, `sessions`, `terminal`, `worktrees`).
-- `src/core/*` – shared domain modules (`auth`, `git`, `terminal-sessions`, `tmux`, `workdir`).
-- `src/utils/*` – helpers (`cookies`, `http`, `random`).
-- `ui/` – frontend source (`src/`), Tailwind/Vite config, and `dist/` build output.
-- `.gitignore` – excludes `node_modules`, `ui/node_modules`, and `ui/dist`.
+- `bin/terminal-worktree.js` – CLI entry point (imports compiled `dist/cli.js`).
+- `src/cli.ts` – Modular CLI organized under `src/cli/` with focused modules.
+- `src/cli/` – CLI modules: arg parsing, config management, validation, command handlers.
+- `src/server/` – HTTP server bootstrap, routing, WebSocket wiring, UI serving.
+- `src/api/` – Request handlers (`auth`, `repos`, `sessions`, `terminal`, `worktrees`, `automation`).
+- `src/core/` – Domain modules (`auth`, `git`, `terminal-sessions`, `tmux`, `tasks`, `plan`, `github`).
+- `src/utils/` – Utilities (`cookies`, `http`, `random`, `errors`).
+- `ui/` – Frontend source (`src/`), Tailwind/Vite config, and `dist/` build output.
+- `dist/` – Compiled TypeScript output (gitignored).
+- `.gitignore` – Excludes `node_modules`, `ui/node_modules`, `ui/dist`, and `dist`.
 
 ## 3. CLI Usage
 
@@ -30,7 +32,7 @@ React frontend.
 node bin/terminal-worktree.js [options]
 ```
 
-Arguments (see `src/cli.js`):
+Arguments (see `src/cli.ts` and `src/cli/` modules):
 - `-p, --port <number>` – HTTP port (default `3414`).
 - `-H, --host <host>` – Bind interface (default `0.0.0.0`).
 - `-u, --ui <path>` – Built UI directory or entry file (default `ui/dist`).
@@ -109,15 +111,27 @@ guarded against duplicate signals and cleans up HTTP, WebSocket, tmux, and PTY r
   `@xterm/*` addons is a future improvement.
 
 ## 11. Practices & Constraints
-- Preserve existing ESM structure; avoid reintroducing CommonJS.
-- Stay within ASCII unless a file already includes Unicode.
-- Avoid destructive Git commands; never revert user-authored changes without direction.
-- UI changes should honour the established layout and behaviour.
+- **TypeScript**: All backend code is TypeScript with strict mode enabled.
+- **ESM**: Preserve existing ES module structure; avoid reintroducing CommonJS.
+- **Imports**: Use `.js` extensions in import statements (TypeScript + Node ESM requirement).
+- **Types**: Maintain comprehensive type safety; avoid `any` types.
+- **SOLID**: Follow SOLID principles and clean architecture patterns.
+- **Git**: Avoid destructive Git commands; never revert user-authored changes without direction.
+- **UI**: Changes should honour the established layout and behaviour.
 
-## 12. Future Enhancements
+## 12. Development Commands
+- `npm run typecheck` – Run TypeScript type checking
+- `npm run build:backend` – Compile TypeScript to `dist/`
+- `npm run build:ui` – Build frontend to `ui/dist`
+- `npm run build` – Build both backend and frontend
+- `npm run dev` – Start development backend
+- `npm run dev:ui` – Start Vite dev server with HMR
+
+## 13. Future Enhancements
 - Validate existence of helper binaries (`codex`, `cursor-agent`, `claude`) before auto-running them.
 - Improve error messaging for Git/tmux failures surfaced to the UI.
 - Consider clean-up when worktrees are removed while users are still connected (auto-close sessions).
+- Migrate to `@xterm/*` packages when upstream deprecations are resolved.
 
 Refer to this handbook whenever you return to the project to stay aligned with the agreed design and
 workflow.
