@@ -2,16 +2,17 @@
  * Hook for processing pending worktree creation tasks
  */
 
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
+import type { MutableRefObject } from 'react';
 import type { Worktree } from '../../../types/domain.js';
 
 interface UsePendingTaskProcessorOptions {
   getWorktreeKey: (org: string, repo: string, branch: string) => string;
   getCommandForLaunch: (action: string, dangerousMode?: boolean) => string | undefined;
-  sessionMapRef: React.MutableRefObject<Map<string, string>>;
-  knownSessionsRef: React.MutableRefObject<Set<string>>;
-  openTerminalForWorktreeRef: React.MutableRefObject<((worktree: Worktree, options?: any) => Promise<any>) | null>;
-  activeWorktreeRef: React.MutableRefObject<Worktree | null>;
+  sessionMapRef: MutableRefObject<Map<string, string>>;
+  knownSessionsRef: MutableRefObject<Set<string>>;
+  openTerminalForWorktreeRef: MutableRefObject<((worktree: Worktree, options?: any) => Promise<any>) | null>;
+  activeWorktreeRef: MutableRefObject<Worktree | null>;
   clearDashboardPolling: () => void;
   setActiveRepoDashboard: (value: any) => void;
   setDashboardError: (value: any) => void;
@@ -21,6 +22,7 @@ interface UsePendingTaskProcessorOptions {
   setIsMobileMenuOpen: (value: boolean) => void;
   closePromptModal: () => void;
   closeWorktreeModal: () => void;
+  pendingLaunchesRef?: MutableRefObject<Map<string, any>>;
 }
 
 export function usePendingTaskProcessor({
@@ -39,22 +41,28 @@ export function usePendingTaskProcessor({
   setIsMobileMenuOpen,
   closePromptModal,
   closeWorktreeModal,
+  pendingLaunchesRef,
 }: UsePendingTaskProcessorOptions) {
   const processPendingTask = useCallback(
-    (task: any, pendingLaunchesRef: React.MutableRefObject<Map<string, any>>) => {
+    (task: any, pendingMetadata?: any) => {
       if (!task || typeof task !== 'object' || !task.id) {
         return;
       }
-      const pending = pendingLaunchesRef.current.get(task.id);
+      const pending =
+        pendingMetadata || (pendingLaunchesRef ? pendingLaunchesRef.current.get(task.id) : null);
       if (!pending) {
         return;
       }
       if (task.removed) {
-        pendingLaunchesRef.current.delete(task.id);
+        if (pendingLaunchesRef) {
+          pendingLaunchesRef.current.delete(task.id);
+        }
         return;
       }
       if (task.status === 'failed') {
-        pendingLaunchesRef.current.delete(task.id);
+        if (pendingLaunchesRef) {
+          pendingLaunchesRef.current.delete(task.id);
+        }
         const message =
           (task.error && typeof task.error.message === 'string' && task.error.message) ||
           'Worktree creation failed. Check server logs for details.';
@@ -66,7 +74,9 @@ export function usePendingTaskProcessor({
         return;
       }
 
-      pendingLaunchesRef.current.delete(task.id);
+      if (pendingLaunchesRef) {
+        pendingLaunchesRef.current.delete(task.id);
+      }
 
       const openTerminal = openTerminalForWorktreeRef.current;
       if (typeof openTerminal !== 'function') {
@@ -171,4 +181,3 @@ export function usePendingTaskProcessor({
     processPendingTask,
   };
 }
-

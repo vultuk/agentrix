@@ -54,7 +54,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     getWorktreeKey,
   } = browserState;
   
-  const pendingTaskProcessorRef = useRef<((task: any) => void) | null>(null);
+  const pendingTaskProcessorRef = useRef<((task: any, pending: any) => void) | null>(null);
   
   // Mobile menu ref
   const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -87,8 +87,10 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     setActiveRepoDashboard: dashboard.setActiveRepoDashboard,
   });
   
-  const handleTaskComplete = useCallback((task: any) => {
-    pendingTaskProcessorRef.current?.(task);
+  const handleTaskComplete = useCallback((task: any, pending: any) => {
+    // handleTaskComplete relies on pendingTaskProcessorRef being assigned later in the render cycle.
+    // The ref indirection avoids dependency churn while preserving a stable callback signature.
+    pendingTaskProcessorRef.current?.(task, pending);
   }, []);
   
   // Use task management hook
@@ -316,7 +318,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
 
   const openTerminalForWorktreeRef = useRef<((worktree: Worktree, options?: any) => Promise<any>) | null>(null);
   
-  const pendingTaskProcessor = usePendingTaskProcessor({
+  const { processPendingTask: processPendingWorktree } = usePendingTaskProcessor({
     getWorktreeKey,
     getCommandForLaunch,
     sessionMapRef,
@@ -332,15 +334,16 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     setIsMobileMenuOpen: menus.setIsMobileMenuOpen,
     closePromptModal: modals.closePromptModal,
     closeWorktreeModal: modals.closeWorktreeModal,
+    pendingLaunchesRef,
   });
-  pendingTaskProcessorRef.current = (task: any) => {
-    pendingTaskProcessor.processPendingTask(task, pendingLaunchesRef);
-  };
   useEffect(() => {
+    pendingTaskProcessorRef.current = (task: any, pending: any) => {
+      processPendingWorktree(task, pending);
+    };
     return () => {
       pendingTaskProcessorRef.current = null;
     };
-  }, []);
+  }, [processPendingWorktree]);
   
   // Destructure Git sidebar values
   const isGitSidebarOpen = gitSidebar.isGitSidebarOpen;
