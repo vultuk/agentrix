@@ -5,3 +5,4 @@ dist/
 .bun/
 npm-debug.log*
 *.tsbuildinfo
+.eslintcache
