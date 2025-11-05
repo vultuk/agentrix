@@ -236,6 +236,11 @@ guarded against duplicate signals and cleans up HTTP, WebSocket, tmux, and PTY r
 - `npm run build` – Build both backend and frontend
 - `npm run dev` – Start development backend
 - `npm run dev:ui` – Start Vite dev server with HMR
+- `bun run lint` – Run ESLint across backend and UI (must pass before any commit)
+- `bun run lint:fix` – Auto-fix lint issues where possible
+- `bun run test` – Execute backend test suite via `tsx --test` (all new work expects green test runs)
+- `bun run --filter agentrix-ui test -- --passWithNoTests` – Execute frontend Vitest suite (include UI specs as they are added)
+- `bun run format` / `bun run format:fix` – Verify or apply Prettier formatting prior to submission
 
 ## 14. Future Enhancements
 - Validate existence of helper binaries (`codex`, `cursor-agent`, `claude`) before auto-running them.
@@ -245,3 +250,7 @@ guarded against duplicate signals and cleans up HTTP, WebSocket, tmux, and PTY r
 
 Refer to this handbook whenever you return to the project to stay aligned with the agreed design and
 workflow.
+
+### Continuous Quality Discipline
+- Always run `bun run lint` and the relevant test commands before, during, and after implementing changes. Treat lint/test failures as blockers.
+- Follow strict TDD: write a failing (red) test first, implement the code to make it pass (green), and only then refactor. No feature or bugfix work is considered complete without this red-green cycle.
