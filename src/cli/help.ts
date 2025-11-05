@@ -1,7 +1,7 @@
 import { DEFAULT_HOST, DEFAULT_PORT } from '../server/index.js';
 
 export function printHelp(): void {
-  const helpText = `Usage: terminal-worktree [options]
+  const helpText = `Usage: agentrix [options]
 
 Options:
   -p, --port <number>    Port to bind the HTTP server (default: ${DEFAULT_PORT})

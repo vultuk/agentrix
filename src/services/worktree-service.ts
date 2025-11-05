@@ -172,7 +172,7 @@ export class WorktreeService implements IWorktreeService {
               message,
             });
             console.warn(
-              '[terminal-worktree] Failed to persist plan for worktree:',
+              '[agentrix] Failed to persist plan for worktree:',
               (error as Error)?.message || error
             );
           }
@@ -250,7 +250,7 @@ export class WorktreeService implements IWorktreeService {
         await tmuxKillSession(tmuxSessionName);
       } catch (error: unknown) {
         console.warn(
-          `[terminal-worktree] Failed to kill tmux session ${tmuxSessionName}:`,
+          `[agentrix] Failed to kill tmux session ${tmuxSessionName}:`,
           (error as Error).message
         );
       }

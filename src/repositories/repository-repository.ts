@@ -186,7 +186,7 @@ export async function discoverRepositories(workdir: string): Promise<Repositorie
       } catch (error: unknown) {
         const err = error as { message?: string };
         console.warn(
-          `[terminal-worktree] Failed to load repository config for ${orgName}/${repoName}:`,
+          `[agentrix] Failed to load repository config for ${orgName}/${repoName}:`,
           err?.message || error
         );
         initCommand = '';

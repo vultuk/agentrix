@@ -12,7 +12,7 @@ export class ValidationError extends Error {
 }
 
 export function warnConfig(message: string): void {
-  process.stderr.write(`[terminal-worktree] ${message}\n`);
+  process.stderr.write(`[agentrix] ${message}\n`);
 }
 
 export function validatePort(value: unknown, name: string, configPath: string): number | undefined {

@@ -1,7 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 
-export const CONFIG_DIR_NAME = '.terminal-worktree';
+export const CONFIG_DIR_NAME = '.agentrix';
 export const CONFIG_FILE_NAME = 'config.json';
 
 export const VALID_BRANCH_LLMS = new Set(['codex', 'claude', 'cursor']);

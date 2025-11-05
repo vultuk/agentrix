@@ -173,7 +173,7 @@ export async function tmuxKillSessionsForRepository(
       } catch (error: unknown) {
         const err = error as { message?: string };
         console.warn(
-          `[terminal-worktree] Failed to kill tmux session ${tmuxSessionName}:`,
+          `[agentrix] Failed to kill tmux session ${tmuxSessionName}:`,
           err?.message || error
         );
       }

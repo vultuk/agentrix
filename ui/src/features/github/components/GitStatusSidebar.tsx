@@ -24,7 +24,7 @@ const DEFAULT_SECTION_VISIBILITY = Object.freeze({
   commits: false,
 });
 
-const SIDEBAR_WIDTH_STORAGE_KEY = 'terminal-worktree:git-sidebar-width';
+const SIDEBAR_WIDTH_STORAGE_KEY = 'agentrix:git-sidebar-width';
 const DEFAULT_DESKTOP_WIDTH = 360;
 const MIN_DESKTOP_WIDTH = 320;
 const MAX_DESKTOP_WIDTH = 720;

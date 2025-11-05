@@ -73,7 +73,7 @@ export async function listWorktrees(repositoryPath: string): Promise<WorktreeEnt
   } catch (error) {
     const message = extractGitErrorMessage(error);
     console.error(
-      `[terminal-worktree] Failed to list worktrees for ${repositoryPath}: ${message}`
+      `[agentrix] Failed to list worktrees for ${repositoryPath}: ${message}`
     );
     throw new GitWorktreeError(repositoryPath, message, error);
   }
@@ -138,7 +138,7 @@ async function runRepositoryInitCommand(repoRoot: string, worktreePath: string):
   } catch (error: unknown) {
     const err = error as { message?: string };
     console.warn(
-      `[terminal-worktree] Failed to read repository config for ${repoRoot}:`,
+      `[agentrix] Failed to read repository config for ${repoRoot}:`,
       err?.message || error
     );
     initCommand = '';
@@ -343,7 +343,7 @@ export async function createWorktree(
       } catch (cleanupError: unknown) {
         const cleanupErr = cleanupError as { message?: string };
         console.warn(
-          `[terminal-worktree] Failed to clean up worktree at ${targetPath} after init command failure:`,
+          `[agentrix] Failed to clean up worktree at ${targetPath} after init command failure:`,
           cleanupErr?.message || cleanupError
         );
       }

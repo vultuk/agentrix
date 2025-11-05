@@ -1,16 +1,16 @@
 {
-  "name": "terminal-worktree",
+  "name": "agentrix",
   "version": "0.36.0",
-  "description": "CLI utility for serving the terminal-worktree UI",
+  "description": "CLI utility for serving the agentrix UI",
   "license": "MIT",
   "author": "Simon Skinner (vultuk) <talkto@simonskinner.me>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vultuk/terminal-worktree.git"
+    "url": "git+https://github.com/vultuk/agentrix.git"
   },
-  "homepage": "https://github.com/vultuk/terminal-worktree#readme",
+  "homepage": "https://github.com/vultuk/agentrix#readme",
   "bugs": {
-    "url": "https://github.com/vultuk/terminal-worktree/issues"
+    "url": "https://github.com/vultuk/agentrix/issues"
   },
   "keywords": [
     "terminal",
@@ -35,19 +35,19 @@
     "node": ">=20.0.0"
   },
   "bin": {
-    "terminal-worktree": "bin/terminal-worktree.js"
+    "agentrix": "bin/agentrix.js"
   },
   "scripts": {
     "test": "node --test --test-concurrency=1",
-    "start": "node bin/terminal-worktree.js",
-    "dev": "node bin/terminal-worktree.js",
-    "dev:ui": "node scripts/ensure-ui-deps.js && bun run --filter terminal-worktree-ui dev",
+    "start": "node bin/agentrix.js",
+    "dev": "node bin/agentrix.js",
+    "dev:ui": "node scripts/ensure-ui-deps.js && bun run --filter agentrix-ui dev",
     "build": "npm run build:backend && npm run build:ui",
     "build:backend": "tsc -p tsconfig.build.json",
-    "build:ui": "node scripts/ensure-ui-deps.js && bun run --filter terminal-worktree-ui build",
+    "build:ui": "node scripts/ensure-ui-deps.js && bun run --filter agentrix-ui build",
     "prepack": "npm run build",
-    "preview": "node scripts/ensure-ui-deps.js && bun run --filter terminal-worktree-ui preview",
-    "preview:ui": "node scripts/ensure-ui-deps.js && bun run --filter terminal-worktree-ui preview",
+    "preview": "node scripts/ensure-ui-deps.js && bun run --filter agentrix-ui preview",
+    "preview:ui": "node scripts/ensure-ui-deps.js && bun run --filter agentrix-ui preview",
     "typecheck": "tsc --noEmit",
     "watch": "tsc -p tsconfig.build.json --watch"
   },

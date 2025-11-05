@@ -38,7 +38,7 @@ function getTasksSnapshot() {
 function logPersistenceError(error: unknown): void {
   const logger = persistenceConfig?.logger;
   if (logger && typeof logger.error === 'function') {
-    logger.error('[terminal-worktree] Failed to persist tasks:', error);
+    logger.error('[agentrix] Failed to persist tasks:', error);
   }
 }
 
@@ -560,7 +560,7 @@ export async function configureTaskPersistence({
   loadSnapshot,
   saveSnapshot,
   debounceMs = 200,
-  restartTaskMessage = 'Task failed because terminal-worktree restarted while it was running.',
+  restartTaskMessage = 'Task failed because agentrix restarted while it was running.',
   restartStepMessage = 'Step marked as failed after process restart.',
   restartReason = 'process_restart',
   defaultFailureMessage = 'Task failed.',
@@ -607,7 +607,7 @@ export async function configureTaskPersistence({
       loadedTasks = Array.isArray(loaded) ? loaded : [];
     } catch (error) {
       logPersistenceWarning(
-        '[terminal-worktree] Failed to load persisted tasks snapshot:',
+        '[agentrix] Failed to load persisted tasks snapshot:',
         error instanceof Error ? error : new Error(String(error)),
       );
       loadedTasks = [];

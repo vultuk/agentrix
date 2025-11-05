@@ -60,7 +60,7 @@ export const REPOSITORY_POLL_INTERVAL_MS = 60000;
 export const REPOSITORY_DASHBOARD_POLL_INTERVAL_MS = 60000;
 export const SESSION_POLL_INTERVAL_MS = 60000;
 
-export const ORGANISATION_COLLAPSE_STORAGE_KEY = 'terminal-worktree:collapsed-organisations';
+export const ORGANISATION_COLLAPSE_STORAGE_KEY = 'agentrix:collapsed-organisations';
 
 export const TASK_STATUS_LABELS = Object.freeze({
   pending: 'Pending',

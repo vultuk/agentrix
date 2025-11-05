@@ -41,7 +41,7 @@ export function emit(event: string, data: unknown): void {
     try {
       callback(data);
     } catch (error: unknown) {
-      console.error(`[terminal-worktree] Event handler error for ${event}:`, error);
+      console.error(`[agentrix] Event handler error for ${event}:`, error);
     }
   });
 }

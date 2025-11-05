@@ -1,6 +1,6 @@
-# terminal-worktree
+# agentrix
 
-`terminal-worktree` is a password-protected CLI that serves a browser-based interface for managing
+`agentrix` is a password-protected CLI that serves a browser-based interface for managing
 Git repositories, worktrees, and persistent shell sessions. The backend is an ES module Node.js
 service that exposes REST + WebSocket APIs, while the frontend is a Vite-powered React application
 that lives in `ui/`.
@@ -46,14 +46,14 @@ npm start
 or directly:
 
 ```bash
-node bin/terminal-worktree.js
+node bin/agentrix.js
 ```
 
 By default the server binds to `0.0.0.0:3414`, serves assets from `ui/dist`, and scans the current
 working directory for repositories. Customise behaviour with flags:
 
 ```bash
-node bin/terminal-worktree.js \
+node bin/agentrix.js \
   --port 4000 \
   --host 127.0.0.1 \
   --ui ./ui/dist \
@@ -75,7 +75,7 @@ node bin/terminal-worktree.js \
 - `--show-password` – Print the resolved password even if it was set via config or flag
 - `--ngrok-api-key <token>` – Authtoken used to establish a public ngrok tunnel
 - `--ngrok-domain <domain>` – Reserved ngrok domain exposed when tunnelling (requires `--ngrok-api-key`)
-- `--save` – Persist the effective configuration to `~/.terminal-worktree/config.json` and exit
+- `--save` – Persist the effective configuration to `~/.agentrix/config.json` and exit
 - `-h, --help` – Print usage
 - `-v, --version` – Show package version
 
@@ -85,7 +85,7 @@ and port.
 
 ### Configuration File
 
-At startup the CLI also reads `~/.terminal-worktree/config.json` if it exists. Any values in that file
+At startup the CLI also reads `~/.agentrix/config.json` if it exists. Any values in that file
 fill in defaults for matching CLI options, while explicit command-line arguments always win. A simple
 configuration might look like:
 
@@ -124,7 +124,7 @@ automation API key can be supplied as `automation.apiKey`, `automationApiKey`, o
 the file absent to continue using only CLI arguments. Use `terminalSessionMode` to persist the
 preferred terminal backend (`auto`, `tmux`, or `pty`).
 
-Run `terminal-worktree --port 4001 --workdir /srv/worktrees --save` to save the provided values into
+Run `agentrix --port 4001 --workdir /srv/worktrees --save` to save the provided values into
 the config file without starting the server.
 
 ### Authentication
@@ -168,14 +168,14 @@ metadata about the repository, worktree, agent command, process `pid`, terminal 
 (`terminalSessionId`, `terminalSessionCreated`, `terminalUsingTmux`, `tmuxSessionName` when
 applicable), plus the automation metadata `plan`, `promptRoute`, and `automationRequestId`. Automated
 launches therefore appear immediately inside the UI terminal. The effective prompt (planned or
-passthrough) is exported to the session as `TERMINAL_WORKTREE_PROMPT` and appended to the initial
+passthrough) is exported to the session as `AGENTRIX_PROMPT` and appended to the initial
 agent command so automation invocations receive it straight away.
 
 ### Task Persistence
 
 Automation launches and other background workflows publish task status updates that power
 `/api/tasks` and the UI dashboard. The backend persists this metadata to
-`<workdir>/.terminal-worktree/tasks.json` using atomic writes so that state survives process
+`<workdir>/.agentrix/tasks.json` using atomic writes so that state survives process
 restarts. During bootstrap the saved snapshot is rehydrated; any task that was still `pending` or
 `running` is marked as `failed` with `error.reason` set to `process_restart`, allowing the UI to show
 that progress was interrupted. Completed tasks remain visible for 15 minutes before being pruned
@@ -189,8 +189,8 @@ under `.plans/`. Access them without SSHing into the worktree:
 - `GET /api/plans?org=<org>&repo=<repo>&branch=<branch>` – returns the newest plan identifiers and
   timestamps for the requested worktree.
 - `GET /api/plans/content?...&planId=<file>` – streams the selected plan’s contents in Markdown.
-- CLI helper: `terminal-worktree plans list --org <org> --repo <repo> --branch <branch>` followed by
-  `terminal-worktree plans show --org <org> --repo <repo> --branch <branch> --plan-id <file>` to
+- CLI helper: `agentrix plans list --org <org> --repo <repo> --branch <branch>` followed by
+  `agentrix plans show --org <org> --repo <repo> --branch <branch> --plan-id <file>` to
   render Markdown locally.
 
 The server prunes older artifacts, keeping the 20 most recent plans per branch by default. Delete

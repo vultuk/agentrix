@@ -21,7 +21,7 @@ function run(command, args, options = {}) {
   });
 }
 
-let install = run('bun', ['install', '--filter', 'terminal-worktree-ui']);
+let install = run('bun', ['install', '--filter', 'agentrix-ui']);
 
 if (install.status !== 0) {
   install = run('npm', ['ci'], { cwd: uiDir });

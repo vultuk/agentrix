@@ -22,7 +22,7 @@ function createSilentLogger() {
 }
 
 async function createStoreRoot() {
-  const root = await mkdtemp(join(tmpdir(), 'terminal-worktree-tests-'));
+  const root = await mkdtemp(join(tmpdir(), 'agentrix-tests-'));
   const store = createTaskStore({ root, logger: createSilentLogger() });
   return { root, store };
 }
