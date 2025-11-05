@@ -1,0 +1,1 @@
+When we use the "Create from prompt" system and click "Create workspace," it creates the workspace in the branch. However, it doesn't automatically start the appropriate agent and send the command. Please can you investigate and fix this?
