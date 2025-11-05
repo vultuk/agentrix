@@ -52,9 +52,13 @@ export function useSessionManagement() {
     const queue = pendingNotificationsRef.current;
     const existingIndex = queue.findIndex((item) => item.key === notification.key);
     if (existingIndex >= 0) {
-      queue[existingIndex] = notification;
+      pendingNotificationsRef.current = [
+        ...queue.slice(0, existingIndex),
+        notification,
+        ...queue.slice(existingIndex + 1),
+      ];
     } else {
-      queue.push(notification);
+      pendingNotificationsRef.current = [...queue, notification];
     }
   }, []);
 
@@ -148,6 +152,14 @@ export function useSessionManagement() {
         nextAcknowledgements.delete(key);
         idleAcknowledgementsRef.current = nextAcknowledgements;
         setIdleAcknowledgementsSnapshot(new Map(nextAcknowledgements));
+      }
+      if (pendingNotificationsRef.current.length > 0) {
+        const filteredNotifications = pendingNotificationsRef.current.filter(
+          (entry) => entry.key !== key,
+        );
+        if (filteredNotifications.length !== pendingNotificationsRef.current.length) {
+          pendingNotificationsRef.current = filteredNotifications;
+        }
       }
     },
     [setIdleAcknowledgementsSnapshot, setSessionMetadataSnapshot],
