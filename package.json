@@ -38,7 +38,7 @@
     "agentrix": "bin/agentrix.js"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1",
+    "test": "tsx --test --test-concurrency=1",
     "start": "node bin/agentrix.js",
     "dev": "node bin/agentrix.js",
     "dev:ui": "node scripts/ensure-ui-deps.js && bun run --filter agentrix-ui dev",
