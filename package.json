@@ -49,7 +49,11 @@
     "preview": "node scripts/ensure-ui-deps.js && bun run --filter agentrix-ui preview",
     "preview:ui": "node scripts/ensure-ui-deps.js && bun run --filter agentrix-ui preview",
     "typecheck": "tsc --noEmit",
-    "watch": "tsc -p tsconfig.build.json --watch"
+    "watch": "tsc -p tsconfig.build.json --watch",
+    "lint": "eslint . --ext .ts,.tsx,.js --cache --max-warnings=0",
+    "lint:fix": "npm run lint -- --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write ."
   },
   "type": "module",
   "dependencies": {
@@ -70,10 +74,20 @@
     "@types/mime-types": "^3.0.1",
     "@types/node": "^24.10.0",
     "@types/ws": "^8.18.1",
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-jsx-a11y": "^6.10.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "globals": "^15.12.0",
+    "prettier": "^3.4.2",
     "esbuild-node-loader": "^0.8.0",
     "esbuild-register": "^3.6.0",
     "jsdom": "^27.1.0",
     "tsx": "^4.20.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.15.0"
   }
 }
