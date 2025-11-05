@@ -56,9 +56,3 @@ export interface ErrorMessageProps {
   className?: string;
 }
 
-// Loading spinner props
-export interface LoadingSpinnerProps {
-  size?: 'sm' | 'md' | 'lg';
-  className?: string;
-}
-

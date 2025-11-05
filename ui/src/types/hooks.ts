@@ -106,10 +106,3 @@ export interface UseLocalStorageReturn<T> {
 
 // useDebounce hook - no return type needed, just returns the debounced value
 
-// useResizeObserver hook
-export interface UseResizeObserverReturn {
-  ref: React.RefObject<HTMLElement>;
-  width: number;
-  height: number;
-}
-

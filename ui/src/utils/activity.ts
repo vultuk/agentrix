@@ -2,7 +2,7 @@
  * Utilities for tracking and managing terminal activity acknowledgements
  */
 
-import { ACKNOWLEDGEMENT_ACTIVITY_TOLERANCE_MS } from '../config/constants.js';
+import { ACKNOWLEDGEMENT_ACTIVITY_TOLERANCE_MS } from './constants.js';
 
 export const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);

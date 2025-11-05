@@ -26,7 +26,117 @@ React frontend.
 - `dist/` – Compiled TypeScript output (gitignored).
 - `.gitignore` – Excludes `node_modules`, `ui/node_modules`, `ui/dist`, and `dist`.
 
-## 3. CLI Usage
+## 3. Frontend Architecture
+
+The frontend follows a feature-based architecture organized by domain to promote modularity, reusability, and 
+separation of concerns. The structure adheres to SOLID and DRY principles.
+
+### Directory Structure
+
+```
+ui/src/
+├── app/                          # Entry point & application root
+│   ├── App.tsx                   # Main application component with AuthProvider
+│   └── main.tsx                  # Application bootstrap
+├── components/                   # Reusable presentational components
+│   ├── Badge.tsx                 # UI atoms/molecules with no business logic
+│   ├── Button.tsx
+│   ├── Input.tsx
+│   ├── Modal.tsx
+│   ├── Spinner.tsx
+│   └── ...
+├── features/                     # Domain-specific modules (self-contained)
+│   ├── auth/
+│   │   └── components/           # Auth-specific components
+│   ├── repositories/
+│   │   ├── components/           # Repository UI components
+│   │   │   ├── RepoBrowser.tsx
+│   │   │   ├── Sidebar.tsx
+│   │   │   └── modals/
+│   │   └── hooks/                # Repository business logic hooks
+│   ├── worktrees/
+│   │   ├── components/modals/
+│   │   └── hooks/
+│   ├── tasks/
+│   │   ├── components/
+│   │   └── hooks/
+│   ├── plans/
+│   │   ├── components/modals/
+│   │   └── hooks/
+│   ├── terminal/
+│   │   ├── components/
+│   │   └── hooks/
+│   └── github/
+│       ├── components/
+│       └── hooks/
+├── hooks/                        # Shared hooks (framework-level utilities)
+│   ├── useDebounce.tsx
+│   ├── usePolling.tsx
+│   ├── useEventStream.tsx
+│   └── ...
+├── context/                      # React contexts for global state
+│   └── AuthContext.tsx           # Authentication state & handlers
+├── hoc/                          # Higher-order components (guards, wrappers)
+├── services/                     # API clients & data access
+│   └── api/
+│       ├── api-client.ts
+│       ├── authService.ts
+│       ├── reposService.ts
+│       └── ...
+├── utils/                        # Pure helper functions (no React dependency)
+│   ├── constants.ts
+│   ├── formatting.ts
+│   ├── validation.ts
+│   └── ...
+├── types/                        # Shared TypeScript interfaces & enums
+│   ├── api.ts
+│   ├── domain.ts
+│   └── ...
+├── config/                       # Configuration & constants
+│   ├── commands.ts
+│   └── tasks.ts
+└── styles.css                    # Global styles
+```
+
+### Key Principles
+
+1. **Feature Isolation** – Each feature module is self-contained with its own components, hooks, and business 
+   logic. Features do not directly import from each other.
+
+2. **Component Organization**:
+   - `components/` – Pure presentational components with no business logic or API calls
+   - `features/*/components/` – Feature-specific components that may contain business logic
+   - Components use the `.js` extension in imports despite being `.tsx` files (ESM requirement)
+
+3. **Hook Organization**:
+   - `hooks/` – Framework-level, truly reusable hooks (debounce, polling, event streams)
+   - `features/*/hooks/` – Feature-specific business logic hooks (e.g., `useTaskManagement`, 
+     `useRepositoryOperations`)
+
+4. **State Management**:
+   - `context/AuthContext.tsx` – Centralized authentication state via React Context
+   - Local state management within features using React hooks
+   - No global state library (Zustand/Redux) currently used
+
+5. **Import Patterns**:
+   - Cross-feature imports go through shared layers (`components/`, `hooks/`, `utils/`, `services/`, `types/`)
+   - Features import from: `../../../components/`, `../../../hooks/`, `../../../services/`, etc.
+   - Shared hooks import from: `../../hooks/`, `../../utils/`, etc.
+   - Always use `.js` extensions in imports (TypeScript + ESM requirement)
+
+6. **Type Safety** – All TypeScript with strict mode. Shared types in `types/`, feature-specific types 
+   co-located or in shared types.
+
+### Common Patterns
+
+- **Modal Container** – `features/terminal/components/ModalContainer.tsx` aggregates all modals from different 
+  features for centralized rendering
+- **Feature Hooks** – Complex features expose multiple hooks (e.g., repositories has `useRepoBrowserState`, 
+  `useRepositoryData`, `useRepositoryOperations`)
+- **Service Layer** – All API calls go through `services/api/*` for consistency and error handling
+- **Authentication** – `AuthContext` provides `useAuth()` hook for auth state and handlers throughout the app
+
+## 4. CLI Usage
 
 ```bash
 node bin/terminal-worktree.js [options]
@@ -45,7 +155,7 @@ Arguments (see `src/cli.ts` and `src/cli/` modules):
 The CLI logs the resolved UI root, work directory, listening address, and password. Shutdown is
 guarded against duplicate signals and cleans up HTTP, WebSocket, tmux, and PTY resources.
 
-## 4. Workdir Expectations & Git Flow
+## 5. Workdir Expectations & Git Flow
 - Repository layout for `git@github.com:org/repo.git`:
   ```
   [workdir]/
@@ -64,7 +174,7 @@ guarded against duplicate signals and cleans up HTTP, WebSocket, tmux, and PTY r
 - Removing a worktree (`DELETE /api/worktrees`) disposes active sessions, kills tmux mirrors, and
   runs `git worktree remove --force`. Branch `main` remains protected.
 
-## 5. Terminal Sessions
+## 6. Terminal Sessions
 - Sessions keyed by `org::repo::branch` and tracked in-memory (`core/terminal-sessions`).
 - `/api/terminal/open` returns existing sessions or spawns new PTYs (`node-pty`) and attaches tmux
   when available.
@@ -73,7 +183,7 @@ guarded against duplicate signals and cleans up HTTP, WebSocket, tmux, and PTY r
   output (trimmed to 200k chars). Authentication is validated during upgrade using session cookies.
 - `/api/sessions` merges in-memory sessions with live tmux sessions to restore orphaned terminals.
 
-## 6. Frontend Behaviour
+## 7. Frontend Behaviour
 - Built with React function components and hooks (mirrors the original mockup functionality).
 - TailwindCSS + PostCSS deliver the utility classes formerly provided by `cdn.tailwindcss.com`.
 - `re-resizable` powers the sidebar resize on desktop; mobile view swaps to a hamburger drawer.
@@ -82,26 +192,26 @@ guarded against duplicate signals and cleans up HTTP, WebSocket, tmux, and PTY r
 - xterm.js + fit addon render the terminal, preserve scrollback, and keep geometry synced via
   `ResizeObserver`.
 
-## 7. Auth & Session Notes
+## 8. Auth & Session Notes
 - `core/auth` manages session tokens and cookie serialisation. Login failures surface 400/401 with
   descriptive messages.
 - Cookies: `SameSite=Strict`, `HttpOnly`, path `/`, and session max-age `8h`.
 - Logout clears the session cookie and in-memory token set.
 
-## 8. Shutdown Path
+## 9. Shutdown Path
 - `startServer` exposes `close()` which:
   - Terminates PTY/tmux sessions (escalating from `SIGTERM` to `SIGKILL` after 2s if required).
   - Closes the WebSocket server and HTTP server.
   - Clears auth session tokens/maps.
 
-## 9. Frontend Build & Dev
+## 10. Frontend Build & Dev
 - `npm run build` (root) → runs Vite build under `ui/` to refresh `ui/dist`.
 - `npm run dev:ui` → Vite dev server with HMR.
 - Backend serving expects `ui/dist` to exist; rebuild after UI changes before using the CLI.
 - Access the dev server directly in the browser when iterating on frontend features; backend APIs
   continue to run on port `3414`.
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 - **Missing `ui/dist`** – `createUiProvider` throws `UI path not found`. Run `npm run build`.
 - **Auth errors / 401** – Usually indicates expired session; login again or inspect cookie.
 - **Terminal stuck `disconnected`** – Investigate WebSocket connection in browser console, check
@@ -110,7 +220,7 @@ guarded against duplicate signals and cleans up HTTP, WebSocket, tmux, and PTY r
 - **Deprecated xterm packages** – Vite warns that upstream packages are deprecated; switching to
   `@xterm/*` addons is a future improvement.
 
-## 11. Practices & Constraints
+## 12. Practices & Constraints
 - **TypeScript**: All backend code is TypeScript with strict mode enabled.
 - **ESM**: Preserve existing ES module structure; avoid reintroducing CommonJS.
 - **Imports**: Use `.js` extensions in import statements (TypeScript + Node ESM requirement).
@@ -119,7 +229,7 @@ guarded against duplicate signals and cleans up HTTP, WebSocket, tmux, and PTY r
 - **Git**: Avoid destructive Git commands; never revert user-authored changes without direction.
 - **UI**: Changes should honour the established layout and behaviour.
 
-## 12. Development Commands
+## 13. Development Commands
 - `npm run typecheck` – Run TypeScript type checking
 - `npm run build:backend` – Compile TypeScript to `dist/`
 - `npm run build:ui` – Build frontend to `ui/dist`
@@ -127,7 +237,7 @@ guarded against duplicate signals and cleans up HTTP, WebSocket, tmux, and PTY r
 - `npm run dev` – Start development backend
 - `npm run dev:ui` – Start Vite dev server with HMR
 
-## 13. Future Enhancements
+## 14. Future Enhancements
 - Validate existence of helper binaries (`codex`, `cursor-agent`, `claude`) before auto-running them.
 - Improve error messaging for Git/tmux failures surfaced to the UI.
 - Consider clean-up when worktrees are removed while users are still connected (auto-close sessions).

@@ -8,7 +8,7 @@ export interface Repository {
   repo: string;
   url?: string;
   path?: string;
-  worktrees?: Worktree[];
+  worktrees?: WorktreeInfo[];
   initCommand?: string;
 }
 
@@ -18,12 +18,25 @@ export interface RepositoryData {
   };
 }
 
-// Worktree types
-export interface Worktree {
+// Worktree types (detailed info from Git)
+export interface WorktreeInfo {
   branch: string;
   path: string;
   current?: boolean;
   prunable?: boolean;
+}
+
+// Worktree context (org/repo/branch identifier)
+export interface Worktree {
+  org: string;
+  repo: string;
+  branch: string;
+}
+
+// Repository dashboard context
+export interface RepoDashboard {
+  org: string;
+  repo: string;
 }
 
 // Task types
