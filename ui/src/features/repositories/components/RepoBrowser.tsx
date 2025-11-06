@@ -99,6 +99,20 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   
   // Use Git sidebar hook
   const gitSidebar = useGitSidebar(repoData.activeWorktree, getWorktreeKey);
+
+  const [isPortsSidebarOpen, setIsPortsSidebarOpen] = useState(false);
+  const togglePortsSidebar = useCallback(() => {
+    setIsPortsSidebarOpen((current) => !current);
+  }, []);
+  const closePortsSidebar = useCallback(() => {
+    setIsPortsSidebarOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!repoData.activeWorktree) {
+      setIsPortsSidebarOpen(false);
+    }
+  }, [repoData.activeWorktree]);
   
   // Use command config hook
   const commandCfg = useCommandConfig({ onAuthExpired });
@@ -393,6 +407,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     disposeSocket: terminal.disposeSocket,
     disposeTerminal: terminal.disposeTerminal,
     closeGitSidebar: gitSidebar.closeGitSidebar,
+    closePortsSidebar,
     loadSessions: polling.loadSessions,
     openTerminalForWorktree: terminal.openTerminal,
   });
@@ -782,14 +797,17 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     planModalOpen: modals.planModal.open,
     planModalLoading: modals.planModal.loading,
     isGitSidebarOpen,
+    isPortsSidebarOpen,
     onOpenPlanHistory: openPlanHistory,
     onToggleGitSidebar: toggleGitSidebar,
+    onTogglePortsSidebar: togglePortsSidebar,
   });
 
   const githubControls = actionButtons.githubControls;
   const taskMenuButton = actionButtons.taskMenuButton;
   const planHistoryButton = actionButtons.planHistoryButton;
   const gitSidebarButton = actionButtons.gitSidebarButton;
+  const portsSidebarButton = actionButtons.portsSidebarButton;
 
   const acknowledgeIdleSession = useCallback((org: string, repo: string, branch: string) => {
     const key = getWorktreeKey(org, repo, branch);
@@ -841,14 +859,17 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     dashboardError,
     terminalContainerRef,
     isGitSidebarOpen,
+    isPortsSidebarOpen,
     githubControls,
     taskMenuButton,
     planHistoryButton,
     gitSidebarButton,
+    portsSidebarButton,
     registerMobileMenuButton,
     onMobileMenuOpen: () => menus.setIsMobileMenuOpen(true),
     onDashboardRefresh: handleDashboardRefresh,
     onGitSidebarClose: closeGitSidebar,
+    onPortsSidebarClose: closePortsSidebar,
     onAuthExpired: notifyAuthExpired,
     onGitStatusUpdate: handleGitStatusUpdate,
     onOpenDiff: handleOpenGitDiff,

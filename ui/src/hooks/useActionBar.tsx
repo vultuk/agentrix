@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { ScrollText, GitBranch } from 'lucide-react';
+import { ScrollText, GitBranch, Server } from 'lucide-react';
 import { renderSpinner } from '../components/Spinner.js';
 import { TaskMenu } from '../features/tasks/components/TaskMenu.js';
 import GitHubControls from '../features/github/components/GitHubControls.js';
@@ -20,8 +20,10 @@ interface UseActionBarOptions {
   planModalOpen: boolean;
   planModalLoading: boolean;
   isGitSidebarOpen: boolean;
+  isPortsSidebarOpen: boolean;
   onOpenPlanHistory: () => void;
   onToggleGitSidebar: () => void;
+  onTogglePortsSidebar: () => void;
 }
 
 export function useActionBar({
@@ -32,8 +34,10 @@ export function useActionBar({
   planModalOpen,
   planModalLoading,
   isGitSidebarOpen,
+  isPortsSidebarOpen,
   onOpenPlanHistory,
   onToggleGitSidebar,
+  onTogglePortsSidebar,
 }: UseActionBarOptions) {
   const githubRepoContext = activeWorktree || activeRepoDashboard;
 
@@ -79,11 +83,26 @@ export function useActionBar({
       )
     : null;
 
+  const portsSidebarButton = activeWorktree
+    ? h(
+        'button',
+        {
+          type: 'button',
+          onClick: onTogglePortsSidebar,
+          className: `${ACTION_BUTTON_CLASS} text-neutral-400 hover:text-neutral-100`,
+          'aria-pressed': isPortsSidebarOpen ? 'true' : 'false',
+          'aria-expanded': isPortsSidebarOpen ? 'true' : 'false',
+          title: isPortsSidebarOpen ? 'Hide ports sidebar' : 'Show ports sidebar',
+        },
+        h(Server, { size: 16 })
+      )
+    : null;
+
   return {
     githubControls,
     taskMenuButton,
     planHistoryButton,
     gitSidebarButton,
+    portsSidebarButton,
   };
 }
-

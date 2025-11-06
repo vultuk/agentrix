@@ -14,7 +14,9 @@ import { createPlanHandlers } from '../api/create-plan.js';
 import { createPlanArtifactHandlers } from '../api/plans.js';
 import { createEventStreamHandler } from './events.js';
 import { createTaskHandlers } from '../api/tasks.js';
+import { createPortHandlers } from '../api/ports.js';
 import type { AuthManager, CookieManager } from '../types/auth.js';
+import type { PortTunnelManager } from '../core/ports.js';
 
 export interface RouterConfig {
   authManager: AuthManager;
@@ -26,6 +28,7 @@ export interface RouterConfig {
   defaultBranches: unknown;
   cookieManager?: CookieManager;
   terminalSessionMode?: 'auto' | 'tmux' | 'pty';
+  portManager: PortTunnelManager;
 }
 
 export type Router = (req: IncomingMessage, res: ServerResponse) => Promise<boolean>;
@@ -45,6 +48,7 @@ interface RouterDependencies {
   createPlanArtifactHandlers: typeof createPlanArtifactHandlers;
   createEventStreamHandler: typeof createEventStreamHandler;
   createTaskHandlers: typeof createTaskHandlers;
+  createPortHandlers: typeof createPortHandlers;
   sendJson: typeof sendJson;
   readJsonBody: typeof readJsonBody;
 }
@@ -64,6 +68,7 @@ const defaultDependencies: RouterDependencies = {
   createPlanArtifactHandlers,
   createEventStreamHandler,
   createTaskHandlers,
+  createPortHandlers,
   sendJson,
   readJsonBody,
 };
@@ -88,12 +93,16 @@ export function createRouter({
   defaultBranches,
   cookieManager,
   terminalSessionMode = 'auto',
+  portManager,
 }: RouterConfig): Router {
   if (!authManager) {
     throw new Error('authManager is required');
   }
   if (!agentCommands) {
     throw new Error('agentCommands is required');
+  }
+  if (!portManager) {
+    throw new Error('portManager is required');
   }
 
   const authHandlers = getDependency('createAuthHandlers')(authManager, { cookieManager });
@@ -123,6 +132,7 @@ export function createRouter({
   const planArtifactHandlers = getDependency('createPlanArtifactHandlers')(workdir);
   const eventStreamHandler = getDependency('createEventStreamHandler')({ authManager, workdir });
   const taskHandlers = getDependency('createTaskHandlers')();
+  const portHandlers = getDependency('createPortHandlers')({ portManager });
   const readJson = getDependency('readJsonBody');
   const sendJsonResponse = getDependency('sendJson');
 
@@ -132,6 +142,20 @@ export function createRouter({
       {
         requiresAuth: false,
         handlers: { POST: authHandlers.login },
+      },
+    ],
+    [
+      '/api/ports',
+      {
+        requiresAuth: true,
+        handlers: { GET: portHandlers.list, HEAD: portHandlers.list },
+      },
+    ],
+    [
+      '/api/ports/tunnel',
+      {
+        requiresAuth: true,
+        handlers: { POST: portHandlers.openTunnel },
       },
     ],
     [

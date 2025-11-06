@@ -1,0 +1,1 @@
+In the same way we have the git changes right sidebar, I'd like one that will show a list of ports. We can show a list of ports for the user with this command `ss -ntpH | awk '{print $5}' | awk -F: '{print $NF}' | sort -n | uniq`. Clicking on a port should use the ngrok sdk to open a temporary tunnel.
