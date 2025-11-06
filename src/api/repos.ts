@@ -1,4 +1,4 @@
-import { createRepositoryService } from '../services/index.js';
+import { createRepositoryService, type RepositoryService } from '../services/index.js';
 import { handleHeadRequest } from '../utils/http.js';
 import { asyncHandler } from '../infrastructure/errors/index.js';
 import { createHandler } from './base-handler.js';
@@ -9,8 +9,12 @@ import {
   validateInitCommandUpdate,
 } from '../validation/index.js';
 
-export function createRepoHandlers(workdir: string) {
-  const repositoryService = createRepositoryService(workdir);
+export interface RepoHandlersOverrides {
+  repositoryService?: RepositoryService;
+}
+
+export function createRepoHandlers(workdir: string, overrides: RepoHandlersOverrides = {}) {
+  const repositoryService = overrides.repositoryService ?? createRepositoryService(workdir);
 
   const list = asyncHandler(async (context: RequestContext) => {
     if (context.method === 'HEAD') {

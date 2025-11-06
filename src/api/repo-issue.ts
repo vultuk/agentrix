@@ -2,7 +2,7 @@ import { ensureRepository } from '../core/git.js';
 import { createGithubClient } from '../core/github.js';
 import { sendJson, handleHeadRequest } from '../utils/http.js';
 import { extractRepositoryParams } from '../validation/index.js';
-import { extractErrorMessage } from '../infrastructure/errors/index.js';
+import { HttpError, ValidationError } from '../infrastructure/errors/index.js';
 import { createQueryHandler } from './base-handler.js';
 import type { RequestContext } from '../types/http.js';
 
@@ -24,23 +24,20 @@ export function createRepoIssueHandlers(workdir: string, overrides: RepoIssueOve
     const issueParam = context.url.searchParams.get('issue')?.trim() || '';
 
     if (!issueParam) {
-      sendJson(context.res, 400, { error: 'issue query parameter is required' });
-      return;
+      throw new ValidationError('issue query parameter is required');
     }
 
     const issueNumber = Number.parseInt(issueParam, 10);
     if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
-      sendJson(context.res, 400, { error: 'issue query parameter must be a positive integer' });
-      return;
+      throw new ValidationError('issue query parameter must be a positive integer');
     }
 
     try {
       await ensureRepo(workdir, org, repo);
     } catch (error: unknown) {
-      const message = extractErrorMessage(error, 'Repository not found');
+      const message = error instanceof Error ? error.message : String(error);
       const statusCode = message.includes('not found') ? 404 : 500;
-      sendJson(context.res, statusCode, { error: message });
-      return;
+      throw new HttpError(message, statusCode);
     }
 
     if (context.method === 'HEAD') {

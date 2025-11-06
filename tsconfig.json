@@ -2,10 +2,11 @@
   "compilerOptions": {
     /* Language and Environment */
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    
     /* Type Checking */
     "strict": true,
     "noImplicitAny": true,
@@ -22,13 +23,11 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
-    
     /* Modules */
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    
     /* Emit */
     "noEmit": true,
     "declaration": true,
@@ -38,12 +37,10 @@
     "importHelpers": false,
     "downlevelIteration": true,
     "preserveConstEnums": true,
-    
     /* Interop Constraints */
     "isolatedModules": true,
     "allowArbitraryExtensions": false,
     "verbatimModuleSyntax": false,
-    
     /* Completeness */
     "skipLibCheck": true
   },
@@ -54,8 +51,6 @@
     "node_modules",
     "dist",
     "ui",
-    "**/*.test.ts",
     "**/__tests__/**"
   ]
 }
-

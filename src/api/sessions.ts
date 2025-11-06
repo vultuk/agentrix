@@ -1,10 +1,14 @@
-import { createSessionService } from '../services/session-service.js';
+import { createSessionService, type SessionService } from '../services/session-service.js';
 import { handleHeadRequest } from '../utils/http.js';
 import { asyncHandler } from '../infrastructure/errors/index.js';
 import type { RequestContext } from '../types/http.js';
 
-export function createSessionHandlers(workdir: string) {
-  const sessionService = createSessionService(workdir);
+export interface SessionHandlersOverrides {
+  sessionService?: SessionService;
+}
+
+export function createSessionHandlers(workdir: string, overrides: SessionHandlersOverrides = {}) {
+  const sessionService = overrides.sessionService ?? createSessionService(workdir);
 
   const list = asyncHandler(async (context: RequestContext) => {
     if (context.method === 'HEAD') {

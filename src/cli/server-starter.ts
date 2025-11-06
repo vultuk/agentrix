@@ -24,8 +24,28 @@ interface ServerConfig {
   terminalSessionMode: string;
 }
 
+interface ServerStarterDependencies {
+  startServer: typeof startServer;
+  generateRandomPassword: typeof generateRandomPassword;
+}
+
+const defaultDependencies: ServerStarterDependencies = {
+  startServer,
+  generateRandomPassword,
+};
+
+let activeDependencies: ServerStarterDependencies = { ...defaultDependencies };
+
+export function __setServerStarterTestOverrides(overrides?: Partial<ServerStarterDependencies>): void {
+  if (!overrides) {
+    activeDependencies = { ...defaultDependencies };
+    return;
+  }
+  activeDependencies = { ...activeDependencies, ...overrides };
+}
+
 export async function startAppServer(config: ServerConfig): Promise<void> {
-  const chosenPassword = config.password || generateRandomPassword();
+  const chosenPassword = config.password || activeDependencies.generateRandomPassword();
   const passwordWasProvided = config.password !== null;
   const shouldPrintPassword = config.showPassword || !passwordWasProvided;
 
@@ -58,7 +78,7 @@ export async function startAppServer(config: ServerConfig): Promise<void> {
     close,
     password: serverPassword,
     publicUrl,
-  } = await startServer({
+  } = await activeDependencies.startServer({
     uiPath: config.uiPath,
     port: config.port,
     host: config.host,

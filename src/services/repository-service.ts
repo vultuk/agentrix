@@ -21,6 +21,41 @@ export interface AddRepositoryResult {
   };
 }
 
+type RepositoryServiceDependencyOverrides = Partial<{
+  discoverRepositories: typeof discoverRepositories;
+  cloneRepository: typeof cloneRepository;
+  refreshRepositoryCache: typeof refreshRepositoryCache;
+  removeRepository: typeof removeRepository;
+  ensureRepository: typeof ensureRepository;
+  setRepositoryInitCommand: typeof setRepositoryInitCommand;
+}>;
+
+const repositoryServiceDependencies = {
+  discoverRepositories,
+  cloneRepository,
+  refreshRepositoryCache,
+  removeRepository,
+  ensureRepository,
+  setRepositoryInitCommand,
+} as const;
+
+let repositoryServiceTestOverrides: RepositoryServiceDependencyOverrides | null = null;
+
+function resolveRepositoryServiceDependency<K extends keyof typeof repositoryServiceDependencies>(
+  key: K
+): (typeof repositoryServiceDependencies)[K] {
+  const overrides = repositoryServiceTestOverrides || {};
+  const override = overrides[key];
+  if (override) {
+    return override as (typeof repositoryServiceDependencies)[K];
+  }
+  return repositoryServiceDependencies[key];
+}
+
+export function __setRepositoryServiceTestOverrides(overrides?: RepositoryServiceDependencyOverrides): void {
+  repositoryServiceTestOverrides = overrides ?? null;
+}
+
 /**
  * Service for repository management operations
  */
@@ -32,7 +67,8 @@ export class RepositoryService implements IRepositoryService {
    * @returns Repository data
    */
   async listRepositories(): Promise<RepositoriesData> {
-    return await discoverRepositories(this.workdir);
+    const discover = resolveRepositoryServiceDependency('discoverRepositories');
+    return await discover(this.workdir);
   }
 
   /**
@@ -42,8 +78,11 @@ export class RepositoryService implements IRepositoryService {
    * @returns Result with repository data
    */
   async addRepository(repositoryUrl: string, initCommand: string = ''): Promise<AddRepositoryResult> {
-    const repoInfo = await cloneRepository(this.workdir, repositoryUrl, { initCommand });
-    const data = await refreshRepositoryCache(this.workdir);
+    const clone = resolveRepositoryServiceDependency('cloneRepository');
+    const refresh = resolveRepositoryServiceDependency('refreshRepositoryCache');
+
+    const repoInfo = await clone(this.workdir, repositoryUrl, { initCommand });
+    const data = await refresh(this.workdir);
     return { data, repo: repoInfo };
   }
 
@@ -54,8 +93,11 @@ export class RepositoryService implements IRepositoryService {
    * @returns Updated repository data
    */
   async deleteRepository(org: string, repo: string): Promise<RepositoriesData> {
-    await removeRepository(this.workdir, org, repo);
-    return await refreshRepositoryCache(this.workdir);
+    const remove = resolveRepositoryServiceDependency('removeRepository');
+    const refresh = resolveRepositoryServiceDependency('refreshRepositoryCache');
+
+    await remove(this.workdir, org, repo);
+    return await refresh(this.workdir);
   }
 
   /**
@@ -66,9 +108,13 @@ export class RepositoryService implements IRepositoryService {
    * @returns Updated repository data
    */
   async updateInitCommand(org: string, repo: string, initCommand: string): Promise<RepositoriesData> {
-    const { repoRoot } = await ensureRepository(this.workdir, org, repo);
-    await setRepositoryInitCommand(repoRoot, initCommand);
-    return await refreshRepositoryCache(this.workdir);
+    const ensure = resolveRepositoryServiceDependency('ensureRepository');
+    const setInit = resolveRepositoryServiceDependency('setRepositoryInitCommand');
+    const refresh = resolveRepositoryServiceDependency('refreshRepositoryCache');
+
+    const { repoRoot } = await ensure(this.workdir, org, repo);
+    await setInit(repoRoot, initCommand);
+    return await refresh(this.workdir);
   }
 }
 

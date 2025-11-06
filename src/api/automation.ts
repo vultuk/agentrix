@@ -20,27 +20,73 @@ import { runAutomationTask } from '../core/automation/task-runner.js';
 import { createLogger } from '../infrastructure/logging/index.js';
 import type { Logger } from '../infrastructure/logging/index.js';
 
-async function ensureRepositoryExists(
+interface AutomationModuleDependencies {
+  cloneRepository: typeof cloneRepository;
+  ensureRepository: typeof ensureRepository;
+  getWorktreePath: typeof getWorktreePath;
+  createWorktree: typeof createWorktree;
+  launchAgentProcess: typeof launchAgentProcess;
+  runTask: typeof runTask;
+  validateAutomationRequest: typeof validateAutomationRequest;
+  resolveBranchName: typeof resolveBranchName;
+  generatePlanText: typeof generatePlanText;
+  createGitOrchestrator: typeof createGitOrchestrator;
+  runAutomationTask: typeof runAutomationTask;
+  createLogger: typeof createLogger;
+}
+
+const defaultAutomationDependencies: AutomationModuleDependencies = {
+  cloneRepository,
+  ensureRepository,
+  getWorktreePath,
+  createWorktree,
+  launchAgentProcess,
+  runTask,
+  validateAutomationRequest,
+  resolveBranchName,
+  generatePlanText,
+  createGitOrchestrator,
+  runAutomationTask,
+  createLogger,
+};
+
+let activeAutomationDependencies: AutomationModuleDependencies = { ...defaultAutomationDependencies };
+
+/**
+ * @internal Test hook to override automation dependencies
+ */
+export function __setAutomationTestOverrides(overrides?: Partial<AutomationModuleDependencies>): void {
+  if (!overrides) {
+    activeAutomationDependencies = { ...defaultAutomationDependencies };
+    return;
+  }
+  activeAutomationDependencies = {
+    ...activeAutomationDependencies,
+    ...overrides,
+  } as AutomationModuleDependencies;
+}
+
+export async function ensureRepositoryExists(
   workdir: string,
   org: string,
   repo: string
 ): Promise<{ repositoryPath: string; cloned: boolean }> {
   try {
-    const { repositoryPath } = await ensureRepository(workdir, org, repo);
+    const { repositoryPath } = await activeAutomationDependencies.ensureRepository(workdir, org, repo);
     return { repositoryPath, cloned: false };
   } catch (error: unknown) {
     const err = error as { message?: string };
     if (err && /Repository not found/i.test(err.message || '')) {
       const remote = `git@github.com:${org}/${repo}.git`;
-      await cloneRepository(workdir, remote);
-      const { repositoryPath } = await ensureRepository(workdir, org, repo);
+      await activeAutomationDependencies.cloneRepository(workdir, remote);
+      const { repositoryPath } = await activeAutomationDependencies.ensureRepository(workdir, org, repo);
       return { repositoryPath, cloned: true };
     }
     throw error;
   }
 }
 
-async function ensureWorktreeExists(
+export async function ensureWorktreeExists(
   workdir: string,
   org: string,
   repo: string,
@@ -48,13 +94,13 @@ async function ensureWorktreeExists(
   options: unknown = {}
 ): Promise<{ worktreePath: string; created: boolean }> {
   try {
-    const { worktreePath } = await getWorktreePath(workdir, org, repo, branch);
+    const { worktreePath } = await activeAutomationDependencies.getWorktreePath(workdir, org, repo, branch);
     return { worktreePath, created: false };
   } catch (error: unknown) {
     const err = error as { message?: string };
     if (err && /worktree .* not found/i.test(err.message || '')) {
-      await createWorktree(workdir, org, repo, branch, options as never);
-      const { worktreePath } = await getWorktreePath(workdir, org, repo, branch);
+      await activeAutomationDependencies.createWorktree(workdir, org, repo, branch, options as never);
+      const { worktreePath } = await activeAutomationDependencies.getWorktreePath(workdir, org, repo, branch);
       return { worktreePath, created: true };
     }
     throw error;
@@ -130,24 +176,24 @@ export function createAutomationHandlers(
   {
     ensureRepositoryExists: ensureRepoExists = ensureRepositoryExists,
     ensureWorktreeExists: ensureWorktree = ensureWorktreeExists,
-    launchAgentProcess: launchAgent = launchAgentProcess,
-    runTaskImpl = runTask,
+    launchAgentProcess: launchAgent = activeAutomationDependencies.launchAgentProcess,
+    runTaskImpl = activeAutomationDependencies.runTask,
     now = () => Date.now(),
     createRequestId = () => randomUUID(),
   }: AutomationHandlersDependencies = {}
 ) {
-  const gitOrchestrator = createGitOrchestrator({
+  const gitOrchestrator = activeAutomationDependencies.createGitOrchestrator({
     ensureRepositoryExists: ensureRepoExists,
     ensureWorktreeExists: ensureWorktree,
   });
 
-  const log = createLogger(logger);
+  const log = activeAutomationDependencies.createLogger(logger);
 
   async function launch(context: { req: unknown; res: unknown; readJsonBody: () => Promise<unknown> }): Promise<void> {
     const ctx = context as { req: { headers?: Record<string, string | string[] | undefined> }; res: { statusCode?: number; setHeader?: (name: string, value: string) => void; end?: (data?: unknown) => void }; readJsonBody: () => Promise<unknown> };
     let validation;
     try {
-      validation = await validateAutomationRequest({
+      validation = await activeAutomationDependencies.validateAutomationRequest({
         req: ctx.req,
         expectedApiKey: apiKey || '',
         readJsonBody: ctx.readJsonBody,
@@ -219,10 +265,10 @@ export function createAutomationHandlers(
     }
 
     try {
-      const result = (await runAutomationTask({
+      const result = (await activeAutomationDependencies.runAutomationTask({
         runTaskImpl: runTaskImpl as never,
-        resolveBranchName: resolveBranchName as never,
-        generatePlanText: generatePlanText as never,
+        resolveBranchName: activeAutomationDependencies.resolveBranchName as never,
+        generatePlanText: activeAutomationDependencies.generatePlanText as never,
         gitOrchestrator,
         launchAgent: launchAgent as never,
         workdir,

@@ -16,6 +16,45 @@ export interface SessionInfo {
   lastActivityAt: string | null;
 }
 
+type SessionServiceDependencyOverrides = Partial<{
+  discoverRepositories: typeof discoverRepositories;
+  buildSanitisedWorktreeLookup: typeof buildSanitisedWorktreeLookup;
+  detectTmux: typeof detectTmux;
+  isTmuxAvailable: typeof isTmuxAvailable;
+  parseTmuxSessionName: typeof parseTmuxSessionName;
+  runTmux: typeof runTmux;
+  listActiveSessions: typeof listActiveSessions;
+  makeSessionKey: typeof makeSessionKey;
+}>;
+
+const sessionServiceDependencies = {
+  discoverRepositories,
+  buildSanitisedWorktreeLookup,
+  detectTmux,
+  isTmuxAvailable,
+  parseTmuxSessionName,
+  runTmux,
+  listActiveSessions,
+  makeSessionKey,
+} as const;
+
+let sessionServiceTestOverrides: SessionServiceDependencyOverrides | null = null;
+
+function resolveSessionServiceDependency<K extends keyof typeof sessionServiceDependencies>(
+  key: K
+): (typeof sessionServiceDependencies)[K] {
+  const overrides = sessionServiceTestOverrides || {};
+  const override = overrides[key];
+  if (override) {
+    return override as (typeof sessionServiceDependencies)[K];
+  }
+  return sessionServiceDependencies[key];
+}
+
+export function __setSessionServiceTestOverrides(overrides?: SessionServiceDependencyOverrides): void {
+  sessionServiceTestOverrides = overrides ?? null;
+}
+
 /**
  * Type guard for finite numbers
  */
@@ -42,12 +81,15 @@ export class SessionService {
       lastActivityAtMs: number | null;
     }>();
 
+    const listSessionsFn = resolveSessionServiceDependency('listActiveSessions');
+    const makeKey = resolveSessionServiceDependency('makeSessionKey');
+
     // Gather in-memory sessions
-    listActiveSessions().forEach((session) => {
+    listSessionsFn().forEach((session) => {
       if (!session || !session.org || !session.repo || !session.branch) {
         return;
       }
-      const key = makeSessionKey(session.org, session.repo, session.branch);
+      const key = makeKey(session.org, session.repo, session.branch);
       const lastActivityAtMs =
         typeof session.lastActivityAt === 'number'
           ? session.lastActivityAt
@@ -76,15 +118,20 @@ export class SessionService {
     });
 
     // Discover orphaned tmux sessions
-    await detectTmux();
-    if (isTmuxAvailable()) {
+    const detect = resolveSessionServiceDependency('detectTmux');
+    const tmuxAvailable = resolveSessionServiceDependency('isTmuxAvailable');
+
+    await detect();
+    if (tmuxAvailable()) {
       const tmuxSessions = await this.discoverTmuxSessions();
       
       if (tmuxSessions.length > 0) {
         let lookup;
         try {
-          const structure = await discoverRepositories(this.workdir);
-          lookup = buildSanitisedWorktreeLookup(structure);
+          const repositoryDiscovery = resolveSessionServiceDependency('discoverRepositories');
+          const buildLookup = resolveSessionServiceDependency('buildSanitisedWorktreeLookup');
+          const structure = await repositoryDiscovery(this.workdir);
+          lookup = buildLookup(structure);
         } catch (error: unknown) {
           lookup = new Map();
         }
@@ -128,8 +175,9 @@ export class SessionService {
    */
   private async discoverTmuxSessions(): Promise<Array<{ org: string; repo: string; branch: string }>> {
     let stdout = '';
+    const run = resolveSessionServiceDependency('runTmux');
     try {
-      const result = await runTmux(['list-sessions', '-F', '#S']);
+      const result = await run(['list-sessions', '-F', '#S']);
       stdout = result && typeof result.stdout === 'string' ? result.stdout : '';
     } catch (error: unknown) {
       const err = error as { code?: number };
@@ -146,8 +194,10 @@ export class SessionService {
       .map((line) => line.trim())
       .filter(Boolean);
 
+    const parse = resolveSessionServiceDependency('parseTmuxSessionName');
+
     return names
-      .map((name) => parseTmuxSessionName(name))
+      .map((name) => parse(name))
       .filter((parsed): parsed is NonNullable<typeof parsed> => parsed !== null);
   }
 }

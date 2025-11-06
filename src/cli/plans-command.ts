@@ -22,6 +22,28 @@ Options:
   process.stdout.write(helpText);
 }
 
+interface PlansDependencies {
+  getWorktreePath: typeof getWorktreePath;
+  listPlansForWorktree: typeof listPlansForWorktree;
+  readPlanFromWorktree: typeof readPlanFromWorktree;
+}
+
+const defaultDependencies: PlansDependencies = {
+  getWorktreePath,
+  listPlansForWorktree,
+  readPlanFromWorktree,
+};
+
+let activeDependencies: PlansDependencies = { ...defaultDependencies };
+
+export function __setPlansCommandTestOverrides(overrides?: Partial<PlansDependencies>): void {
+  if (!overrides) {
+    activeDependencies = { ...defaultDependencies };
+    return;
+  }
+  activeDependencies = { ...activeDependencies, ...overrides };
+}
+
 function parsePlansOptions(args: string[]): PlansOptions {
   const options: PlansOptions = {
     org: '',
@@ -81,14 +103,14 @@ function parsePlansOptions(args: string[]): PlansOptions {
 }
 
 async function handleListCommand(options: PlansOptions): Promise<void> {
-  const { worktreePath } = await getWorktreePath(
+  const { worktreePath } = await activeDependencies.getWorktreePath(
     options.workdir,
     options.org,
     options.repo,
     options.branch,
   );
 
-  const plans = await listPlansForWorktree({
+  const plans = await activeDependencies.listPlansForWorktree({
     worktreePath,
     branch: options.branch,
     limit: options.limit,
@@ -111,14 +133,14 @@ async function handleShowCommand(options: PlansOptions): Promise<void> {
     return;
   }
 
-  const { worktreePath } = await getWorktreePath(
+  const { worktreePath } = await activeDependencies.getWorktreePath(
     options.workdir,
     options.org,
     options.repo,
     options.branch,
   );
 
-  const plan = await readPlanFromWorktree({
+  const plan = await activeDependencies.readPlanFromWorktree({
     worktreePath,
     branch: options.branch,
     id: options.planId,

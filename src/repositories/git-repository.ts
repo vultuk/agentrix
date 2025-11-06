@@ -3,6 +3,22 @@ import { execFile } from 'node:child_process';
 
 const execFileAsync = promisify(execFile);
 
+type GitRepositoryTestOverrides = {
+  execFileAsync?: typeof execFileAsync;
+} | null;
+
+let gitRepositoryTestOverrides: GitRepositoryTestOverrides = null;
+
+function resolveExecFileAsync(): typeof execFileAsync {
+  return gitRepositoryTestOverrides?.execFileAsync ?? execFileAsync;
+}
+
+export function __setGitRepositoryTestOverrides(overrides?: {
+  execFileAsync?: typeof execFileAsync;
+}): void {
+  gitRepositoryTestOverrides = overrides ?? null;
+}
+
 /**
  * Default buffer sizes for git operations
  */
@@ -79,8 +95,10 @@ export async function executeGitCommand(
     repositoryPath = null,
   } = options;
 
+  const execImpl = resolveExecFileAsync();
+
   try {
-    const result = await execFileAsync('git', args, {
+    const result = await execImpl('git', args, {
       cwd,
       maxBuffer,
       env: { ...env },

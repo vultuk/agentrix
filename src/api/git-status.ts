@@ -4,6 +4,31 @@ import { extractWorktreeParams } from '../validation/index.js';
 import { ValidationError } from '../infrastructure/errors/index.js';
 import type { RequestContext } from '../types/http.js';
 
+interface GitStatusDependencies {
+  getWorktreeStatus: typeof getWorktreeStatus;
+  getWorktreeFileDiff: typeof getWorktreeFileDiff;
+  extractWorktreeParams: typeof extractWorktreeParams;
+}
+
+const defaultDependencies: GitStatusDependencies = {
+  getWorktreeStatus,
+  getWorktreeFileDiff,
+  extractWorktreeParams,
+};
+
+let activeDependencies: GitStatusDependencies = { ...defaultDependencies };
+
+/**
+ * @internal Test hook to override git-status dependencies
+ */
+export function __setGitStatusTestOverrides(overrides?: Partial<GitStatusDependencies>): void {
+  if (!overrides) {
+    activeDependencies = { ...defaultDependencies };
+    return;
+  }
+  activeDependencies = { ...activeDependencies, ...overrides } as GitStatusDependencies;
+}
+
 function parseOptionalInteger(value: string | null, fallback: number | undefined): number | undefined {
   if (typeof value !== 'string') {
     return fallback;
@@ -25,11 +50,11 @@ export function createGitStatusHandlers(workdir: string) {
   }
 
   const read = createQueryHandler(async (context: RequestContext) => {
-    const { org, repo, branch } = extractWorktreeParams(context.url.searchParams);
+    const { org, repo, branch } = activeDependencies.extractWorktreeParams(context.url.searchParams);
     const entryLimit = parseOptionalInteger(context.url.searchParams.get('entryLimit'), undefined);
     const commitLimit = parseOptionalInteger(context.url.searchParams.get('commitLimit'), undefined);
 
-    const status = await getWorktreeStatus(workdir, org, repo, branch, {
+    const status = await activeDependencies.getWorktreeStatus(workdir, org, repo, branch, {
       entryLimit,
       commitLimit,
     });
@@ -40,7 +65,7 @@ export function createGitStatusHandlers(workdir: string) {
 
   const diff = createQueryHandler(async (context: RequestContext) => {
     const payload = await context.readJsonBody();
-    const { org, repo, branch } = extractWorktreeParams(
+    const { org, repo, branch } = activeDependencies.extractWorktreeParams(
       new URLSearchParams({
         org: typeof payload['org'] === 'string' ? payload['org'] : '',
         repo: typeof payload['repo'] === 'string' ? payload['repo'] : '',
@@ -57,7 +82,7 @@ export function createGitStatusHandlers(workdir: string) {
     const mode = typeof payload['mode'] === 'string' ? payload['mode'] : undefined;
     const status = typeof payload['status'] === 'string' ? payload['status'] : undefined;
 
-    return await getWorktreeFileDiff(workdir, org, repo, branch, {
+    return await activeDependencies.getWorktreeFileDiff(workdir, org, repo, branch, {
       path: filePath,
       previousPath,
       mode,

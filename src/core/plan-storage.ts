@@ -98,10 +98,10 @@ function parsePlanFilename(filename: string): ParsedPlanFilename | null {
   }
 
   const [, datePart, timePart] = timestampMatch;
-  const year = Number.parseInt(datePart!, 10);
+  const year = Number.parseInt(datePart!.slice(0, 4), 10);
   const month = Number.parseInt(datePart!.slice(4, 6), 10) - 1;
   const day = Number.parseInt(datePart!.slice(6, 8), 10);
-  const hour = Number.parseInt(timePart!, 10);
+  const hour = Number.parseInt(timePart!.slice(0, 2), 10);
   const minute = Number.parseInt(timePart!.slice(2, 4), 10);
   const second = Number.parseInt(timePart!.slice(4, 6), 10);
   const createdAt = new Date(Date.UTC(year, month, day, hour, minute, second));

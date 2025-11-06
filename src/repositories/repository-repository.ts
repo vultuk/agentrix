@@ -29,6 +29,41 @@ export interface RepositoriesMap {
   };
 }
 
+type RepositoryRepositoryDependencyOverrides = Partial<{
+  executeGitCommand: typeof executeGitCommand;
+  listWorktrees: typeof listWorktrees;
+  getRepositoryInitCommand: typeof getRepositoryInitCommand;
+  normaliseInitCommand: typeof normaliseInitCommand;
+  setRepositoryInitCommand: typeof setRepositoryInitCommand;
+}>;
+
+const repositoryRepositoryDependencies = {
+  executeGitCommand,
+  listWorktrees,
+  getRepositoryInitCommand,
+  normaliseInitCommand,
+  setRepositoryInitCommand,
+} as const;
+
+let repositoryRepositoryTestOverrides: RepositoryRepositoryDependencyOverrides | null = null;
+
+function resolveRepositoryRepositoryDependency<K extends keyof typeof repositoryRepositoryDependencies>(
+  key: K
+): (typeof repositoryRepositoryDependencies)[K] {
+  const overrides = repositoryRepositoryTestOverrides || {};
+  const override = overrides[key];
+  if (override) {
+    return override as (typeof repositoryRepositoryDependencies)[K];
+  }
+  return repositoryRepositoryDependencies[key];
+}
+
+export function __setRepositoryRepositoryTestOverrides(
+  overrides?: RepositoryRepositoryDependencyOverrides
+): void {
+  repositoryRepositoryTestOverrides = overrides ?? null;
+}
+
 /**
  * Ensures a repository exists and returns its paths
  * @param workdir - Work directory root
@@ -96,7 +131,8 @@ export async function cloneRepository(
   }
 
   try {
-    await executeGitCommand(['clone', url, repositoryPath], {
+    const execGit = resolveRepositoryRepositoryDependency('executeGitCommand');
+    await execGit(['clone', url, repositoryPath], {
       maxBuffer: GIT_BUFFER_SIZES.MEDIUM,
     });
   } catch (error: unknown) {
@@ -105,9 +141,11 @@ export async function cloneRepository(
   }
 
   if (options && Object.prototype.hasOwnProperty.call(options, 'initCommand')) {
-    const initCommand = normaliseInitCommand(options.initCommand);
+    const normalise = resolveRepositoryRepositoryDependency('normaliseInitCommand');
+    const initCommand = normalise(options.initCommand);
     try {
-      await setRepositoryInitCommand(repoRoot, initCommand);
+      const setInit = resolveRepositoryRepositoryDependency('setRepositoryInitCommand');
+      await setInit(repoRoot, initCommand);
     } catch (error: unknown) {
       const err = error as { message?: string };
       throw new Error(`Failed to persist repository settings: ${err?.message || error}`);
@@ -124,6 +162,8 @@ export async function cloneRepository(
  */
 export async function discoverRepositories(workdir: string): Promise<RepositoriesMap> {
   const result: RepositoriesMap = {};
+  const listWorktreesFn = resolveRepositoryRepositoryDependency('listWorktrees');
+  const getInitCommand = resolveRepositoryRepositoryDependency('getRepositoryInitCommand');
 
   let organisations;
   try {
@@ -169,8 +209,7 @@ export async function discoverRepositories(workdir: string): Promise<Repositorie
         continue;
       }
 
-      // eslint-disable-next-line no-await-in-loop
-      const worktrees = await listWorktrees(repositoryPath);
+      const worktrees = await listWorktreesFn(repositoryPath);
       const branches = Array.from(
         new Set(
           worktrees
@@ -181,8 +220,7 @@ export async function discoverRepositories(workdir: string): Promise<Repositorie
 
       let initCommand = '';
       try {
-        // eslint-disable-next-line no-await-in-loop
-        initCommand = await getRepositoryInitCommand(repoRoot);
+        initCommand = await getInitCommand(repoRoot);
       } catch (error: unknown) {
         const err = error as { message?: string };
         console.warn(

@@ -6,6 +6,37 @@ import { extractWorktreeParams } from '../validation/index.js';
 import { ValidationError, extractErrorMessage } from '../infrastructure/errors/index.js';
 import type { RequestContext } from '../types/http.js';
 
+interface PlansDependencies {
+  getWorktreePath: typeof getWorktreePath;
+  listPlansForWorktree: typeof listPlansForWorktree;
+  readPlanFromWorktree: typeof readPlanFromWorktree;
+  extractWorktreeParams: typeof extractWorktreeParams;
+  sendJson: typeof sendJson;
+  extractErrorMessage: typeof extractErrorMessage;
+}
+
+const defaultDependencies: PlansDependencies = {
+  getWorktreePath,
+  listPlansForWorktree,
+  readPlanFromWorktree,
+  extractWorktreeParams,
+  sendJson,
+  extractErrorMessage,
+};
+
+let activeDependencies: PlansDependencies = { ...defaultDependencies };
+
+/**
+ * @internal Test hook to override plans dependencies
+ */
+export function __setPlansTestOverrides(overrides?: Partial<PlansDependencies>): void {
+  if (!overrides) {
+    activeDependencies = { ...defaultDependencies };
+    return;
+  }
+  activeDependencies = { ...activeDependencies, ...overrides } as PlansDependencies;
+}
+
 interface ParsedParams {
   org: string;
   repo: string;
@@ -15,30 +46,30 @@ interface ParsedParams {
 
 function parseCommonParams(context: RequestContext): ParsedParams | null {
   try {
-    const { org, repo, branch } = extractWorktreeParams(context.url.searchParams);
+    const { org, repo, branch } = activeDependencies.extractWorktreeParams(context.url.searchParams);
     
     const limitParam = context.url.searchParams.get('limit');
     const limit = limitParam ? Number.parseInt(limitParam, 10) : undefined;
     if (limitParam && (Number.isNaN(limit) || (limit && limit < 1))) {
-      sendJson(context.res, 400, { error: 'limit must be a positive integer' });
+      activeDependencies.sendJson(context.res, 400, { error: 'limit must be a positive integer' });
       return null;
     }
 
     return { org, repo, branch, limit };
   } catch (error: unknown) {
-    const message = error instanceof ValidationError ? error.message : extractErrorMessage(error, 'Invalid parameters');
-    sendJson(context.res, 400, { error: message });
+    const message = error instanceof ValidationError ? error.message : activeDependencies.extractErrorMessage(error, 'Invalid parameters');
+    activeDependencies.sendJson(context.res, 400, { error: message });
     return null;
   }
 }
 
 function handleResolutionError(res: ServerResponse, error: unknown): void {
-  const message = extractErrorMessage(error, 'Unknown error');
+  const message = activeDependencies.extractErrorMessage(error, 'Unknown error');
   if (/not found/i.test(message)) {
-    sendJson(res, 404, { error: message });
+    activeDependencies.sendJson(res, 404, { error: message });
     return;
   }
-  sendJson(res, 500, { error: message });
+  activeDependencies.sendJson(res, 500, { error: message });
 }
 
 export function createPlanArtifactHandlers(workdir: string) {
@@ -49,13 +80,13 @@ export function createPlanArtifactHandlers(workdir: string) {
     }
 
     try {
-      const { worktreePath } = await getWorktreePath(workdir, parsed.org, parsed.repo, parsed.branch);
-      const plans = await listPlansForWorktree({
+      const { worktreePath } = await activeDependencies.getWorktreePath(workdir, parsed.org, parsed.repo, parsed.branch);
+      const plans = await activeDependencies.listPlansForWorktree({
         worktreePath,
         branch: parsed.branch,
         limit: parsed.limit,
       });
-      sendJson(context.res, 200, { data: plans });
+      activeDependencies.sendJson(context.res, 200, { data: plans });
     } catch (error: unknown) {
       handleResolutionError(context.res, error);
     }
@@ -69,18 +100,18 @@ export function createPlanArtifactHandlers(workdir: string) {
 
     const planId = (context.url.searchParams.get('planId') || '').trim();
     if (!planId) {
-      sendJson(context.res, 400, { error: 'planId is required' });
+      activeDependencies.sendJson(context.res, 400, { error: 'planId is required' });
       return;
     }
 
     try {
-      const { worktreePath } = await getWorktreePath(workdir, parsed.org, parsed.repo, parsed.branch);
-      const plan = await readPlanFromWorktree({
+      const { worktreePath } = await activeDependencies.getWorktreePath(workdir, parsed.org, parsed.repo, parsed.branch);
+      const plan = await activeDependencies.readPlanFromWorktree({
         worktreePath,
         branch: parsed.branch,
         id: planId,
       });
-      sendJson(context.res, 200, { data: plan });
+      activeDependencies.sendJson(context.res, 200, { data: plan });
     } catch (error: unknown) {
       handleResolutionError(context.res, error);
     }

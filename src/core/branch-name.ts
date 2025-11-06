@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process';
-import { loadDeveloperMessage } from '../config/developer-messages.js';
-import { normaliseBranchName } from './git.js';
+import { spawn as childSpawn } from 'node:child_process';
+import { loadDeveloperMessage as loadDeveloperMessageImpl } from '../config/developer-messages.js';
+import { normaliseBranchName as normaliseBranchNameImpl } from './git.js';
 
 const SUPPORTED_LLMS = new Set(['codex', 'claude', 'cursor']);
 const DEFAULT_LLM = 'codex';
@@ -15,6 +15,28 @@ const COMMAND_NAMES = {
   claude: 'claude',
   cursor: 'cursor-agent',
 };
+
+interface BranchNameDependencies {
+  spawn: typeof childSpawn;
+  loadDeveloperMessage: typeof loadDeveloperMessageImpl;
+  normaliseBranchName: typeof normaliseBranchNameImpl;
+}
+
+const defaultDependencies: BranchNameDependencies = {
+  spawn: childSpawn,
+  loadDeveloperMessage: loadDeveloperMessageImpl,
+  normaliseBranchName: normaliseBranchNameImpl,
+};
+
+let activeDependencies: BranchNameDependencies = { ...defaultDependencies };
+
+export function __setBranchNameTestOverrides(overrides?: Partial<BranchNameDependencies>): void {
+  if (!overrides) {
+    activeDependencies = { ...defaultDependencies };
+    return;
+  }
+  activeDependencies = { ...activeDependencies, ...overrides };
+}
 
 function slugifySegment(value: unknown): string {
   if (typeof value !== 'string') {
@@ -63,7 +85,7 @@ function sanitiseCandidate(rawValue: unknown): string {
   }
 
   const branch = [type, ...remainder].join('/');
-  return normaliseBranchName(branch);
+  return activeDependencies.normaliseBranchName(branch);
 }
 
 function buildUserPrompt({ prompt, org, repo }: { prompt?: string; org?: string; repo?: string } = {}): string {
@@ -137,7 +159,7 @@ async function executeLlmCommand(
     let aborted = false;
     let killTimer: NodeJS.Timeout | null = null;
     let overflowed = false;
-    const child = spawn(shellPath, [...shellArgs, command], {
+    const child = activeDependencies.spawn(shellPath, [...shellArgs, command], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: process.env,
       detached: isPosix,
@@ -352,7 +374,7 @@ export function createBranchNameGenerator({ defaultLlm }: { defaultLlm?: string 
 
   async function generateBranchName(context: { prompt?: string; org?: string; repo?: string; llm?: string } = {}) {
     const userPrompt = buildUserPrompt(context);
-    const developerMessage = await loadDeveloperMessage('branch-name', DEFAULT_DEVELOPER_MESSAGE);
+    const developerMessage = await activeDependencies.loadDeveloperMessage('branch-name', DEFAULT_DEVELOPER_MESSAGE);
 
     const promptText = buildPromptText({ developerMessage, userPrompt });
     const requestedLlm = normaliseLlm(context.llm || chosenLlm);

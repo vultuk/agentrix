@@ -57,6 +57,27 @@ export interface HandlerOptions<TInput, TOutput> {
  * });
  * ```
  */
+interface HandlerDependencies {
+  sendJson: typeof sendJson;
+}
+
+const defaultDependencies: HandlerDependencies = {
+  sendJson,
+};
+
+let activeDependencies: HandlerDependencies = { ...defaultDependencies };
+
+/**
+ * @internal Test hook to override handler dependencies
+ */
+export function __setBaseHandlerTestOverrides(overrides?: Partial<HandlerDependencies>): void {
+  if (!overrides) {
+    activeDependencies = { ...defaultDependencies };
+    return;
+  }
+  activeDependencies = { ...activeDependencies, ...overrides } as HandlerDependencies;
+}
+
 export function createHandler<TInput = void, TOutput = unknown>(
   options: HandlerOptions<TInput, TOutput>
 ): (context: RequestContext) => Promise<void> {
@@ -84,7 +105,7 @@ export function createHandler<TInput = void, TOutput = unknown>(
       ? responseTransformer(result)
       : result;
 
-    sendJson(context.res, successCode, response);
+    activeDependencies.sendJson(context.res, successCode, response);
   });
 }
 
@@ -114,7 +135,7 @@ export function createQueryHandler<TOutput = unknown>(
     const response = options.responseTransformer 
       ? options.responseTransformer(result)
       : result;
-    sendJson(context.res, options.successCode || 200, response);
+    activeDependencies.sendJson(context.res, options.successCode || 200, response);
   });
 }
 

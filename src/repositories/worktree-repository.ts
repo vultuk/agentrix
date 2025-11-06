@@ -131,7 +131,7 @@ export interface InitCommandResult {
  * @param worktreePath - Path to the worktree
  * @returns Init command result
  */
-async function runRepositoryInitCommand(repoRoot: string, worktreePath: string): Promise<InitCommandResult> {
+async function internalRunRepositoryInitCommand(repoRoot: string, worktreePath: string): Promise<InitCommandResult> {
   let initCommand = '';
   try {
     initCommand = await getRepositoryInitCommand(repoRoot);
@@ -175,6 +175,21 @@ async function runRepositoryInitCommand(repoRoot: string, worktreePath: string):
     const details = stderr || stdout || err?.message || 'Unknown repository init error';
     throw new Error(`Repository init command failed: ${details.trim()}`);
   }
+}
+
+let runRepositoryInitCommandImpl: typeof internalRunRepositoryInitCommand = internalRunRepositoryInitCommand;
+
+async function runRepositoryInitCommand(
+  repoRoot: string,
+  worktreePath: string
+): Promise<InitCommandResult> {
+  return await runRepositoryInitCommandImpl(repoRoot, worktreePath);
+}
+
+export function __setWorktreeRepositoryTestOverrides(overrides?: {
+  runRepositoryInitCommand?: typeof internalRunRepositoryInitCommand;
+}): void {
+  runRepositoryInitCommandImpl = overrides?.runRepositoryInitCommand ?? internalRunRepositoryInitCommand;
 }
 
 export interface CreateWorktreeOptions {

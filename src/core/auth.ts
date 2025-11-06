@@ -4,11 +4,36 @@ import { clearCookie, parseCookies, setCookie } from '../infrastructure/cookies/
 import { generateSessionToken } from '../utils/random.js';
 import type { AuthManager } from '../types/auth.js';
 
+type AuthDependencies = {
+  parseCookies: typeof parseCookies;
+  setCookie: typeof setCookie;
+  clearCookie: typeof clearCookie;
+  generateSessionToken: typeof generateSessionToken;
+};
+
+const baseAuthDependencies: AuthDependencies = {
+  parseCookies,
+  setCookie,
+  clearCookie,
+  generateSessionToken,
+};
+
+let authTestOverrides: Partial<AuthDependencies> | null = null;
+
+function resolveAuthDependencies(): AuthDependencies {
+  return authTestOverrides ? { ...baseAuthDependencies, ...authTestOverrides } : baseAuthDependencies;
+}
+
+export function __setAuthTestOverrides(overrides?: Partial<AuthDependencies>): void {
+  authTestOverrides = overrides ?? null;
+}
+
 interface AuthError extends Error {
   statusCode: number;
 }
 
 export function createAuthManager(expectedPassword: string): AuthManager {
+  const deps = resolveAuthDependencies();
   const validSessionTokens = new Set<string>();
 
   function createError(message: string, statusCode: number): AuthError {
@@ -18,7 +43,7 @@ export function createAuthManager(expectedPassword: string): AuthManager {
   }
 
   function getTokenFromRequest(req: IncomingMessage): string {
-    const cookies = parseCookies(req.headers?.cookie);
+    const cookies = deps.parseCookies(req.headers?.cookie);
     return cookies[SESSION_COOKIE_NAME] || '';
   }
 
@@ -45,10 +70,10 @@ export function createAuthManager(expectedPassword: string): AuthManager {
       validSessionTokens.delete(existing);
     }
 
-    const token = generateSessionToken();
+    const token = deps.generateSessionToken();
     validSessionTokens.add(token);
     const secureFlag = options.secure;
-    setCookie(res, SESSION_COOKIE_NAME, token, {
+    deps.setCookie(res, SESSION_COOKIE_NAME, token, {
       maxAge: SESSION_MAX_AGE_SECONDS,
       sameSite: 'Strict',
       httpOnly: true,
@@ -63,7 +88,7 @@ export function createAuthManager(expectedPassword: string): AuthManager {
     if (token) {
       validSessionTokens.delete(token);
     }
-    clearCookie(res, SESSION_COOKIE_NAME, {
+    deps.clearCookie(res, SESSION_COOKIE_NAME, {
       path: '/',
       sameSite: 'Strict',
       httpOnly: true,

@@ -3,6 +3,30 @@ import type { TerminalSession } from '../types/terminal.js';
 import { runTmux } from './tmux.js';
 import { savePlanToWorktree } from './plan-storage.js';
 
+type AgentDependencies = {
+  createIsolatedTerminalSession: typeof createIsolatedTerminalSession;
+  queueSessionInput: typeof queueSessionInput;
+  runTmux: typeof runTmux;
+  savePlanToWorktree: typeof savePlanToWorktree;
+};
+
+const baseDependencies: AgentDependencies = {
+  createIsolatedTerminalSession,
+  queueSessionInput,
+  runTmux,
+  savePlanToWorktree,
+};
+
+let agentTestOverrides: Partial<AgentDependencies> | null = null;
+
+function resolveDependencies(): AgentDependencies {
+  return agentTestOverrides ? { ...baseDependencies, ...agentTestOverrides } : baseDependencies;
+}
+
+export function __setAgentsTestOverrides(overrides?: Partial<AgentDependencies>): void {
+  agentTestOverrides = overrides ?? null;
+}
+
 function normaliseTerminalInput(value: unknown): string {
   if (!value) {
     return '';
@@ -22,15 +46,19 @@ function shellQuote(value: unknown): string {
   return `'${text.replace(/'/g, `'\\''`)}'`;
 }
 
-async function preparePromptEnvironment(session: TerminalSession, prompt: string): Promise<string | null> {
+async function preparePromptEnvironment(
+  session: TerminalSession,
+  prompt: string,
+  deps: AgentDependencies,
+): Promise<string | null> {
   const value = typeof prompt === 'string' ? prompt : '';
   if (session?.usingTmux && session.tmuxSessionName) {
     const target = `=${session.tmuxSessionName}`;
     try {
       if (value) {
-        await runTmux(['set-environment', '-t', target, 'AGENTRIX_PROMPT', value]);
+        await deps.runTmux(['set-environment', '-t', target, 'AGENTRIX_PROMPT', value]);
       } else {
-        await runTmux(['set-environment', '-u', '-t', target, 'AGENTRIX_PROMPT']);
+        await deps.runTmux(['set-environment', '-u', '-t', target, 'AGENTRIX_PROMPT']);
       }
       return null;
     } catch (error: unknown) {
@@ -79,6 +107,7 @@ export async function launchAgentProcess({
   branch,
   prompt,
 }: LaunchAgentParams): Promise<LaunchAgentResult> {
+  const deps = resolveDependencies();
   if (!command || typeof command !== 'string' || !command.trim()) {
     throw new Error('Agent command is required');
   }
@@ -88,11 +117,11 @@ export async function launchAgentProcess({
 
   const executable = command.trim();
   const promptValue = typeof prompt === 'string' ? prompt : '';
-  const session = await createIsolatedTerminalSession(workdir, org, repo, branch);
+  const session = await deps.createIsolatedTerminalSession(workdir, org, repo, branch);
 
   if (session.worktreePath) {
     try {
-      await savePlanToWorktree({
+      await deps.savePlanToWorktree({
         worktreePath: session.worktreePath,
         branch,
         planText: promptValue,
@@ -106,18 +135,18 @@ export async function launchAgentProcess({
     }
   }
 
-  const envPreparation = await preparePromptEnvironment(session, promptValue);
+  const envPreparation = await preparePromptEnvironment(session, promptValue, deps);
   if (envPreparation) {
     const envInput = normaliseTerminalInput(envPreparation);
     if (envInput) {
-      queueSessionInput(session, envInput);
+      deps.queueSessionInput(session, envInput);
     }
   }
 
   const commandWithPrompt =
     promptValue.length > 0 ? `${executable} ${shellQuote(promptValue)}` : executable;
 
-  queueSessionInput(session, normaliseTerminalInput(commandWithPrompt));
+  deps.queueSessionInput(session, normaliseTerminalInput(commandWithPrompt));
 
   const pid = session?.process?.pid ?? null;
   return {

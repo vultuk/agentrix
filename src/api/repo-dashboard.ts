@@ -1,9 +1,9 @@
 import { ensureRepository, countLocalWorktrees } from '../core/git.js';
 import { createGithubClient } from '../core/github.js';
-import { sendJson, handleHeadRequest } from '../utils/http.js';
+import { handleHeadRequest } from '../utils/http.js';
 import { extractRepositoryParams } from '../validation/index.js';
 import { createQueryHandler } from './base-handler.js';
-import { extractErrorMessage } from '../infrastructure/errors/error-handler.js';
+import { HttpError } from '../infrastructure/errors/index.js';
 import type { RequestContext } from '../types/http.js';
 
 export interface RepoDashboardOverrides {
@@ -28,10 +28,9 @@ export function createRepoDashboardHandlers(workdir: string, overrides: RepoDash
     try {
       ({ repositoryPath } = await ensureRepo(workdir, org, repo));
     } catch (error: unknown) {
-      const message = extractErrorMessage(error, 'Repository not found');
+      const message = error instanceof Error ? error.message : String(error);
       const statusCode = message.includes('not found') ? 404 : 500;
-      sendJson(context.res, statusCode, { error: message });
-      return;
+      throw new HttpError(message, statusCode);
     }
 
     if (context.method === 'HEAD') {

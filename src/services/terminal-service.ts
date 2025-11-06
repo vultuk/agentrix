@@ -19,6 +19,37 @@ export interface TerminalSendResult {
   ok: boolean;
 }
 
+type TerminalServiceDependencyOverrides = Partial<{
+  getOrCreateTerminalSession: typeof getOrCreateTerminalSession;
+  getSessionById: typeof getSessionById;
+  queueSessionInput: typeof queueSessionInput;
+  launchAgentProcess: typeof launchAgentProcess;
+}>;
+
+const terminalServiceDependencies = {
+  getOrCreateTerminalSession,
+  getSessionById,
+  queueSessionInput,
+  launchAgentProcess,
+} as const;
+
+let terminalServiceTestOverrides: TerminalServiceDependencyOverrides | null = null;
+
+function resolveTerminalServiceDependency<K extends keyof typeof terminalServiceDependencies>(
+  key: K
+): (typeof terminalServiceDependencies)[K] {
+  const overrides = terminalServiceTestOverrides || {};
+  const override = overrides[key];
+  if (override) {
+    return override as (typeof terminalServiceDependencies)[K];
+  }
+  return terminalServiceDependencies[key];
+}
+
+export function __setTerminalServiceTestOverrides(overrides?: TerminalServiceDependencyOverrides): void {
+  terminalServiceTestOverrides = overrides ?? null;
+}
+
 /**
  * Service for terminal session orchestration
  */
@@ -46,7 +77,8 @@ export class TerminalService implements ITerminalService {
         throw new ValidationError('command must be provided when prompt is included');
       }
 
-      const { sessionId, createdSession } = await launchAgentProcess({
+      const launch = resolveTerminalServiceDependency('launchAgentProcess');
+      const { sessionId, createdSession } = await launch({
         command,
         workdir: this.workdir,
         org,
@@ -55,7 +87,8 @@ export class TerminalService implements ITerminalService {
         prompt: prompt ?? '',
       });
 
-      const session = getSessionById(sessionId);
+      const getSession = resolveTerminalServiceDependency('getSessionById');
+      const session = getSession(sessionId);
       if (!session) {
         throw new Error('Terminal session not found after launch');
       }
@@ -68,7 +101,8 @@ export class TerminalService implements ITerminalService {
       };
     }
 
-    const result = await getOrCreateTerminalSession(
+    const getOrCreate = resolveTerminalServiceDependency('getOrCreateTerminalSession');
+    const result = await getOrCreate(
       this.workdir,
       org,
       repo,
@@ -81,7 +115,8 @@ export class TerminalService implements ITerminalService {
 
     if (command) {
       const commandInput = /[\r\n]$/.test(command) ? command : `${command}\r`;
-      queueSessionInput(session, commandInput);
+      const queueInput = resolveTerminalServiceDependency('queueSessionInput');
+      queueInput(session, commandInput);
     }
 
     return {
@@ -99,13 +134,15 @@ export class TerminalService implements ITerminalService {
    */
   async sendInput(params: TerminalSendInput): Promise<TerminalSendResult> {
     const { sessionId, input } = params;
-    const session = getSessionById(sessionId);
+    const getSession = resolveTerminalServiceDependency('getSessionById');
+    const queueInput = resolveTerminalServiceDependency('queueSessionInput');
+    const session = getSession(sessionId);
     
     if (!session || session.closed) {
       throw new ValidationError('Terminal session not found');
     }
 
-    queueSessionInput(session, input);
+    queueInput(session, input);
     return { ok: true };
   }
 }
