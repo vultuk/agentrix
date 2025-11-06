@@ -30,7 +30,7 @@ export interface RouterConfig {
 
 export type Router = (req: IncomingMessage, res: ServerResponse) => Promise<boolean>;
 
-type RouterDependencies = {
+interface RouterDependencies {
   createAuthHandlers: typeof createAuthHandlers;
   createAutomationHandlers: typeof createAutomationHandlers;
   createRepoHandlers: typeof createRepoHandlers;
@@ -47,7 +47,7 @@ type RouterDependencies = {
   createTaskHandlers: typeof createTaskHandlers;
   sendJson: typeof sendJson;
   readJsonBody: typeof readJsonBody;
-};
+}
 
 const defaultDependencies: RouterDependencies = {
   createAuthHandlers,

@@ -15,7 +15,7 @@ import { emitSessionsUpdate } from './event-bus.js';
 const IDLE_TIMEOUT_MS = 90 * 1000;
 const IDLE_SWEEP_INTERVAL_MS = 5 * 1000;
 
-type TerminalSessionDependencies = {
+interface TerminalSessionDependencies {
   spawnPty: typeof pty.spawn;
   getWorktreePath: typeof getWorktreePath;
   detectTmux: typeof detectTmux;
@@ -27,7 +27,7 @@ type TerminalSessionDependencies = {
   clearInterval: typeof clearInterval;
   setTimeout: typeof setTimeout;
   clearTimeout: typeof clearTimeout;
-};
+}
 
 const defaultTerminalSessionDependencies: TerminalSessionDependencies = {
   spawnPty: pty.spawn.bind(pty),

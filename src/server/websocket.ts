@@ -17,13 +17,13 @@ export interface WebSocketAttachment {
   close: () => Promise<void>;
 }
 
-type WebSocketDependencies = {
+interface WebSocketDependencies {
   WebSocketServer: typeof WebSocketServer;
   parseCookies: typeof parseCookies;
   getSessionById: typeof getSessionById;
   addSocketWatcher: typeof addSocketWatcher;
   queueSessionInput: typeof queueSessionInput;
-};
+}
 
 const defaultDependencies: WebSocketDependencies = {
   WebSocketServer,

@@ -19,13 +19,13 @@ function writeEvent(res: ServerResponse, { event, data }: EventData): void {
   res.write(`data: ${payload}\n\n`);
 }
 
-type EventStreamDependencies = {
+interface EventStreamDependencies {
   discoverRepositories: typeof discoverRepositories;
   listActiveSessions: typeof listActiveSessions;
   getEventTypes: typeof getEventTypes;
   subscribeToEvents: typeof subscribeToEvents;
   listTasks: typeof listTasks;
-};
+}
 
 const defaultDependencies: EventStreamDependencies = {
   discoverRepositories,
