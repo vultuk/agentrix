@@ -323,26 +323,26 @@ export function createRouter({
     const method = (req.method?.toUpperCase() || 'GET') as keyof typeof route.handlers;
     const allowed = route.handlers[method];
 
-  if (!allowed) {
-    handleMethodNotAllowed(res, Object.keys(route.handlers));
-    return true;
-  }
+    if (!allowed) {
+      handleMethodNotAllowed(res, Object.keys(route.handlers));
+      return true;
+    }
 
-  if (route.requiresAuth && !authManager.isAuthenticated(req)) {
-    sendJsonResponse(res, 401, { error: 'Authentication required' });
-    return true;
-  }
+    if (route.requiresAuth && !authManager.isAuthenticated(req)) {
+      sendJsonResponse(res, 401, { error: 'Authentication required' });
+      return true;
+    }
 
-  const context = {
-    req,
-    res,
-    url,
-    method,
-    workdir,
-    readJsonBody: () => readJson(req),
+    const context = {
+      req,
+      res,
+      url,
+      method,
+      workdir,
+      readJsonBody: () => readJson(req),
+    };
+
+    await allowed(context);
+    return true;
   };
-
-  await allowed(context);
-  return true;
-};
 }
