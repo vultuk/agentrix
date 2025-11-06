@@ -143,11 +143,11 @@ function ChangeList({ items, emptyLabel, onSelect }) {
   }
 
   return (
-    <ul>
+    <ul className="divide-y divide-neutral-800">
       {items.map((item) => {
         const key = `${item.path || ''}:${item.previousPath || ''}:${item.status || ''}:${item.kind || ''}`;
         return (
-          <li key={key} className="px-1 py-1 border-t border-neutral-800 first:border-transparent">
+          <li key={key} className="px-1 py-1">
             <button
               type="button"
               onClick={() => {
@@ -184,9 +184,9 @@ function CommitsList({ commits }) {
 
   return (
     <Fragment>
-      <ul>
+      <ul className="divide-y divide-neutral-800">
         {commits.items.map((commit) => (
-          <li key={commit.hash} className="px-3 py-2 text-sm border-t border-neutral-800 first:border-transparent">
+          <li key={commit.hash} className="px-3 py-2 text-sm">
             <p className="text-neutral-200">
               <span className="font-semibold">{commit.subject}</span>
             </p>

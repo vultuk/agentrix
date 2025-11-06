@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 const { createElement: h } = React;
 
@@ -40,6 +40,11 @@ function resolveInitialTheme(): ThemeMode {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const storedPreference =
+    typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
+  const hasExplicitPreferenceRef = useRef<boolean>(
+    storedPreference === 'light' || storedPreference === 'dark',
+  );
   const [mode, setModeState] = useState<ThemeMode>(() => resolveInitialTheme());
 
   useEffect(() => {
@@ -60,6 +65,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const listener = (event: MediaQueryListEvent) => {
+      if (hasExplicitPreferenceRef.current) {
+        return;
+      }
       setModeState(event.matches ? 'dark' : 'light');
     };
     const query = window.matchMedia('(prefers-color-scheme: dark)');
@@ -78,10 +86,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setMode = useCallback((next: ThemeMode) => {
+    hasExplicitPreferenceRef.current = true;
     setModeState((current) => (current === next ? current : next));
   }, []);
 
   const toggle = useCallback(() => {
+    hasExplicitPreferenceRef.current = true;
     setModeState((current) => (current === 'dark' ? 'light' : 'dark'));
   }, []);
 

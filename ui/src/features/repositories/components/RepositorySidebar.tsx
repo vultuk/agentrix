@@ -106,7 +106,7 @@ export default function RepositorySidebar({
           type: 'button',
           title: toggleModeLabel,
           'aria-label': toggleModeLabel,
-          'aria-pressed': isLightMode ? 'true' : 'false',
+            'aria-pressed': isLightMode,
         },
         h(ThemeToggleIcon, { size: 18 })
       )

@@ -753,7 +753,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
             onClick: onLogout,
             disabled: Boolean(isLoggingOut),
             'aria-label': 'Log out',
-            'aria-busy': Boolean(isLoggingOut) ? ('true' as const) : undefined,
+            'aria-busy': Boolean(isLoggingOut),
             className:
               'inline-flex h-10 w-10 items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 text-neutral-300 transition-colors hover:text-emerald-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-500 disabled:cursor-not-allowed disabled:opacity-70',
           },

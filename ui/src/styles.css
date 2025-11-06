@@ -305,7 +305,7 @@
 .diff-viewer .d2h-wrapper {
   color: var(--diff-line-color);
   border: none;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', 'IBM Plex Mono', monospace;
   background-color: transparent;
 }
 
