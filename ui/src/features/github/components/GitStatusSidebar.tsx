@@ -12,6 +12,7 @@ import {
   RefreshCcw,
   XCircle,
 } from 'lucide-react';
+import { useTheme } from '../../../context/ThemeContext.js';
 
 const AUTO_REFRESH_INTERVAL_MS = 6000;
 const LARGE_SECTION_THRESHOLD = 25;
@@ -94,13 +95,23 @@ function SectionHeaderButton({
   tone = 'neutral',
   truncated = false,
 }) {
-  const toneMap = {
-    neutral: 'text-neutral-300',
-    warning: 'text-amber-200',
-    danger: 'text-rose-200',
-    success: 'text-emerald-200',
-    info: 'text-sky-200',
-  };
+  const { mode } = useTheme();
+  const toneMap =
+    mode === 'light'
+      ? {
+          neutral: 'text-neutral-700',
+          warning: 'text-amber-600',
+          danger: 'text-rose-600',
+          success: 'text-emerald-600',
+          info: 'text-sky-600',
+        }
+      : {
+          neutral: 'text-neutral-300',
+          warning: 'text-amber-200',
+          danger: 'text-rose-200',
+          success: 'text-emerald-200',
+          info: 'text-sky-200',
+        };
 
   return (
     <button

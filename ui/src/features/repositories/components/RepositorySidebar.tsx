@@ -1,7 +1,8 @@
 import React from 'react';
-import { ChevronDown, Github, GitBranch, Plus, Settings, Sparkles, Trash2, RefreshCcw } from 'lucide-react';
+import { ChevronDown, Github, GitBranch, Plus, Settings, Sparkles, Trash2, RefreshCcw, Sun, Moon, X } from 'lucide-react';
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { ACTION_BUTTON_CLASS } from '../../../utils/constants.js';
+import { useTheme } from '../../../context/ThemeContext.js';
 import type { Worktree, RepoDashboard } from '../../../types/domain.js';
 
 const { createElement: h } = React;
@@ -44,6 +45,7 @@ interface RepositorySidebarProps {
   onAcknowledgeIdle: (org: string, repo: string, branch: string) => void;
   onShowRepoDashboard: (org: string, repo: string) => void;
   onAddRepository: () => void;
+  onCloseMobileMenu: () => void;
   logoutButton: React.ReactNode;
 }
 
@@ -64,11 +66,65 @@ export default function RepositorySidebar({
   onAcknowledgeIdle,
   onShowRepoDashboard,
   onAddRepository,
+  onCloseMobileMenu,
   logoutButton,
 }: RepositorySidebarProps) {
+  const { mode, toggle: toggleTheme } = useTheme();
+  const isLightMode = mode === 'light';
+  const ThemeToggleIcon = isLightMode ? Moon : Sun;
+  const toggleModeLabel = isLightMode ? 'Switch to dark mode' : 'Switch to light mode';
+
   return h(
     'div',
     { className: 'flex h-full flex-col text-sm font-sans' },
+    h(
+      'div',
+      { className: 'flex h-16 items-center justify-between px-3 py-3 border-b border-neutral-800 bg-neutral-925/80' },
+      h(
+        'div',
+        { className: 'flex items-center gap-2' },
+        h(
+          'button',
+          {
+            onClick: onAddRepository,
+            className:
+              'inline-flex h-10 w-10 items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 text-neutral-100 transition-colors hover:bg-neutral-850 hover:text-emerald-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-500',
+            type: 'button',
+            title: 'Add repository',
+            'aria-label': 'Add repository',
+          },
+          h(Plus, { size: 18 }),
+          h('span', { className: 'sr-only' }, 'Add repository'),
+        ),
+        logoutButton,
+      h(
+        'button',
+        {
+          onClick: toggleTheme,
+          className:
+            'inline-flex h-10 w-10 items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 text-neutral-300 transition-colors hover:text-emerald-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-500',
+          type: 'button',
+          title: toggleModeLabel,
+          'aria-label': toggleModeLabel,
+            'aria-pressed': isLightMode,
+        },
+        h(ThemeToggleIcon, { size: 18 })
+      )
+      ),
+      h(
+        'button',
+        {
+          onClick: onCloseMobileMenu,
+          className:
+            'lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 text-neutral-400 transition-colors hover:text-neutral-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-500',
+          type: 'button',
+          title: 'Close sidebar',
+          'aria-label': 'Close sidebar',
+        },
+        h(X, { size: 18 }),
+        h('span', { className: 'sr-only' }, 'Close sidebar'),
+      ),
+    ),
     h(
       'div',
       { className: 'flex-1 min-h-0 overflow-y-auto p-3 space-y-5' },
@@ -318,26 +374,6 @@ export default function RepositorySidebar({
             )
         );
       })
-    ),
-    h(
-      'div',
-      { className: 'border-t border-neutral-800 bg-neutral-925/80 px-3 py-3' },
-      h(
-        'div',
-        { className: 'flex items-center justify-between gap-3' },
-        h(
-          'button',
-          {
-            onClick: onAddRepository,
-            className:
-              'inline-flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-medium text-neutral-100 transition-colors hover:bg-neutral-800'
-          },
-          h(Plus, { size: 14 }),
-          h('span', null, 'Add Repo')
-        ),
-        logoutButton
-      )
     )
   );
 }
-
