@@ -21,7 +21,7 @@ interface PortsDependencies {
   now: Clock;
 }
 
-const PORT_LIST_COMMAND = `ss -ntpH | awk '{print $5}' | awk -F: '{print $NF}' | sort -n | uniq`;
+const PORT_LIST_COMMAND = `ss -ntlpH | awk '{print $5}' | awk -F: '{print $NF}' | sort -n | uniq`;
 
 const defaultDependencies: PortsDependencies = {
   execCommand: async (command, options) => {
