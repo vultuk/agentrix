@@ -3,12 +3,12 @@ import type { TerminalSession } from '../types/terminal.js';
 import { runTmux } from './tmux.js';
 import { savePlanToWorktree } from './plan-storage.js';
 
-type AgentDependencies = {
+interface AgentDependencies {
   createIsolatedTerminalSession: typeof createIsolatedTerminalSession;
   queueSessionInput: typeof queueSessionInput;
   runTmux: typeof runTmux;
   savePlanToWorktree: typeof savePlanToWorktree;
-};
+}
 
 const baseDependencies: AgentDependencies = {
   createIsolatedTerminalSession,

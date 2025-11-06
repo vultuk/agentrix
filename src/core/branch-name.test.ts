@@ -25,14 +25,17 @@ class MockChildProcess extends EventEmitter {
   });
 }
 
-type SpawnScenario = (child: MockChildProcess) => void;
+interface SpawnScenario {
+  (child: MockChildProcess): void;
+  readonly scenarioName?: string;
+}
 
-type Harness = {
+interface Harness {
   enqueueScenario: (scenario: SpawnScenario) => void;
   spawnCalls: Array<{ command: string }>;
   loadDeveloperMessageMock: ReturnType<typeof mock.fn>;
   normaliseBranchNameMock: ReturnType<typeof mock.fn>;
-};
+}
 
 function setupHarness(): Harness {
   const localScenarios: SpawnScenario[] = [];

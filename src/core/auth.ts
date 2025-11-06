@@ -4,12 +4,12 @@ import { clearCookie, parseCookies, setCookie } from '../infrastructure/cookies/
 import { generateSessionToken } from '../utils/random.js';
 import type { AuthManager } from '../types/auth.js';
 
-type AuthDependencies = {
+interface AuthDependencies {
   parseCookies: typeof parseCookies;
   setCookie: typeof setCookie;
   clearCookie: typeof clearCookie;
   generateSessionToken: typeof generateSessionToken;
-};
+}
 
 const baseAuthDependencies: AuthDependencies = {
   parseCookies,
