@@ -19,10 +19,39 @@ function writeEvent(res: ServerResponse, { event, data }: EventData): void {
   res.write(`data: ${payload}\n\n`);
 }
 
+type EventStreamDependencies = {
+  discoverRepositories: typeof discoverRepositories;
+  listActiveSessions: typeof listActiveSessions;
+  getEventTypes: typeof getEventTypes;
+  subscribeToEvents: typeof subscribeToEvents;
+  listTasks: typeof listTasks;
+};
+
+const defaultDependencies: EventStreamDependencies = {
+  discoverRepositories,
+  listActiveSessions,
+  getEventTypes,
+  subscribeToEvents,
+  listTasks,
+};
+
+let testOverrides: Partial<EventStreamDependencies> | null = null;
+
+export function __setEventStreamTestOverrides(
+  overrides?: Partial<EventStreamDependencies>,
+): void {
+  testOverrides = overrides ?? null;
+}
+
+function getDependency<K extends keyof EventStreamDependencies>(key: K): EventStreamDependencies[K] {
+  return (testOverrides?.[key] ?? defaultDependencies[key]) as EventStreamDependencies[K];
+}
+
 async function sendInitialSnapshots(res: ServerResponse, workdir: string): Promise<void> {
+  const eventTypes = getDependency('getEventTypes')();
   const [reposSnapshot, sessionsSnapshot, tasksSnapshot] = await Promise.all([
-    discoverRepositories(workdir).catch(() => ({})),
-    Promise.resolve(listActiveSessions()).then((sessions) =>
+    getDependency('discoverRepositories')(workdir).catch(() => ({})),
+    Promise.resolve(getDependency('listActiveSessions')()).then((sessions) =>
       sessions.map((session) => {
         const lastActivityAtMs =
           typeof session.lastActivityAt === 'number'
@@ -41,13 +70,13 @@ async function sendInitialSnapshots(res: ServerResponse, workdir: string): Promi
         };
       })
     ),
-    Promise.resolve(listTasks()).catch(() => []),
+    Promise.resolve(getDependency('listTasks')()).catch(() => []),
   ]);
 
-  writeEvent(res, { event: getEventTypes().REPOS_UPDATE, data: { data: reposSnapshot } });
-  writeEvent(res, { event: getEventTypes().SESSIONS_UPDATE, data: { sessions: sessionsSnapshot } });
+  writeEvent(res, { event: eventTypes.REPOS_UPDATE, data: { data: reposSnapshot } });
+  writeEvent(res, { event: eventTypes.SESSIONS_UPDATE, data: { sessions: sessionsSnapshot } });
   if (Array.isArray(tasksSnapshot) && tasksSnapshot.length > 0) {
-    writeEvent(res, { event: getEventTypes().TASKS_UPDATE, data: { tasks: tasksSnapshot } });
+    writeEvent(res, { event: eventTypes.TASKS_UPDATE, data: { tasks: tasksSnapshot } });
   }
 }
 
@@ -93,19 +122,20 @@ export function createEventStreamHandler({ authManager, workdir }: EventStreamCo
     }, HEARTBEAT_INTERVAL_MS);
     cleanupFunctions.push(() => clearInterval(heartbeatInterval));
 
-    const unsubscribeRepos = subscribeToEvents(getEventTypes().REPOS_UPDATE, (payload) => {
+    const eventTypes = getDependency('getEventTypes')();
+    const unsubscribeRepos = getDependency('subscribeToEvents')(eventTypes.REPOS_UPDATE, (payload) => {
       try {
-        writeEvent(res, { event: getEventTypes().REPOS_UPDATE, data: { data: payload } });
+        writeEvent(res, { event: eventTypes.REPOS_UPDATE, data: { data: payload } });
       } catch {
         res.end();
       }
     });
     cleanupFunctions.push(unsubscribeRepos);
 
-    const unsubscribeSessions = subscribeToEvents(getEventTypes().SESSIONS_UPDATE, (payload) => {
+    const unsubscribeSessions = getDependency('subscribeToEvents')(eventTypes.SESSIONS_UPDATE, (payload) => {
       try {
         writeEvent(res, {
-          event: getEventTypes().SESSIONS_UPDATE,
+          event: eventTypes.SESSIONS_UPDATE,
           data: { sessions: payload },
         });
       } catch {
@@ -114,10 +144,10 @@ export function createEventStreamHandler({ authManager, workdir }: EventStreamCo
     });
     cleanupFunctions.push(unsubscribeSessions);
 
-    const unsubscribeTasks = subscribeToEvents(getEventTypes().TASKS_UPDATE, (payload) => {
+    const unsubscribeTasks = getDependency('subscribeToEvents')(eventTypes.TASKS_UPDATE, (payload) => {
       try {
         writeEvent(res, {
-          event: getEventTypes().TASKS_UPDATE,
+          event: eventTypes.TASKS_UPDATE,
           data: payload,
         });
       } catch {

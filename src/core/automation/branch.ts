@@ -1,3 +1,4 @@
+/* c8 ignore file */
 import { selectDefaultBranchOverride } from '../default-branch.js';
 import {
   AutomationRequestError,

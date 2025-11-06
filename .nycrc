@@ -1,0 +1,33 @@
+{
+  "exclude": [
+    "src/server/index.ts",
+    "src/core/automation/**",
+    "src/core/tmux.ts",
+    "src/repositories/git-status-repository.ts",
+    "src/services/worktree-service.ts",
+    "src/core/default-branch.ts",
+    "src/core/github.ts",
+    "src/core/plan.ts",
+    "src/infrastructure/cookies/**",
+    "src/infrastructure/logging/**",
+    "src/cli/**",
+    "src/core/tasks.ts",
+    "src/core/repositories.ts",
+    "src/domain/branch-validator.ts",
+    "src/core/branch-name.ts",
+    "src/core/plan-storage.ts",
+    "src/core/task-store.ts",
+    "src/core/terminal-sessions.ts",
+    "src/server/events.ts",
+    "src/server/router.ts",
+    "src/server/ui.ts",
+    "src/server/websocket.ts",
+    "src/services/**",
+    "src/infrastructure/errors/**",
+    "src/repositories/**",
+    "src/validation/**",
+    "src/config/agent-commands.ts",
+    "src/core/agents.ts",
+    "src/core/repository-config.ts"
+  ]
+}

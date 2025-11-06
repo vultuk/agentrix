@@ -15,6 +15,51 @@ import { emitSessionsUpdate } from './event-bus.js';
 const IDLE_TIMEOUT_MS = 90 * 1000;
 const IDLE_SWEEP_INTERVAL_MS = 5 * 1000;
 
+type TerminalSessionDependencies = {
+  spawnPty: typeof pty.spawn;
+  getWorktreePath: typeof getWorktreePath;
+  detectTmux: typeof detectTmux;
+  isTmuxAvailable: typeof isTmuxAvailable;
+  makeTmuxSessionName: typeof makeTmuxSessionName;
+  tmuxHasSession: typeof tmuxHasSession;
+  emitSessionsUpdate: typeof emitSessionsUpdate;
+  setInterval: typeof setInterval;
+  clearInterval: typeof clearInterval;
+  setTimeout: typeof setTimeout;
+  clearTimeout: typeof clearTimeout;
+};
+
+const defaultTerminalSessionDependencies: TerminalSessionDependencies = {
+  spawnPty: pty.spawn.bind(pty),
+  getWorktreePath,
+  detectTmux,
+  isTmuxAvailable,
+  makeTmuxSessionName,
+  tmuxHasSession,
+  emitSessionsUpdate,
+  setInterval: globalThis.setInterval.bind(globalThis),
+  clearInterval: globalThis.clearInterval.bind(globalThis),
+  setTimeout: globalThis.setTimeout.bind(globalThis),
+  clearTimeout: globalThis.clearTimeout.bind(globalThis),
+};
+
+let terminalSessionTestOverrides: Partial<TerminalSessionDependencies> | null = null;
+
+export function __setTerminalSessionsTestOverrides(
+  overrides?: Partial<TerminalSessionDependencies>,
+): void {
+  terminalSessionTestOverrides = overrides ?? null;
+}
+
+function resolveTerminalDependency<K extends keyof TerminalSessionDependencies>(
+  key: K,
+): TerminalSessionDependencies[K] {
+  if (terminalSessionTestOverrides && terminalSessionTestOverrides[key]) {
+    return terminalSessionTestOverrides[key] as TerminalSessionDependencies[K];
+  }
+  return defaultTerminalSessionDependencies[key];
+}
+
 const terminalSessions = new Map<string, Map<string, TerminalSession>>();
 const terminalSessionsById = new Map<string, TerminalSession>();
 let idleMonitorTimer: NodeJS.Timeout | null = null;
@@ -23,7 +68,7 @@ function ensureIdleMonitor() {
   if (idleMonitorTimer) {
     return;
   }
-  idleMonitorTimer = setInterval(runIdleSweep, IDLE_SWEEP_INTERVAL_MS);
+  idleMonitorTimer = resolveTerminalDependency('setInterval')(runIdleSweep, IDLE_SWEEP_INTERVAL_MS);
 }
 
 function stopIdleMonitorIfInactive() {
@@ -31,7 +76,7 @@ function stopIdleMonitorIfInactive() {
     return;
   }
   if (terminalSessionsById.size === 0) {
-    clearInterval(idleMonitorTimer);
+    resolveTerminalDependency('clearInterval')(idleMonitorTimer);
     idleMonitorTimer = null;
   }
 }
@@ -119,7 +164,7 @@ function markSessionReady(session: TerminalSession): void {
   }
   session.ready = true;
   if (session.readyTimer) {
-    clearTimeout(session.readyTimer);
+    resolveTerminalDependency('clearTimeout')(session.readyTimer);
     session.readyTimer = null;
   }
   flushPendingInputs(session);
@@ -147,7 +192,7 @@ export function queueSessionInput(session: TerminalSession, input: string | Buff
     session.pendingInputs.push(value);
   }
   if (becameActive) {
-    emitSessionsUpdate(serialiseSessions(listActiveSessions()));
+    resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
   }
 }
 
@@ -245,7 +290,7 @@ function runIdleSweep() {
   });
 
   if (changed) {
-    emitSessionsUpdate(serialiseSessions(listActiveSessions()));
+    resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
   }
 }
 
@@ -258,7 +303,7 @@ function handleSessionExit(session: TerminalSession, code: number, signal: strin
   session.exitSignal = signal;
   session.exitError = error ? error.message : undefined;
   if (session.readyTimer) {
-    clearTimeout(session.readyTimer);
+    resolveTerminalDependency('clearTimeout')(session.readyTimer);
     session.readyTimer = null;
   }
   if (Array.isArray(session.pendingInputs)) {
@@ -284,7 +329,7 @@ function handleSessionExit(session: TerminalSession, code: number, signal: strin
     session.waiters.forEach((resolve) => resolve());
     session.waiters = [];
   }
-  emitSessionsUpdate(serialiseSessions(listActiveSessions()));
+  resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
 }
 
 export function makeSessionKey(org: string, repo: string, branch: string): string {
@@ -316,7 +361,7 @@ async function terminateSession(session: TerminalSession, options: { signal?: st
       resolve();
       return;
     }
-    setTimeout(() => {
+    resolveTerminalDependency('setTimeout')(() => {
       if (!session.closed) {
         try {
           session.process.kill('SIGKILL');
@@ -335,7 +380,7 @@ export async function disposeSessionByKey(key: string): Promise<void> {
   }
   const tasks = sessions.map((session) => terminateSession(session).catch(() => {}));
   await Promise.allSettled(tasks);
-  emitSessionsUpdate(serialiseSessions(listActiveSessions()));
+  resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
 }
 
 export async function disposeSessionsForRepository(org: string, repo: string): Promise<void> {
@@ -356,7 +401,7 @@ export async function disposeSessionsForRepository(org: string, repo: string): P
   }
   const tasks = targets.map((session) => terminateSession(session).catch(() => {}));
   await Promise.allSettled(tasks);
-  emitSessionsUpdate(serialiseSessions(listActiveSessions()));
+  resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
 }
 
 export async function disposeSessionById(sessionId: string): Promise<void> {
@@ -365,7 +410,7 @@ export async function disposeSessionById(sessionId: string): Promise<void> {
     return;
   }
   await terminateSession(session);
-  emitSessionsUpdate(serialiseSessions(listActiveSessions()));
+  resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
 }
 
 export async function disposeAllSessions(): Promise<void> {
@@ -380,7 +425,7 @@ export async function disposeAllSessions(): Promise<void> {
   terminalSessions.clear();
   terminalSessionsById.clear();
   stopIdleMonitorIfInactive();
-  emitSessionsUpdate([]);
+  resolveTerminalDependency('emitSessionsUpdate')([]);
 }
 
 export function getSessionById(sessionId: string): TerminalSession | undefined {
@@ -415,7 +460,12 @@ async function spawnTerminalProcess({
   useTmux?: boolean;
   requireTmux?: boolean;
 }) {
-  const { worktreePath } = await getWorktreePath(workdir, org, repo, branch);
+  const { worktreePath } = await resolveTerminalDependency('getWorktreePath')(
+    workdir,
+    org,
+    repo,
+    branch,
+  );
   const shellCommand = process.env['SHELL'] || '/bin/bash';
   const args = determineShellArgs(shellCommand);
 
@@ -435,10 +485,10 @@ async function spawnTerminalProcess({
   }
 
   if (useTmux) {
-    await detectTmux();
-    if (isTmuxAvailable()) {
-      tmuxSessionName = makeTmuxSessionName(org, repo, branch);
-      tmuxSessionExists = await tmuxHasSession(tmuxSessionName);
+    await resolveTerminalDependency('detectTmux')();
+    if (resolveTerminalDependency('isTmuxAvailable')()) {
+      tmuxSessionName = resolveTerminalDependency('makeTmuxSessionName')(org, repo, branch);
+      tmuxSessionExists = await resolveTerminalDependency('tmuxHasSession')(tmuxSessionName);
       const tmuxArgs = tmuxSessionExists
         ? ['attach-session', '-t', tmuxSessionName]
         : ['new-session', '-s', tmuxSessionName, '-x', '120', '-y', '36'];
@@ -453,7 +503,7 @@ async function spawnTerminalProcess({
 
       const tmuxEnv = { ...baseEnv };
 
-      child = pty.spawn(TMUX_BIN, tmuxArgs, {
+      child = resolveTerminalDependency('spawnPty')(TMUX_BIN, tmuxArgs, {
         cwd: worktreePath,
         env: tmuxEnv,
         cols: 120,
@@ -468,7 +518,7 @@ async function spawnTerminalProcess({
   }
 
   if (!child) {
-    child = pty.spawn(shellCommand, args, {
+    child = resolveTerminalDependency('spawnPty')(shellCommand, args, {
       cwd: worktreePath,
       env: baseEnv,
       cols: 120,
@@ -531,11 +581,11 @@ async function createTerminalSession(
     const signal = args[1] as string | null;
     handleSessionExit(session, code || 0, signal || '');
   });
-  session.readyTimer = setTimeout(() => {
+  session.readyTimer = resolveTerminalDependency('setTimeout')(() => {
     markSessionReady(session);
   }, 150);
 
-  emitSessionsUpdate(serialiseSessions(listActiveSessions()));
+  resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
 
   return session;
 }

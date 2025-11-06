@@ -30,6 +30,54 @@ export interface RouterConfig {
 
 export type Router = (req: IncomingMessage, res: ServerResponse) => Promise<boolean>;
 
+type RouterDependencies = {
+  createAuthHandlers: typeof createAuthHandlers;
+  createAutomationHandlers: typeof createAutomationHandlers;
+  createRepoHandlers: typeof createRepoHandlers;
+  createRepoDashboardHandlers: typeof createRepoDashboardHandlers;
+  createRepoIssueHandlers: typeof createRepoIssueHandlers;
+  createSessionHandlers: typeof createSessionHandlers;
+  createWorktreeHandlers: typeof createWorktreeHandlers;
+  createTerminalHandlers: typeof createTerminalHandlers;
+  createConfigHandlers: typeof createConfigHandlers;
+  createPlanHandlers: typeof createPlanHandlers;
+  createGitStatusHandlers: typeof createGitStatusHandlers;
+  createPlanArtifactHandlers: typeof createPlanArtifactHandlers;
+  createEventStreamHandler: typeof createEventStreamHandler;
+  createTaskHandlers: typeof createTaskHandlers;
+  sendJson: typeof sendJson;
+  readJsonBody: typeof readJsonBody;
+};
+
+const defaultDependencies: RouterDependencies = {
+  createAuthHandlers,
+  createAutomationHandlers,
+  createRepoHandlers,
+  createRepoDashboardHandlers,
+  createRepoIssueHandlers,
+  createSessionHandlers,
+  createWorktreeHandlers,
+  createTerminalHandlers,
+  createConfigHandlers,
+  createPlanHandlers,
+  createGitStatusHandlers,
+  createPlanArtifactHandlers,
+  createEventStreamHandler,
+  createTaskHandlers,
+  sendJson,
+  readJsonBody,
+};
+
+let testOverrides: Partial<RouterDependencies> | null = null;
+
+export function __setRouterTestOverrides(overrides?: Partial<RouterDependencies>): void {
+  testOverrides = overrides ?? null;
+}
+
+function getDependency<K extends keyof RouterDependencies>(key: K): RouterDependencies[K] {
+  return (testOverrides?.[key] ?? defaultDependencies[key]) as RouterDependencies[K];
+}
+
 export function createRouter({
   authManager,
   workdir,
@@ -48,8 +96,8 @@ export function createRouter({
     throw new Error('agentCommands is required');
   }
 
-  const authHandlers = createAuthHandlers(authManager, { cookieManager });
-  const automationHandlers = createAutomationHandlers({
+  const authHandlers = getDependency('createAuthHandlers')(authManager, { cookieManager });
+  const automationHandlers = getDependency('createAutomationHandlers')({
     workdir,
     agentCommands,
     apiKey: automationApiKey,
@@ -57,18 +105,26 @@ export function createRouter({
     planService,
     defaultBranches,
   });
-  const repoHandlers = createRepoHandlers(workdir);
-  const repoDashboardHandlers = createRepoDashboardHandlers(workdir);
-  const repoIssueHandlers = createRepoIssueHandlers(workdir);
-  const sessionHandlers = createSessionHandlers(workdir);
-  const worktreeHandlers = createWorktreeHandlers(workdir, branchNameGenerator, defaultBranches);
-  const terminalHandlers = createTerminalHandlers(workdir, { mode: terminalSessionMode });
-  const configHandlers = createConfigHandlers(agentCommands as never);
-  const planHandlers = createPlanHandlers({ planService: planService as never });
-  const gitStatusHandlers = createGitStatusHandlers(workdir);
-  const planArtifactHandlers = createPlanArtifactHandlers(workdir);
-  const eventStreamHandler = createEventStreamHandler({ authManager, workdir });
-  const taskHandlers = createTaskHandlers();
+  const repoHandlers = getDependency('createRepoHandlers')(workdir);
+  const repoDashboardHandlers = getDependency('createRepoDashboardHandlers')(workdir);
+  const repoIssueHandlers = getDependency('createRepoIssueHandlers')(workdir);
+  const sessionHandlers = getDependency('createSessionHandlers')(workdir);
+  const worktreeHandlers = getDependency('createWorktreeHandlers')(
+    workdir,
+    branchNameGenerator,
+    defaultBranches,
+  );
+  const terminalHandlers = getDependency('createTerminalHandlers')(workdir, {
+    mode: terminalSessionMode,
+  });
+  const configHandlers = getDependency('createConfigHandlers')(agentCommands as never);
+  const planHandlers = getDependency('createPlanHandlers')({ planService: planService as never });
+  const gitStatusHandlers = getDependency('createGitStatusHandlers')(workdir);
+  const planArtifactHandlers = getDependency('createPlanArtifactHandlers')(workdir);
+  const eventStreamHandler = getDependency('createEventStreamHandler')({ authManager, workdir });
+  const taskHandlers = getDependency('createTaskHandlers')();
+  const readJson = getDependency('readJsonBody');
+  const sendJsonResponse = getDependency('sendJson');
 
   const routes = new Map([
     [
@@ -234,7 +290,7 @@ export function createRouter({
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
     if (url.pathname.startsWith('/api/tasks/')) {
       if (!authManager.isAuthenticated(req)) {
-        sendJson(res, 401, { error: 'Authentication required' });
+        sendJsonResponse(res, 401, { error: 'Authentication required' });
         return true;
       }
       if (req.method && !['GET', 'HEAD'].includes(req.method.toUpperCase())) {
@@ -243,7 +299,7 @@ export function createRouter({
       }
       const taskId = url.pathname.slice('/api/tasks/'.length);
       if (!taskId) {
-        sendJson(res, 404, { error: 'Task not found' });
+        sendJsonResponse(res, 404, { error: 'Task not found' });
         return true;
       }
       const context = {
@@ -253,7 +309,7 @@ export function createRouter({
         method: req.method?.toUpperCase() || 'GET',
         params: { id: taskId },
         workdir,
-        readJsonBody: () => readJsonBody(req),
+        readJsonBody: () => readJson(req),
       };
       await taskHandlers.read(context, taskId);
       return true;
@@ -267,26 +323,26 @@ export function createRouter({
     const method = (req.method?.toUpperCase() || 'GET') as keyof typeof route.handlers;
     const allowed = route.handlers[method];
 
-    if (!allowed) {
-      handleMethodNotAllowed(res, Object.keys(route.handlers));
-      return true;
-    }
-
-    if (route.requiresAuth && !authManager.isAuthenticated(req)) {
-      sendJson(res, 401, { error: 'Authentication required' });
-      return true;
-    }
-
-    const context = {
-      req,
-      res,
-      url,
-      method,
-      workdir,
-      readJsonBody: () => readJsonBody(req),
-    };
-
-    await allowed(context);
+  if (!allowed) {
+    handleMethodNotAllowed(res, Object.keys(route.handlers));
     return true;
+  }
+
+  if (route.requiresAuth && !authManager.isAuthenticated(req)) {
+    sendJsonResponse(res, 401, { error: 'Authentication required' });
+    return true;
+  }
+
+  const context = {
+    req,
+    res,
+    url,
+    method,
+    workdir,
+    readJsonBody: () => readJson(req),
   };
+
+  await allowed(context);
+  return true;
+};
 }

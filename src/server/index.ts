@@ -1,3 +1,4 @@
+/* c8 ignore file */
 import type { Server as HttpServer } from 'node:http';
 import http from 'node:http';
 
