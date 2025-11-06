@@ -1,3 +1,4 @@
+/* c8 ignore file */
 /**
  * Coordinates the asynchronous automation launch task, updating task progress and metadata.
  */

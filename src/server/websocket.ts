@@ -17,8 +17,35 @@ export interface WebSocketAttachment {
   close: () => Promise<void>;
 }
 
+interface WebSocketDependencies {
+  WebSocketServer: typeof WebSocketServer;
+  parseCookies: typeof parseCookies;
+  getSessionById: typeof getSessionById;
+  addSocketWatcher: typeof addSocketWatcher;
+  queueSessionInput: typeof queueSessionInput;
+}
+
+const defaultDependencies: WebSocketDependencies = {
+  WebSocketServer,
+  parseCookies,
+  getSessionById,
+  addSocketWatcher,
+  queueSessionInput,
+};
+
+let testOverrides: Partial<WebSocketDependencies> | null = null;
+
+export function __setWebSocketTestOverrides(overrides?: Partial<WebSocketDependencies>): void {
+  testOverrides = overrides ?? null;
+}
+
+function getDependency<K extends keyof WebSocketDependencies>(key: K): WebSocketDependencies[K] {
+  return (testOverrides?.[key] ?? defaultDependencies[key]) as WebSocketDependencies[K];
+}
+
 export function attachTerminalWebSockets(server: HttpServer, authManager: AuthManager): WebSocketAttachment {
-  const wss = new WebSocketServer({ noServer: true });
+  const WebSocketServerImpl = getDependency('WebSocketServer');
+  const wss = new WebSocketServerImpl({ noServer: true });
 
   wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
     try {
@@ -30,14 +57,14 @@ export function attachTerminalWebSockets(server: HttpServer, authManager: AuthMa
         return;
       }
 
-      const session = getSessionById(sessionId);
+      const session = getDependency('getSessionById')(sessionId);
       if (!session) {
         socket.send(JSON.stringify({ type: 'error', message: 'Terminal session not found' }));
         socket.close();
         return;
       }
 
-      addSocketWatcher(session, socket);
+      getDependency('addSocketWatcher')(session, socket);
 
       socket.on('message', (data) => {
         if (session.closed) {
@@ -53,7 +80,7 @@ export function attachTerminalWebSockets(server: HttpServer, authManager: AuthMa
 
         if (parsed && parsed.type === 'input') {
           const payload = typeof parsed.data === 'string' ? parsed.data : '';
-          queueSessionInput(session, payload);
+          getDependency('queueSessionInput')(session, payload);
         } else if (parsed && parsed.type === 'resize') {
           const cols = Number.parseInt(parsed.cols, 10);
           const rows = Number.parseInt(parsed.rows, 10);
@@ -61,7 +88,7 @@ export function attachTerminalWebSockets(server: HttpServer, authManager: AuthMa
             session.process.resize(cols, rows);
           }
         } else {
-          queueSessionInput(session, raw);
+          getDependency('queueSessionInput')(session, raw);
         }
       });
 
@@ -102,7 +129,7 @@ export function attachTerminalWebSockets(server: HttpServer, authManager: AuthMa
         return;
       }
 
-      const cookies = parseCookies(req.headers.cookie);
+      const cookies = getDependency('parseCookies')(req.headers.cookie);
       const token = cookies[SESSION_COOKIE_NAME] || '';
       if (!token || !authManager.hasToken(token)) {
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');

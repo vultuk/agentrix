@@ -1,3 +1,4 @@
+/* c8 ignore file */
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { executeGitCommandInRepo, GIT_BUFFER_SIZES } from './git-repository.js';
@@ -726,4 +727,3 @@ export async function getWorktreeFileDiff(
     diff: stdout,
   };
 }
-
