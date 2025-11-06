@@ -58,11 +58,11 @@ export default function MainPane({
       'div',
       {
         className:
-          'bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0 flex-1',
+          'box-border bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0 flex-1',
       },
       h(
         'div',
-        { className: 'flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
+        { className: 'flex h-16 items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
         h(
           'div',
           { className: 'min-w-0' },
@@ -133,11 +133,11 @@ export default function MainPane({
       'div',
       {
         className:
-          'bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0 flex-1',
+          'box-border bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0 flex-1',
       },
       h(
         'div',
-        { className: 'flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
+        { className: 'flex h-16 items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
         h(
           'div',
           null,
@@ -197,11 +197,11 @@ export default function MainPane({
       'div',
       {
         className:
-          'bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0',
+          'box-border bg-neutral-900 border border-neutral-800 rounded-lg h-full flex flex-col overflow-hidden min-h-0',
       },
       h(
         'div',
-        { className: 'flex justify-end items-center gap-2 px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
+        { className: 'flex h-16 items-center justify-end gap-2 px-4 py-3 border-b border-neutral-800 bg-neutral-900/80' },
         taskMenuButton,
         h(
           'button',
@@ -232,4 +232,3 @@ export default function MainPane({
     mainPaneContent,
   );
 }
-

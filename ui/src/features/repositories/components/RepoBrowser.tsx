@@ -1,9 +1,11 @@
 import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import 'xterm/css/xterm.css';
+import { LogOut } from 'lucide-react';
 import LoadingButton from '../../../components/LoadingButton.js';
 import { ISSUE_PLAN_PROMPT_TEMPLATE } from '../../../config/commands.js';
 import { REPOSITORY_POLL_INTERVAL_MS, SESSION_POLL_INTERVAL_MS } from '../../../utils/constants.js';
+import { renderSpinner } from '../../../components/Spinner.js';
 import { isIdleAcknowledgementCurrent, getMetadataLastActivityMs, createIdleAcknowledgementEntry } from '../../../utils/activity.js';
 import { useRepoBrowserModals } from '../hooks/useRepoBrowserModals.js';
 import { useRepoBrowserState } from '../hooks/useRepoBrowserState.js';
@@ -746,16 +748,29 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   const logoutButton =
     typeof onLogout === 'function'
       ? h(
-          LoadingButton,
+          'button',
           {
+            type: 'button',
             onClick: onLogout,
-            loading: Boolean(isLoggingOut),
-            loadingText: 'Logging out…',
-            variant: 'secondary',
-            size: 'sm',
-            className: 'text-xs',
-            children: 'Log out'
-          }
+            disabled: Boolean(isLoggingOut),
+            'aria-label': 'Log out',
+            'aria-busy': Boolean(isLoggingOut) ? ('true' as const) : undefined,
+            className:
+              'inline-flex h-10 w-10 items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 text-neutral-300 transition-colors hover:text-emerald-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-500 disabled:cursor-not-allowed disabled:opacity-70',
+          },
+          isLoggingOut
+            ? h(
+                Fragment,
+                null,
+                renderSpinner('text-neutral-200'),
+                h('span', { className: 'sr-only' }, 'Logging out')
+              )
+            : h(
+                Fragment,
+                null,
+                h(LogOut, { size: 18 }),
+                h('span', { className: 'sr-only' }, 'Log out')
+              )
         )
       : null;
 
@@ -846,7 +861,10 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     null,
     h(
       'div',
-      { className: 'flex h-screen bg-neutral-950 text-neutral-100 relative flex-col lg:flex-row min-h-0' },
+      {
+        className: 'flex h-screen overflow-hidden bg-neutral-950 text-neutral-100 relative flex-col lg:flex-row min-h-0',
+        style: { height: '100dvh', minHeight: '100dvh' },
+      },
       sidebar,
       h(
         'div',

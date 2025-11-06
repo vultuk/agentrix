@@ -1,6 +1,5 @@
 import React, { Fragment } from 'react';
 import { Resizable } from 're-resizable';
-import { X } from 'lucide-react';
 import RepositorySidebar from './RepositorySidebar.js';
 import type { Worktree, RepoDashboard } from '../../../types/domain.js';
 
@@ -75,6 +74,7 @@ export default function Sidebar({
     onAcknowledgeIdle,
     onShowRepoDashboard,
     onAddRepository,
+    onCloseMobileMenu,
     logoutButton,
   });
 
@@ -111,15 +111,7 @@ export default function Sidebar({
         'aria-modal': 'true',
         'aria-label': 'Repository navigation'
       },
-      sidebarContent,
-      h(
-        'button',
-        {
-          onClick: onCloseMobileMenu,
-          className: 'absolute top-3 right-3 text-neutral-400 hover:text-neutral-100 transition-colors'
-        },
-        h(X, { size: 16 })
-      )
+      sidebarContent
     )
   );
 
@@ -130,4 +122,3 @@ export default function Sidebar({
     mobileSidebar
   );
 }
-

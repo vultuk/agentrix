@@ -388,7 +388,7 @@ export default function RepositoryDashboard({
     ),
     h(
       'div',
-      { className: 'space-y-3' },
+      { className: `flex flex-col space-y-3${issues.length > 0 ? ' flex-1 min-h-0' : ''}` },
       h(
         'div',
         { className: 'flex items-center justify-between gap-2' },
@@ -422,7 +422,7 @@ export default function RepositoryDashboard({
             'div',
             {
               className:
-                'space-y-2 rounded-lg border border-neutral-800 bg-neutral-925/90 p-4 max-h-[50vh] lg:max-h-[75vh] xl:max-h-[calc(100vh-240px)] overflow-y-auto',
+                'flex-1 min-h-0 space-y-2 rounded-lg border border-neutral-800 bg-neutral-925/90 p-4 overflow-y-auto',
             },
             issues.map((issue, index) =>
               h(IssueCard, {
