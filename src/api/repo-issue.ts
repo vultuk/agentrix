@@ -1,6 +1,6 @@
 import { ensureRepository } from '../core/git.js';
 import { createGithubClient } from '../core/github.js';
-import { sendJson, handleHeadRequest } from '../utils/http.js';
+import { handleHeadRequest } from '../utils/http.js';
 import { extractRepositoryParams } from '../validation/index.js';
 import { HttpError, ValidationError } from '../infrastructure/errors/index.js';
 import { createQueryHandler } from './base-handler.js';
