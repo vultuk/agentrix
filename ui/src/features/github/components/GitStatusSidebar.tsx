@@ -12,6 +12,7 @@ import {
   RefreshCcw,
   XCircle,
 } from 'lucide-react';
+import { useTheme } from '../../../context/ThemeContext.js';
 
 const AUTO_REFRESH_INTERVAL_MS = 6000;
 const LARGE_SECTION_THRESHOLD = 25;
@@ -94,13 +95,23 @@ function SectionHeaderButton({
   tone = 'neutral',
   truncated = false,
 }) {
-  const toneMap = {
-    neutral: 'text-neutral-300',
-    warning: 'text-amber-200',
-    danger: 'text-rose-200',
-    success: 'text-emerald-200',
-    info: 'text-sky-200',
-  };
+  const { mode } = useTheme();
+  const toneMap =
+    mode === 'light'
+      ? {
+          neutral: 'text-neutral-700',
+          warning: 'text-amber-600',
+          danger: 'text-rose-600',
+          success: 'text-emerald-600',
+          info: 'text-sky-600',
+        }
+      : {
+          neutral: 'text-neutral-300',
+          warning: 'text-amber-200',
+          danger: 'text-rose-200',
+          success: 'text-emerald-200',
+          info: 'text-sky-200',
+        };
 
   return (
     <button
@@ -132,11 +143,11 @@ function ChangeList({ items, emptyLabel, onSelect }) {
   }
 
   return (
-    <ul className="divide-y divide-neutral-800">
+    <ul>
       {items.map((item) => {
         const key = `${item.path || ''}:${item.previousPath || ''}:${item.status || ''}:${item.kind || ''}`;
         return (
-          <li key={key} className="px-1 py-1">
+          <li key={key} className="px-1 py-1 border-t border-neutral-800 first:border-transparent">
             <button
               type="button"
               onClick={() => {
@@ -173,9 +184,9 @@ function CommitsList({ commits }) {
 
   return (
     <Fragment>
-      <ul className="divide-y divide-neutral-800">
+      <ul>
         {commits.items.map((commit) => (
-          <li key={commit.hash} className="px-3 py-2 text-sm">
+          <li key={commit.hash} className="px-3 py-2 text-sm border-t border-neutral-800 first:border-transparent">
             <p className="text-neutral-200">
               <span className="font-semibold">{commit.subject}</span>
             </p>

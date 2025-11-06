@@ -2,11 +2,12 @@
  * Hook for managing terminal sessions, WebSocket connections, and xterm.js
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import * as terminalService from '../../../services/api/terminalService.js';
 import { isAuthenticationError } from '../../../services/api/api-client.js';
+import { useTheme } from '../../../context/ThemeContext.js';
 import type { Worktree } from '../../../types/domain.js';
 
 type TerminalStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'closed';
@@ -19,6 +20,56 @@ interface UseTerminalManagementOptions {
 export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTerminalManagementOptions = {}) {
   const [terminalStatus, setTerminalStatus] = useState<TerminalStatus>('disconnected');
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const { mode } = useTheme();
+  const terminalTheme = useMemo(
+    () =>
+      mode === 'light'
+        ? {
+            background: '#f8fafc',
+            foreground: '#1f2937',
+            cursor: '#0f172a',
+            selection: '#cbd5e1',
+            black: '#020617',
+            red: '#dc2626',
+            green: '#15803d',
+            yellow: '#b45309',
+            blue: '#1d4ed8',
+            magenta: '#7c3aed',
+            cyan: '#0f766e',
+            white: '#475569',
+            brightBlack: '#94a3b8',
+            brightRed: '#ef4444',
+            brightGreen: '#22c55e',
+            brightYellow: '#f59e0b',
+            brightBlue: '#2563eb',
+            brightMagenta: '#a855f7',
+            brightCyan: '#2dd4bf',
+            brightWhite: '#0f172a',
+          }
+        : {
+            background: '#111111',
+            foreground: '#f4f4f5',
+            cursor: '#f4f4f5',
+            selection: '#1f2937',
+            black: '#1f1f1f',
+            red: '#f87171',
+            green: '#4ade80',
+            yellow: '#facc15',
+            blue: '#60a5fa',
+            magenta: '#a855f7',
+            cyan: '#22d3ee',
+            white: '#f4f4f5',
+            brightBlack: '#52525b',
+            brightRed: '#fca5a5',
+            brightGreen: '#86efac',
+            brightYellow: '#fde047',
+            brightBlue: '#93c5fd',
+            brightMagenta: '#d8b4fe',
+            brightCyan: '#67e8f9',
+            brightWhite: '#fafafa',
+          },
+    [mode],
+  );
 
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -79,11 +130,7 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
       cursorBlink: true,
       fontFamily: 'JetBrains Mono, Menlo, Consolas, monospace',
       fontSize: 13,
-      theme: {
-        background: '#111111',
-        foreground: '#f4f4f5',
-        cursor: '#f4f4f5'
-      },
+      theme: terminalTheme,
       scrollback: 8000
     });
     const fitAddon = new FitAddon();
@@ -109,7 +156,16 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
       sendResize();
       term.focus();
     });
-  }, [disposeTerminal, sendResize]);
+  }, [disposeTerminal, sendResize, terminalTheme]);
+
+  useEffect(() => {
+    const term = terminalRef.current;
+    if (!term) {
+      return;
+    }
+    term.options.theme = terminalTheme;
+    term.refresh(0, term.rows - 1);
+  }, [terminalTheme]);
 
   const connectSocket = useCallback((newSessionId: string) => {
     if (!newSessionId) {
@@ -279,4 +335,3 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
     sendResize,
   };
 }
-

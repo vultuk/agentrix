@@ -1,5 +1,6 @@
 import React from 'react';
 import { AuthProvider, useAuth } from '../context/AuthContext.js';
+import { ThemeProvider } from '../context/ThemeContext.js';
 import LoginScreen from '../features/auth/components/LoginScreen.js';
 import RepoBrowser from '../features/repositories/components/RepoBrowser.js';
 
@@ -31,6 +32,5 @@ function AppContent() {
 }
 
 export default function App() {
-  return h(AuthProvider, null, h(AppContent));
+  return h(ThemeProvider, null, h(AuthProvider, null, h(AppContent)));
 }
-

@@ -1,7 +1,8 @@
 import React from 'react';
-import { ChevronDown, Github, GitBranch, Plus, Settings, Sparkles, Trash2, RefreshCcw, X } from 'lucide-react';
+import { ChevronDown, Github, GitBranch, Plus, Settings, Sparkles, Trash2, RefreshCcw, Sun, Moon, X } from 'lucide-react';
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { ACTION_BUTTON_CLASS } from '../../../utils/constants.js';
+import { useTheme } from '../../../context/ThemeContext.js';
 import type { Worktree, RepoDashboard } from '../../../types/domain.js';
 
 const { createElement: h } = React;
@@ -68,6 +69,11 @@ export default function RepositorySidebar({
   onCloseMobileMenu,
   logoutButton,
 }: RepositorySidebarProps) {
+  const { mode, toggle: toggleTheme } = useTheme();
+  const isLightMode = mode === 'light';
+  const ThemeToggleIcon = isLightMode ? Moon : Sun;
+  const toggleModeLabel = isLightMode ? 'Switch to dark mode' : 'Switch to light mode';
+
   return h(
     'div',
     { className: 'flex h-full flex-col text-sm font-sans' },
@@ -90,7 +96,20 @@ export default function RepositorySidebar({
           h(Plus, { size: 18 }),
           h('span', { className: 'sr-only' }, 'Add repository'),
         ),
-        logoutButton
+        logoutButton,
+      h(
+        'button',
+        {
+          onClick: toggleTheme,
+          className:
+            'inline-flex h-10 w-10 items-center justify-center rounded-md border border-neutral-800 bg-neutral-925 text-neutral-300 transition-colors hover:text-emerald-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-500',
+          type: 'button',
+          title: toggleModeLabel,
+          'aria-label': toggleModeLabel,
+          'aria-pressed': isLightMode ? 'true' : 'false',
+        },
+        h(ThemeToggleIcon, { size: 18 })
+      )
       ),
       h(
         'button',
