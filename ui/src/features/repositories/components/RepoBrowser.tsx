@@ -2,7 +2,6 @@ import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } fr
 
 import 'xterm/css/xterm.css';
 import { LogOut } from 'lucide-react';
-import LoadingButton from '../../../components/LoadingButton.js';
 import { ISSUE_PLAN_PROMPT_TEMPLATE } from '../../../config/commands.js';
 import { REPOSITORY_POLL_INTERVAL_MS, SESSION_POLL_INTERVAL_MS } from '../../../utils/constants.js';
 import { renderSpinner } from '../../../components/Spinner.js';
