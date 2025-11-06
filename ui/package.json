@@ -14,7 +14,7 @@
     "@headlessui/react": "^2.2.9",
     "diff2html": "^3.4.46",
     "highlight.js": "^11.9.0",
-    "lucide-react": "^0.378.0",
+    "lucide-react": "^0.552.0",
     "re-resizable": "^6.9.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
