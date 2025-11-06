@@ -2,6 +2,12 @@
  * Type definitions for plan modal state
  */
 
+export interface PlanHistoryEntry {
+  id: string;
+  branch: string;
+  createdAt: string;
+}
+
 export interface PlanModalContext {
   org: string;
   repo: string;
@@ -12,7 +18,7 @@ export interface PlanModalState {
   open: boolean;
   loading: boolean;
   error: string | null;
-  plans: Array<{ id: string; name: string }>;
+  plans: PlanHistoryEntry[];
   selectedPlanId: string | null;
   content: string;
   contentLoading: boolean;
@@ -33,4 +39,3 @@ export function createEmptyPlanModalState(): PlanModalState {
     context: null
   };
 }
-

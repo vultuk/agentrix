@@ -103,11 +103,20 @@ export interface CreateTaskRequest {
 
 // Plan API
 export interface FetchPlansResponse {
-  plans: Plan[];
+  data: Array<{
+    id: string;
+    branch: string;
+    createdAt: string;
+  }>;
 }
 
 export interface FetchPlanContentResponse {
-  content: string;
+  data: {
+    id: string;
+    branch: string;
+    createdAt: string;
+    content: string;
+  };
 }
 
 export interface CreatePlanRequest {
@@ -188,4 +197,3 @@ export interface EventStreamCallbacks {
   onConnect?: () => void;
   onDisconnect?: () => void;
 }
-

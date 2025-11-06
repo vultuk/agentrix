@@ -3,14 +3,18 @@
  */
 
 import { apiGet, apiPost, apiDelete } from './api-client.js';
-import type { Plan } from '../../types/domain.js';
+import type { PlanHistoryEntry } from '../../types/plan.js';
+
+export interface PlanDetails extends PlanHistoryEntry {
+  content: string;
+}
 
 interface FetchPlansResponse {
-  plans: Plan[];
+  data?: PlanHistoryEntry[];
 }
 
 interface FetchPlanResponse {
-  content: string;
+  data?: PlanDetails;
 }
 
 interface CreatePlanFromPromptResponse {
@@ -18,27 +22,41 @@ interface CreatePlanFromPromptResponse {
 }
 
 /**
- * Fetch all plans for a repository
+ * Fetch all plans for a worktree
  */
-export async function fetchPlans(org: string, repo: string): Promise<Plan[]> {
-  const params = new URLSearchParams({ org, repo });
+export async function fetchPlans(
+  org: string,
+  repo: string,
+  branch: string,
+  limit?: number
+): Promise<PlanHistoryEntry[]> {
+  const params = new URLSearchParams({ org, repo, branch });
+  if (typeof limit === 'number' && Number.isFinite(limit) && limit > 0) {
+    params.set('limit', String(Math.floor(limit)));
+  }
   const response = await apiGet<FetchPlansResponse>(
     `/api/plans?${params.toString()}`,
     { errorPrefix: 'Failed to fetch plans' }
   );
-  return response.plans || [];
+  return Array.isArray(response?.data) ? response.data : [];
 }
 
 /**
  * Fetch a specific plan
  */
-export async function fetchPlan(org: string, repo: string, planId: string): Promise<string> {
-  const params = new URLSearchParams({ org, repo, planId });
+export async function fetchPlan(
+  org: string,
+  repo: string,
+  branch: string,
+  planId: string
+): Promise<string> {
+  const params = new URLSearchParams({ org, repo, branch, planId });
   const response = await apiGet<FetchPlanResponse>(
     `/api/plans/content?${params.toString()}`,
     { errorPrefix: 'Failed to load plan' }
   );
-  return response.content || '';
+  const content = response?.data?.content;
+  return typeof content === 'string' ? content : '';
 }
 
 /**
@@ -94,4 +112,3 @@ export async function deletePlan(org: string, repo: string, planId: string): Pro
   );
   return true;
 }
-

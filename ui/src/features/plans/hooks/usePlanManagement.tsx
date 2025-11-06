@@ -7,6 +7,8 @@ import { flushSync } from 'react-dom';
 import * as plansService from '../../../services/api/plansService.js';
 import { isAuthenticationError } from '../../../services/api/api-client.js';
 import { createEmptyPlanModalState } from '../../../types/plan.js';
+import type { PlanModalState, PlanModalContext, PlanHistoryEntry } from '../../../types/plan.js';
+import type { Worktree } from '../../../types/domain.js';
 
 interface UsePlanManagementOptions {
   onAuthExpired?: () => void;
@@ -96,7 +98,9 @@ export function usePlanManagement({ onAuthExpired }: UsePlanManagementOptions = 
     async (
       context: { org: string; repo: string; branch: string },
       planId: string,
-      setPlanModal: (updater: (current: any) => any) => void,
+      setPlanModal: (
+        state: PlanModalState | ((current: PlanModalState) => PlanModalState)
+      ) => void,
     ) => {
       if (!context || !planId) {
         return;
@@ -111,7 +115,12 @@ export function usePlanManagement({ onAuthExpired }: UsePlanManagementOptions = 
       }));
 
       try {
-        const content = await plansService.fetchPlan(context.org, context.repo, planId);
+        const content = await plansService.fetchPlan(
+          context.org,
+          context.repo,
+          context.branch,
+          planId
+        );
         setPlanModal((current) => ({
           ...current,
           content,
@@ -142,8 +151,10 @@ export function usePlanManagement({ onAuthExpired }: UsePlanManagementOptions = 
   const openPlanHistory = useCallback(
     async (
       activeWorktree: Worktree | null,
-      setPlanModal: (state: any) => void,
-      fetchPlanContentFn: (context: any, planId: string) => Promise<void>,
+      setPlanModal: (
+        state: PlanModalState | ((current: PlanModalState) => PlanModalState)
+      ) => void,
+      fetchPlanContentFn: (context: PlanModalContext & { branch: string }, planId: string) => Promise<void>,
     ) => {
       if (!activeWorktree) {
         return;
@@ -163,8 +174,12 @@ export function usePlanManagement({ onAuthExpired }: UsePlanManagementOptions = 
       });
 
       try {
-        const plans = await plansService.fetchPlans(context.org, context.repo);
-        setPlanModal((current: any) => ({
+        const plans: PlanHistoryEntry[] = await plansService.fetchPlans(
+          context.org,
+          context.repo,
+          context.branch
+        );
+        setPlanModal((current) => ({
           ...current,
           loading: false,
           error: null,
@@ -174,7 +189,7 @@ export function usePlanManagement({ onAuthExpired }: UsePlanManagementOptions = 
         if (plans.length > 0) {
           await fetchPlanContentFn(context, plans[0].id);
         } else {
-          setPlanModal((current: any) => ({
+          setPlanModal((current) => ({
             ...current,
             selectedPlanId: null,
             content: ''
@@ -185,13 +200,13 @@ export function usePlanManagement({ onAuthExpired }: UsePlanManagementOptions = 
           if (onAuthExpired) {
             onAuthExpired();
           }
-          setPlanModal((current: any) => ({
+          setPlanModal((current) => ({
             ...current,
             open: false,
           }));
           return;
         }
-        setPlanModal((current: any) => ({
+        setPlanModal((current) => ({
           ...current,
           loading: false,
           error: (error as any)?.message || 'Failed to load plans.'
@@ -208,4 +223,3 @@ export function usePlanManagement({ onAuthExpired }: UsePlanManagementOptions = 
     openPlanHistory,
   };
 }
-
