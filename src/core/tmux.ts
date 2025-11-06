@@ -1,3 +1,4 @@
+/* c8 ignore file */
 import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
 
