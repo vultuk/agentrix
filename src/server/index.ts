@@ -17,6 +17,7 @@ import { createBranchNameGenerator } from '../core/branch-name.js';
 import { createPlanService } from '../core/plan.js';
 import { configureTaskPersistence, flushTaskPersistence } from '../core/tasks.js';
 import { createTaskStore } from '../core/task-store.js';
+import { createPortTunnelManager } from '../core/ports.js';
 import type { ServerConfig } from '../types/config.js';
 
 export interface StartServerResult {
@@ -71,6 +72,7 @@ export async function startServer({
   });
   const planService = createPlanService({ defaultLlm: planLlm });
   const cookieManager = createCookieManager({ secureSetting: cookieSecure });
+  const portTunnelManager = createPortTunnelManager({ authtoken: ngrokConfig?.apiKey });
   const router = createRouter({
     authManager,
     workdir: resolvedWorkdir,
@@ -81,6 +83,7 @@ export async function startServer({
     defaultBranches,
     cookieManager,
     terminalSessionMode,
+    portManager: portTunnelManager,
   });
 
   const server = http.createServer(async (req, res) => {
@@ -185,6 +188,7 @@ export async function startServer({
       disposeAllSessions(),
       closeWebSockets(),
       serverClose,
+      portTunnelManager.closeAll().catch(() => {}),
     ];
     if (branchNameGenerator && typeof branchNameGenerator.dispose === 'function') {
       closeTasks.push(

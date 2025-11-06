@@ -93,6 +93,10 @@ function createStubHandlers() {
       list: async () => {},
       read: async () => {},
     }),
+    createPortHandlers: () => ({
+      list: async () => {},
+      openTunnel: async () => {},
+    }),
     sendJson: (res: unknown, statusCode: number, payload: unknown) => {
       const response = res as { statusCode: number; end: (value?: unknown) => void };
       response.statusCode = statusCode;
@@ -103,6 +107,13 @@ function createStubHandlers() {
 }
 
 describe('createRouter', () => {
+  const portManagerStub = {
+    open: async () => ({ port: 0, url: '', createdAt: 0 }),
+    close: async () => {},
+    closeAll: async () => {},
+    list: () => [],
+  };
+
   beforeEach(() => {
     __setRouterTestOverrides(createStubHandlers());
   });
@@ -115,6 +126,7 @@ describe('createRouter', () => {
     const config = {
       workdir: '/workdir',
       agentCommands: {},
+      portManager: portManagerStub,
     } as RouterConfig;
     assert.throws(() => createRouter(config), { message: 'authManager is required' });
   });
@@ -125,6 +137,7 @@ describe('createRouter', () => {
       authManager,
       workdir: '/repo',
       agentCommands: {},
+      portManager: portManagerStub,
     });
 
     const { req } = createReq('/api/repos', 'GET');
@@ -146,6 +159,7 @@ describe('createRouter', () => {
       authManager,
       workdir: '/repo',
       agentCommands: {},
+      portManager: portManagerStub,
     });
 
     const { req } = createReq('/api/repos', 'PUT');
@@ -188,6 +202,7 @@ describe('createRouter', () => {
       authManager,
       workdir: '/repo',
       agentCommands: {},
+      portManager: portManagerStub,
     });
 
     const { req } = createReq('/api/tasks/task-123', 'get');
@@ -210,6 +225,7 @@ describe('createRouter', () => {
       authManager,
       workdir: '/repo',
       agentCommands: {},
+      portManager: portManagerStub,
     });
 
     const { req } = createReq('/unknown', 'GET');
