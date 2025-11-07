@@ -25,7 +25,6 @@ interface UseWorktreeSelectionOptions {
   disposeSocket: () => void;
   disposeTerminal: () => void;
   closeGitSidebar: () => void;
-  closePortsSidebar: () => void;
   loadSessions: () => Promise<void>;
   openTerminalForWorktree: (worktree: Worktree, options?: any) => Promise<void>;
 }
@@ -49,7 +48,6 @@ export function useWorktreeSelection({
   disposeSocket,
   disposeTerminal,
   closeGitSidebar,
-  closePortsSidebar,
   loadSessions,
   openTerminalForWorktree,
 }: UseWorktreeSelectionOptions) {
@@ -62,7 +60,6 @@ export function useWorktreeSelection({
         disposeSocket();
         disposeTerminal();
         closeGitSidebar();
-        closePortsSidebar();
         const cacheKey = `${org}::${repo}`;
         const cached = dashboardCacheRef.current.get(cacheKey);
         if (cached) {
@@ -133,7 +130,6 @@ export function useWorktreeSelection({
     [
       clearDashboardPolling,
       closeGitSidebar,
-      closePortsSidebar,
       disposeSocket,
       disposeTerminal,
       getWorktreeKey,
