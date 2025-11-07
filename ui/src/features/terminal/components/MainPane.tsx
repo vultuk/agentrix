@@ -4,7 +4,8 @@ import { renderSpinner } from '../../../components/Spinner.js';
 import GitStatusSidebar from '../../github/components/GitStatusSidebar.js';
 import RepositoryDashboard from '../../repositories/components/RepositoryDashboard.js';
 import { REPOSITORY_POLL_INTERVAL_MS, ACTION_BUTTON_CLASS } from '../../../utils/constants.js';
-import type { Worktree, RepoDashboard } from '../../../types/domain.js';
+import TabbedTerminalPanel from './TabbedTerminalPanel.js';
+import type { Worktree, RepoDashboard, WorktreeSessionTab } from '../../../types/domain.js';
 
 const { createElement: h } = React;
 
@@ -15,6 +16,13 @@ interface MainPaneProps {
   isDashboardLoading: boolean;
   dashboardError: string | null;
   terminalContainerRef: React.RefObject<HTMLDivElement | null>;
+  terminalSessions: WorktreeSessionTab[];
+  activeSessionId: string | null;
+  onSessionSelect: (sessionId: string) => void;
+  onSessionClose: (sessionId: string) => void;
+  onSessionCreate: () => void;
+  isSessionCreationPending: boolean;
+  pendingCloseSessionId: string | null;
   isGitSidebarOpen: boolean;
   githubControls: React.ReactNode;
   taskMenuButton: React.ReactNode;
@@ -38,6 +46,13 @@ export default function MainPane({
   isDashboardLoading,
   dashboardError,
   terminalContainerRef,
+  terminalSessions,
+  activeSessionId,
+  onSessionSelect,
+  onSessionClose,
+  onSessionCreate,
+  isSessionCreationPending,
+  pendingCloseSessionId,
   isGitSidebarOpen,
   githubControls,
   taskMenuButton,
@@ -114,9 +129,15 @@ export default function MainPane({
       h(
         'div',
         { className: 'flex-1 min-h-0 flex flex-col lg:flex-row lg:min-w-0' },
-        h('div', {
-          ref: terminalContainerRef,
-          className: 'flex-1 bg-neutral-950 min-h-0 min-w-0 overflow-hidden relative',
+        h(TabbedTerminalPanel, {
+          terminalContainerRef,
+          sessions: terminalSessions,
+          activeSessionId,
+          pendingCloseSessionId,
+          isAddDisabled: isSessionCreationPending,
+          onSelectSession: onSessionSelect,
+          onCloseSession: onSessionClose,
+          onAddSession: onSessionCreate,
         }),
         h(GitStatusSidebar, {
           isOpen: isGitSidebarOpen,

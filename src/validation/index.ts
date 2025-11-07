@@ -18,7 +18,7 @@ export type { RepositoryCreateInput, RepositoryDeleteInput, InitCommandUpdateInp
 export { validateWorktreeCreate, validateWorktreeDelete } from './schemas/worktree-schema.js';
 export type { WorktreeCreateInput, WorktreeDeleteInput } from './schemas/worktree-schema.js';
 
-export { validateTerminalOpen, validateTerminalSend } from './schemas/terminal-schema.js';
-export type { TerminalOpenInput, TerminalSendInput } from './schemas/terminal-schema.js';
+export { validateTerminalOpen, validateTerminalSend, validateTerminalClose } from './schemas/terminal-schema.js';
+export type { TerminalOpenInput, TerminalSendInput, TerminalCloseInput } from './schemas/terminal-schema.js';
 
 export { ValidationError } from '../infrastructure/errors/index.js';

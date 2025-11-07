@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import pty from 'node-pty';
-import type { TerminalSession } from '../types/terminal.js';
+import type {
+  TerminalSession,
+  SessionKind,
+  SessionTool,
+  WorktreeSessionSummary,
+  TerminalSessionSnapshot,
+} from '../types/terminal.js';
 
 import { MAX_TERMINAL_BUFFER, TMUX_BIN } from '../config/constants.js';
 import { getWorktreePath } from './git.js';
@@ -62,6 +68,7 @@ function resolveTerminalDependency<K extends keyof TerminalSessionDependencies>(
 
 const terminalSessions = new Map<string, Map<string, TerminalSession>>();
 const terminalSessionsById = new Map<string, TerminalSession>();
+const sessionLabelCounters = new Map<string, { terminal: number; agent: number }>();
 let idleMonitorTimer: NodeJS.Timeout | null = null;
 
 function ensureIdleMonitor() {
@@ -79,6 +86,60 @@ function stopIdleMonitorIfInactive() {
     resolveTerminalDependency('clearInterval')(idleMonitorTimer);
     idleMonitorTimer = null;
   }
+}
+
+function allocateSessionLabel(key: string, tool: SessionTool): string {
+  const counters = sessionLabelCounters.get(key) ?? { terminal: 0, agent: 0 };
+  const counterKey = tool === 'agent' ? 'agent' : 'terminal';
+  counters[counterKey] += 1;
+  sessionLabelCounters.set(key, counters);
+  const base = tool === 'agent' ? 'Agent' : 'Terminal';
+  return `${base} ${counters[counterKey]}`;
+}
+
+function resetSessionCountersIfEmpty(key: string): void {
+  if (!terminalSessions.has(key)) {
+    sessionLabelCounters.delete(key);
+  }
+}
+
+function normaliseTimestamp(value: number | Date | undefined): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isFinite(time) ? time : null;
+  }
+  return null;
+}
+
+function formatTimestamp(value: number | Date | undefined): string | null {
+  const ms = normaliseTimestamp(value);
+  return ms ? new Date(ms).toISOString() : null;
+}
+
+function buildSessionSnapshot(session: TerminalSession): TerminalSessionSnapshot {
+  const lastActivityAt = formatTimestamp(session.lastActivityAt);
+  const createdAt = formatTimestamp(session.createdAt);
+  const resolvedTool =
+    session.tool ?? (session.kind === 'automation' ? 'agent' : ('terminal' as SessionTool));
+  const resolvedLabel =
+    typeof session.label === 'string' && session.label.trim().length > 0
+      ? session.label
+      : resolvedTool === 'agent'
+      ? 'Agent'
+      : 'Terminal';
+  return {
+    id: session.id,
+    label: resolvedLabel,
+    kind: session.kind ?? 'interactive',
+    tool: resolvedTool,
+    idle: Boolean(session.idle),
+    usingTmux: Boolean(session.usingTmux),
+    lastActivityAt,
+    createdAt,
+  };
 }
 
 function getSessionBucket(key: string, create: boolean = false): Map<string, TerminalSession> | undefined {
@@ -103,6 +164,7 @@ function removeSession(session: TerminalSession): void {
     bucket.delete(session.id);
     if (bucket.size === 0) {
       terminalSessions.delete(session.key);
+      resetSessionCountersIfEmpty(session.key);
     }
   }
   terminalSessionsById.delete(session.id);
@@ -241,24 +303,44 @@ function handleSessionOutput(session: TerminalSession, chunk: string | Buffer): 
   }
 }
 
-function serialiseSessions(sessions: TerminalSession[]): unknown[] {
-  return sessions.map((session) => {
-    const lastActivityAtMs =
-      typeof session.lastActivityAt === 'number'
-        ? session.lastActivityAt
-        : session.lastActivityAt instanceof Date
-        ? session.lastActivityAt.getTime()
-        : null;
-    return {
-      id: session.id,
-      org: session.org,
-      repo: session.repo,
-      branch: session.branch,
-      usingTmux: session.usingTmux,
-      idle: Boolean(session.idle),
-      lastActivityAt: lastActivityAtMs ? new Date(lastActivityAtMs).toISOString() : null,
-    };
+export function serialiseSessions(sessions: TerminalSession[]): WorktreeSessionSummary[] {
+  const summaries = new Map<
+    string,
+    { entry: WorktreeSessionSummary; lastActivityAtMs: number | null }
+  >();
+  sessions.forEach((session) => {
+    if (!session) {
+      return;
+    }
+    const key = session.key;
+    const snapshot = buildSessionSnapshot(session);
+    const lastActivityAtMs = normaliseTimestamp(session.lastActivityAt);
+    const existing = summaries.get(key);
+    if (!existing) {
+      summaries.set(key, {
+        entry: {
+          org: session.org,
+          repo: session.repo,
+          branch: session.branch,
+          idle: Boolean(session.idle),
+          lastActivityAt: snapshot.lastActivityAt,
+          sessions: [snapshot],
+        },
+        lastActivityAtMs,
+      });
+      return;
+    }
+    existing.entry.sessions.push(snapshot);
+    existing.entry.idle = existing.entry.idle && Boolean(session.idle);
+    if (
+      typeof lastActivityAtMs === 'number' &&
+      (!existing.lastActivityAtMs || lastActivityAtMs > existing.lastActivityAtMs)
+    ) {
+      existing.lastActivityAtMs = lastActivityAtMs;
+      existing.entry.lastActivityAt = snapshot.lastActivityAt;
+    }
   });
+  return Array.from(summaries.values()).map(({ entry }) => entry);
 }
 
 function runIdleSweep() {
@@ -540,10 +622,14 @@ async function createTerminalSession(
   org: string,
   repo: string,
   branch: string,
-  options: { useTmux?: boolean; kind?: string; requireTmux?: boolean } = {}
+  options: { useTmux?: boolean; kind?: SessionKind; tool?: SessionTool; requireTmux?: boolean } = {}
 ): Promise<TerminalSession> {
-  const { useTmux = true, kind = 'interactive', requireTmux = false } = options;
+  const { useTmux = true, kind = 'interactive', tool, requireTmux = false } = options;
+  const resolvedKind: SessionKind = kind === 'automation' ? 'automation' : 'interactive';
   const key = makeSessionKey(org, repo, branch);
+  const resolvedTool: SessionTool = tool ?? (resolvedKind === 'automation' ? 'agent' : 'terminal');
+  const label = allocateSessionLabel(key, resolvedTool);
+  const createdAt = Date.now();
   const { child, usingTmux, tmuxSessionName, worktreePath } =
     await spawnTerminalProcess({ workdir, org, repo, branch, useTmux, requireTmux });
 
@@ -564,8 +650,11 @@ async function createTerminalSession(
     pendingInputs: [],
     ready: false,
     readyTimer: null,
-    kind: kind as never,
-    lastActivityAt: Date.now(),
+    kind: resolvedKind,
+    tool: resolvedTool,
+    label,
+    lastActivityAt: createdAt,
+    createdAt,
     idle: false,
   };
 
@@ -595,13 +684,22 @@ export async function getOrCreateTerminalSession(
   org: string,
   repo: string,
   branch: string,
-  options: { mode?: string } = {}
+  options: { mode?: string; forceNew?: boolean } = {}
 ) {
   const rawMode = typeof options['mode'] === 'string' ? options['mode'].toLowerCase() : 'auto';
   const mode = rawMode === 'tmux' || rawMode === 'pty' ? rawMode : 'auto';
   const allowTmuxSessions = mode !== 'pty';
   const allowPlainSessions = mode !== 'tmux';
   const requireTmux = mode === 'tmux';
+
+  if (options.forceNew) {
+    return createTerminalSession(workdir, org, repo, branch, {
+      useTmux: allowTmuxSessions,
+      kind: 'interactive',
+      tool: 'terminal',
+      requireTmux,
+    });
+  }
 
   const key = makeSessionKey(org, repo, branch);
   const bucket = getSessionBucket(key);
@@ -651,12 +749,14 @@ export async function getOrCreateTerminalSession(
     return createTerminalSession(workdir, org, repo, branch, {
       useTmux: true,
       kind: 'interactive',
+      tool: 'terminal',
       requireTmux,
     });
   }
   return createTerminalSession(workdir, org, repo, branch, {
     useTmux: false,
     kind: 'interactive',
+    tool: 'terminal',
   });
 }
 
@@ -669,5 +769,6 @@ export async function createIsolatedTerminalSession(
   return createTerminalSession(workdir, org, repo, branch, {
     useTmux: true,
     kind: 'automation',
+    tool: 'agent',
   });
 }

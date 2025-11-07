@@ -286,6 +286,43 @@ describe('terminal sessions', () => {
     assert.equal(spawnMock.mock.calls[0]?.arguments[0], 'tmux');
     assert.equal(session.usingTmux, true);
     assert.equal(session.kind, 'automation');
+    assert.ok(session.label?.startsWith('Agent'));
+
+    await disposeAllSessions();
+    await flushMicrotasks();
+    timers.clearAll();
+    module.__setTerminalSessionsTestOverrides();
+  });
+
+  it('assigns incremental labels per worktree and supports forced creation', async () => {
+    mock.reset();
+    const { module, emitSessionsUpdateMock, timers } = await loadTerminalSessions();
+    const { getOrCreateTerminalSession, listActiveSessions, disposeAllSessions } = module;
+
+    const firstResult = await getOrCreateTerminalSession('/workspace', 'org', 'repo', 'feature', {
+      mode: 'auto',
+    });
+    const firstSession = 'session' in firstResult ? firstResult.session : firstResult;
+    assert.equal(firstSession.label, 'Terminal 1');
+
+    const secondResult = await getOrCreateTerminalSession('/workspace', 'org', 'repo', 'feature', {
+      mode: 'auto',
+      forceNew: true,
+    });
+
+    const secondSession = 'session' in secondResult ? secondResult.session : secondResult;
+    assert.equal(secondSession.label, 'Terminal 2');
+    assert.equal(listActiveSessions().length, 2);
+
+    timers.advance(200);
+    const lastPayload = emitSessionsUpdateMock.mock.calls.at(-1)?.arguments[0] as any[];
+    assert.ok(Array.isArray(lastPayload));
+    const summary = lastPayload.find((entry) => entry?.org === 'org' && entry?.branch === 'feature');
+    assert.ok(summary);
+    assert.equal(Array.isArray(summary.sessions), true);
+    assert.equal(summary.sessions.length, 2);
+    assert.equal(summary.sessions[0].label, 'Terminal 1');
+    assert.equal(summary.sessions[1].label, 'Terminal 2');
 
     await disposeAllSessions();
     await flushMicrotasks();

@@ -1,7 +1,7 @@
 import { createTerminalService, type TerminalService } from '../services/index.js';
 import { createHandler } from './base-handler.js';
-import { validateTerminalOpen, validateTerminalSend } from '../validation/index.js';
-import type { TerminalOpenInput, TerminalSendInput } from '../validation/index.js';
+import { validateTerminalOpen, validateTerminalSend, validateTerminalClose } from '../validation/index.js';
+import type { TerminalOpenInput, TerminalSendInput, TerminalCloseInput } from '../validation/index.js';
 
 export interface TerminalHandlerOptions {
   mode?: string;
@@ -22,5 +22,10 @@ export function createTerminalHandlers(workdir: string, options: TerminalHandler
     handler: async (input: TerminalSendInput) => terminalService.sendInput(input),
   });
 
-  return { open, send };
+  const close = createHandler({
+    validator: validateTerminalClose,
+    handler: async (input: TerminalCloseInput) => terminalService.closeSession(input),
+  });
+
+  return { open, send, close };
 }

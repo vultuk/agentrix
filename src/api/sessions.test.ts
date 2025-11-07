@@ -43,6 +43,18 @@ describe('createSessionHandlers', () => {
           branch: 'main',
           idle: false,
           lastActivityAt: '2024-01-01T00:00:00.000Z',
+          sessions: [
+            {
+              id: 'session-1',
+              label: 'Terminal 1',
+              kind: 'interactive',
+              tool: 'terminal',
+              idle: false,
+              usingTmux: true,
+              lastActivityAt: '2024-01-01T00:00:00.000Z',
+              createdAt: '2023-12-31T23:59:00.000Z',
+            },
+          ],
         },
       ]),
     } as unknown as SessionService;
@@ -70,6 +82,18 @@ describe('createSessionHandlers', () => {
           branch: 'main',
           idle: false,
           lastActivityAt: '2024-01-01T00:00:00.000Z',
+          sessions: [
+            {
+              id: 'session-1',
+              label: 'Terminal 1',
+              kind: 'interactive',
+              tool: 'terminal',
+              idle: false,
+              usingTmux: true,
+              lastActivityAt: '2024-01-01T00:00:00.000Z',
+              createdAt: '2023-12-31T23:59:00.000Z',
+            },
+          ],
         },
       ],
     });
@@ -96,4 +120,3 @@ describe('createSessionHandlers', () => {
     assert.equal(end.mock.calls.length, 1);
   });
 });
-

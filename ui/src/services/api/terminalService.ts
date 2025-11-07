@@ -3,10 +3,10 @@
  */
 
 import { apiGet, apiPost } from './api-client.js';
-import type { TerminalSession } from '../../types/domain.js';
+import type { WorktreeSession } from '../../types/domain.js';
 
 interface FetchSessionsResponse {
-  sessions: TerminalSession[];
+  sessions: WorktreeSession[];
 }
 
 interface OpenTerminalResponse {
@@ -18,7 +18,7 @@ interface OpenTerminalResponse {
 /**
  * Fetch all terminal sessions
  */
-export async function fetchSessions(): Promise<TerminalSession[]> {
+export async function fetchSessions(): Promise<WorktreeSession[]> {
   const response = await apiGet<FetchSessionsResponse>(
     '/api/sessions',
     { errorPrefix: 'Failed to fetch sessions' }
@@ -33,15 +33,37 @@ export async function openTerminal(
   org: string,
   repo: string,
   branch: string,
-  initCommand: string | null = null,
-  prompt: string | null = null
+  options: {
+    command?: string | null;
+    prompt?: string | null;
+    sessionId?: string | null;
+    newSession?: boolean;
+  } = {},
 ): Promise<{ sessionId: string | null; created: boolean; log: string }> {
-  const payload: { org: string; repo: string; branch: string; command?: string; prompt?: string } = { org, repo, branch };
-  if (initCommand !== undefined && initCommand !== null) {
-    payload.command = initCommand;
+  const payload: {
+    org: string;
+    repo: string;
+    branch: string;
+    command?: string;
+    prompt?: string;
+    sessionId?: string;
+    newSession?: boolean;
+  } = { org, repo, branch };
+
+  if (options.command !== undefined && options.command !== null) {
+    payload.command = options.command;
   }
-  if (prompt !== undefined && prompt !== null && typeof prompt === 'string') {
-    payload.prompt = prompt;
+
+  if (options.prompt !== undefined && options.prompt !== null && typeof options.prompt === 'string') {
+    payload.prompt = options.prompt;
+  }
+
+  if (options.sessionId) {
+    payload.sessionId = options.sessionId;
+  }
+
+  if (typeof options.newSession === 'boolean') {
+    payload.newSession = options.newSession;
   }
 
   const body = await apiPost<OpenTerminalResponse>(
@@ -55,6 +77,18 @@ export async function openTerminal(
     created: body && typeof body.created === 'boolean' ? body.created : false,
     log: body && typeof body.log === 'string' ? body.log : '',
   };
+}
+
+/**
+ * Close a terminal session
+ */
+export async function closeTerminal(sessionId: string): Promise<boolean> {
+  await apiPost<{ ok: boolean }>(
+    '/api/terminal/close',
+    { sessionId },
+    { errorPrefix: 'Failed to close terminal' },
+  );
+  return true;
 }
 
 /**
@@ -101,4 +135,3 @@ export function getTerminalWebSocketUrl(org: string, repo: string, branch: strin
   const params = new URLSearchParams({ org, repo, branch });
   return `${protocol}//${window.location.host}/api/terminal/socket?${params.toString()}`;
 }
-

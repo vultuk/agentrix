@@ -8,11 +8,17 @@ export interface TerminalOpenInput {
   command: string;
   hasPrompt: boolean;
   prompt?: string;
+  sessionId?: string;
+  newSession?: boolean;
 }
 
 export interface TerminalSendInput {
   sessionId: string;
   input: string;
+}
+
+export interface TerminalCloseInput {
+  sessionId: string;
 }
 
 /**
@@ -33,6 +39,9 @@ export function validateTerminalOpen(payload: unknown): TerminalOpenInput {
   const command = typeof data['command'] === 'string' ? data['command'].trim() : '';
   const hasPrompt = Object.prototype.hasOwnProperty.call(data, 'prompt');
   const prompt = hasPrompt ? data['prompt'] : undefined;
+  const sessionIdValue = typeof data['sessionId'] === 'string' ? data['sessionId'].trim() : '';
+  const sessionId = sessionIdValue ? sessionIdValue : undefined;
+  const newSession = typeof data['newSession'] === 'boolean' ? data['newSession'] : false;
 
   if (hasPrompt && typeof prompt !== 'string') {
     throw new ValidationError('prompt must be a string');
@@ -42,7 +51,28 @@ export function validateTerminalOpen(payload: unknown): TerminalOpenInput {
     throw new ValidationError('command must be provided when prompt is included');
   }
 
-  return { org, repo, branch, command, hasPrompt, prompt: prompt as string | undefined };
+  if (sessionId && newSession) {
+    throw new ValidationError('sessionId cannot be combined with newSession');
+  }
+
+  if (sessionId && hasPrompt) {
+    throw new ValidationError('sessionId cannot be combined with prompt');
+  }
+
+  if (newSession && hasPrompt) {
+    throw new ValidationError('newSession cannot be combined with prompt');
+  }
+
+  return {
+    org,
+    repo,
+    branch,
+    command,
+    hasPrompt,
+    prompt: prompt as string | undefined,
+    sessionId,
+    newSession,
+  };
 }
 
 /**
@@ -58,4 +88,16 @@ export function validateTerminalSend(payload: unknown): TerminalSendInput {
   const input = typeof data['input'] === 'string' ? data['input'] : '';
 
   return { sessionId, input };
+}
+
+/**
+ * Validates a terminal close request
+ */
+export function validateTerminalClose(payload: unknown): TerminalCloseInput {
+  if (!payload || typeof payload !== 'object') {
+    throw new ValidationError('Invalid request payload');
+  }
+  const data = payload as Record<string, unknown>;
+  const sessionId = requireNonEmpty(data['sessionId'], 'sessionId');
+  return { sessionId };
 }

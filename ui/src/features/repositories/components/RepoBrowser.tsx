@@ -1,4 +1,4 @@
-import React, { Fragment, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import 'xterm/css/xterm.css';
 import { LogOut } from 'lucide-react';
@@ -29,6 +29,7 @@ import MainPane from '../../terminal/components/MainPane.js';
 import Sidebar from './Sidebar.js';
 import ModalContainer from '../../terminal/components/ModalContainer.js';
 import { PortsMenu } from '../../ports/components/PortsMenu.js';
+import { closeTerminal } from '../../services/api/terminalService.js';
 import type { Worktree } from '../../../types/domain.js';
 
 const { createElement: h } = React;
@@ -75,6 +76,8 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     onAuthExpired: onAuthExpired,
     onSessionRemoved: sessions.removeTrackedSession
   });
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [pendingCloseSessionId, setPendingCloseSessionId] = useState<string | null>(null);
   
   // Use dashboard hook first (needed by repo data hook)
   const dashboard = useDashboard({ onAuthExpired });
@@ -153,7 +156,15 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   
   const knownSessionsRef = sessions.knownSessionsRef;
   const sessionMetadataSnapshot = sessions.sessionMetadataSnapshot;
+  const sessionMetadataRef = sessions.sessionMetadataRef;
   const idleAcknowledgementsSnapshot = sessions.idleAcknowledgementsSnapshot;
+  const activeWorktreeKey = activeWorktree
+    ? getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch)
+    : null;
+  const activeTerminalSessions =
+    activeWorktreeKey && sessionMetadataSnapshot.has(activeWorktreeKey)
+      ? sessionMetadataSnapshot.get(activeWorktreeKey)?.sessions ?? []
+      : [];
   
   const hasRunningTasks = useMemo(
     () => tasks.some((task) => task && (task.status === 'pending' || task.status === 'running')),
@@ -326,7 +337,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     toggleDiffViewInternal(setGitDiffModal);
   }, [toggleDiffViewInternal, setGitDiffModal]);
 
-  const openTerminalForWorktreeRef = useRef<((worktree: Worktree, options?: any) => Promise<any>) | null>(null);
+  const openTerminalForWorktreeRef = useRef<((worktree: Worktree | null, options?: { command?: string | null; prompt?: string | null; sessionId?: string | null; newSession?: boolean }) => Promise<any>) | null>(null);
   
   const { processPendingTask: processPendingWorktree } = usePendingTaskProcessor({
     getWorktreeKey,
@@ -402,7 +413,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
 
   // Sync openTerminalForWorktree function to ref for use in other callbacks
   useEffect(() => {
-    openTerminalForWorktreeRef.current = ((worktree: Worktree | null, options?: { command?: string; prompt?: string }) => {
+    openTerminalForWorktreeRef.current = ((worktree: Worktree | null, options?: { command?: string | null; prompt?: string | null; sessionId?: string | null; newSession?: boolean }) => {
       return openTerminalForWorktree(worktree, options || {}) as any;
     }) as any;
   }, [openTerminalForWorktree]);
@@ -458,6 +469,93 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
       setIsRealtimeConnected(false);
     },
   });
+
+  const handleSelectSessionTab = useCallback(
+    async (sessionId: string | null) => {
+      if (!activeWorktree || !sessionId || terminal.sessionId === sessionId) {
+        return;
+      }
+      try {
+        await openTerminalForWorktree(activeWorktree, { sessionId });
+      } catch (error: any) {
+        if (error && error.message === 'AUTH_REQUIRED') {
+          return;
+        }
+        console.error('Failed to attach to session', error);
+        window.alert('Failed to attach to the selected session.');
+      }
+    },
+    [activeWorktree, openTerminalForWorktree, terminal.sessionId],
+  );
+
+  const handleCreateSessionTab = useCallback(
+    async () => {
+      if (!activeWorktree || isCreatingSession) {
+        return;
+      }
+      setIsCreatingSession(true);
+      try {
+        await openTerminalForWorktree(activeWorktree, { newSession: true });
+      } catch (error: any) {
+        if (error && error.message === 'AUTH_REQUIRED') {
+          return;
+        }
+        console.error('Failed to create terminal session', error);
+        window.alert('Failed to create a new session. Check server logs for details.');
+      } finally {
+        setIsCreatingSession(false);
+      }
+    },
+    [activeWorktree, isCreatingSession, openTerminalForWorktree],
+  );
+
+  const handleCloseSessionTab = useCallback(
+    async (sessionId: string | null) => {
+      if (!activeWorktree || !sessionId || pendingCloseSessionId === sessionId) {
+        return;
+      }
+      const worktreeKey = getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch);
+      const metadata = sessionMetadataRef.current.get(worktreeKey);
+      const tabs = Array.isArray(metadata?.sessions) ? metadata.sessions : [];
+      const sessionIndex = tabs.findIndex((entry: any) => entry && entry.id === sessionId);
+      const isActiveSession = terminal.sessionId === sessionId;
+      let fallbackId: string | null = null;
+      if (isActiveSession && tabs.length > 1) {
+        const candidateIndex = sessionIndex > 0 ? sessionIndex - 1 : sessionIndex + 1;
+        fallbackId = tabs[candidateIndex]?.id ?? null;
+      }
+      setPendingCloseSessionId(sessionId);
+      try {
+        await closeTerminal(sessionId);
+        if (isActiveSession) {
+          if (fallbackId) {
+            await openTerminalForWorktree(activeWorktree, { sessionId: fallbackId });
+          } else {
+            sessionMapRef.current.delete(worktreeKey);
+            sessionKeyByIdRef.current.delete(sessionId);
+            await openTerminalForWorktree(null, {});
+          }
+        }
+      } catch (error: any) {
+        if (!error || error.message !== 'AUTH_REQUIRED') {
+          console.error('Failed to close terminal session', error);
+          window.alert('Failed to close the session. Check server logs for details.');
+        }
+      } finally {
+        setPendingCloseSessionId((current) => (current === sessionId ? null : current));
+      }
+    },
+    [
+      activeWorktree,
+      pendingCloseSessionId,
+      getWorktreeKey,
+      openTerminalForWorktree,
+      sessionMetadataRef,
+      sessionKeyByIdRef,
+      sessionMapRef,
+      terminal.sessionId,
+    ],
+  );
 
   const handleAddRepo = async () => {
     if (repoOps.isAddingRepo) {
@@ -848,6 +946,13 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     isDashboardLoading,
     dashboardError,
     terminalContainerRef,
+    terminalSessions: activeTerminalSessions,
+    activeSessionId: terminal.sessionId,
+    onSessionSelect: handleSelectSessionTab,
+    onSessionClose: handleCloseSessionTab,
+    onSessionCreate: handleCreateSessionTab,
+    isSessionCreationPending: isCreatingSession || !activeWorktree,
+    pendingCloseSessionId,
     isGitSidebarOpen,
     githubControls,
     taskMenuButton,

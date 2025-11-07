@@ -251,6 +251,13 @@ export function createRouter({
       },
     ],
     [
+      '/api/terminal/close',
+      {
+        requiresAuth: true,
+        handlers: { POST: terminalHandlers.close },
+      },
+    ],
+    [
       '/api/commands',
       {
         requiresAuth: true,

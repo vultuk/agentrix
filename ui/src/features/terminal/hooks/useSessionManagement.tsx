@@ -28,6 +28,43 @@ export function useSessionManagement() {
   const pendingNotificationsRef = useRef<PendingNotification[]>([]);
   const notificationRequestRef = useRef<Promise<NotificationPermission> | null>(null);
 
+  const normaliseSessionTabs = useCallback((payload: unknown) => {
+    if (!Array.isArray(payload)) {
+      return [];
+    }
+    return payload
+      .map((entry: any) => {
+        if (!entry || typeof entry !== 'object') {
+          return null;
+        }
+        const id = typeof entry.id === 'string' ? entry.id : null;
+        if (!id) {
+          return null;
+        }
+        const label =
+          typeof entry.label === 'string' && entry.label.trim().length > 0
+            ? entry.label.trim()
+            : 'Terminal';
+        const kind = entry.kind === 'automation' ? 'automation' : 'interactive';
+        const tool = entry.tool === 'agent' ? 'agent' : 'terminal';
+        const lastActivityAt =
+          typeof entry.lastActivityAt === 'string' ? entry.lastActivityAt : null;
+        const createdAt =
+          typeof entry.createdAt === 'string' ? entry.createdAt : null;
+        return {
+          id,
+          label,
+          kind,
+          tool,
+          idle: Boolean(entry.idle),
+          usingTmux: Boolean(entry.usingTmux),
+          lastActivityAt,
+          createdAt,
+        };
+      })
+      .filter((value): value is NonNullable<typeof value> => Boolean(value));
+  }, []);
+
   const flushNotificationQueue = useCallback(() => {
     if (typeof window === 'undefined' || typeof window.Notification !== 'function') {
       pendingNotificationsRef.current = [];
@@ -185,6 +222,7 @@ export function useSessionManagement() {
         const key = `${org}::${repo}::${branch}`;
         const idle = Boolean(item.idle);
         const lastActivityAtMs = parseActivityTimestamp(item.lastActivityAt);
+        const sessionTabs = normaliseSessionTabs(item.sessions);
         const existing = aggregated.get(key);
         if (!existing) {
           aggregated.set(key, {
@@ -193,6 +231,7 @@ export function useSessionManagement() {
             branch,
             idle,
             lastActivityAtMs,
+            sessions: sessionTabs,
           });
           return;
         }
@@ -203,6 +242,7 @@ export function useSessionManagement() {
         ) {
           existing.lastActivityAtMs = lastActivityAtMs;
         }
+        existing.sessions = sessionTabs;
       });
     }
 
@@ -218,6 +258,7 @@ export function useSessionManagement() {
         idle: value.idle,
         lastActivityAtMs,
         lastActivityAt: isFiniteNumber(lastActivityAtMs) ? new Date(lastActivityAtMs).toISOString() : null,
+        sessions: Array.isArray(value.sessions) ? value.sessions : [],
       });
 
       const previous = previousMetadata.get(key);
@@ -264,7 +305,7 @@ export function useSessionManagement() {
 
     idleAcknowledgementsRef.current = nextAcknowledgements;
     setIdleAcknowledgementsSnapshot(new Map(nextAcknowledgements));
-  }, [deliverIdleNotification]);
+  }, [deliverIdleNotification, normaliseSessionTabs]);
 
   const acknowledgeIdleSession = useCallback((org: string, repo: string, branch: string) => {
     const key = `${org}::${repo}::${branch}`;

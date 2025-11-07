@@ -67,13 +67,24 @@ export interface Plan {
 }
 
 // Terminal session types
-export interface TerminalSession {
+export interface WorktreeSessionTab {
   id: string;
+  label: string;
+  kind: 'interactive' | 'automation';
+  tool: 'terminal' | 'agent';
+  idle: boolean;
+  usingTmux: boolean;
+  lastActivityAt: string | null;
+  createdAt: string | null;
+}
+
+export interface WorktreeSession {
   org: string;
   repo: string;
   branch: string;
-  status?: 'active' | 'inactive';
-  pid?: number;
+  idle: boolean;
+  lastActivityAt: string | null;
+  sessions: WorktreeSessionTab[];
 }
 
 // Git status types
@@ -161,4 +172,3 @@ export interface Command {
 export interface Commands {
   [key: string]: Command;
 }
-

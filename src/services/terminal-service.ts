@@ -2,10 +2,11 @@ import {
   getOrCreateTerminalSession,
   getSessionById,
   queueSessionInput,
+  disposeSessionById,
 } from '../core/terminal-sessions.js';
 import { launchAgentProcess } from '../core/agents.js';
 import { ValidationError } from '../infrastructure/errors/index.js';
-import type { TerminalOpenInput, TerminalSendInput } from '../validation/index.js';
+import type { TerminalOpenInput, TerminalSendInput, TerminalCloseInput } from '../validation/index.js';
 import type { ITerminalService } from '../types/services.js';
 
 export interface TerminalOpenResult {
@@ -19,11 +20,16 @@ export interface TerminalSendResult {
   ok: boolean;
 }
 
+export interface TerminalCloseResult {
+  ok: boolean;
+}
+
 type TerminalServiceDependencyOverrides = Partial<{
   getOrCreateTerminalSession: typeof getOrCreateTerminalSession;
   getSessionById: typeof getSessionById;
   queueSessionInput: typeof queueSessionInput;
   launchAgentProcess: typeof launchAgentProcess;
+  disposeSessionById: typeof disposeSessionById;
 }>;
 
 const terminalServiceDependencies = {
@@ -31,6 +37,7 @@ const terminalServiceDependencies = {
   getSessionById,
   queueSessionInput,
   launchAgentProcess,
+  disposeSessionById,
 } as const;
 
 let terminalServiceTestOverrides: TerminalServiceDependencyOverrides | null = null;
@@ -66,10 +73,54 @@ export class TerminalService implements ITerminalService {
    * @returns Session information
    */
   async openTerminal(params: TerminalOpenInput): Promise<TerminalOpenResult> {
-    const { org, repo, branch, command = '', hasPrompt, prompt } = params;
+    const {
+      org,
+      repo,
+      branch,
+      command = '',
+      hasPrompt,
+      prompt,
+      sessionId,
+      newSession,
+    } = params;
 
     if (branch.toLowerCase() === 'main') {
       throw new ValidationError('Terminal access to the main branch is disabled');
+    }
+
+    if (sessionId && newSession) {
+      throw new ValidationError('sessionId cannot be combined with newSession');
+    }
+
+    if (hasPrompt && sessionId) {
+      throw new ValidationError('sessionId cannot be combined with prompt launches');
+    }
+
+    if (hasPrompt && newSession) {
+      throw new ValidationError('newSession cannot be combined with prompt launches');
+    }
+
+    const attachSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
+    if (attachSessionId) {
+      const getSession = resolveTerminalServiceDependency('getSessionById');
+      const session = getSession(attachSessionId);
+      if (!session || session.closed) {
+        throw new ValidationError('Terminal session not found');
+      }
+      if (session.org !== org || session.repo !== repo || session.branch !== branch) {
+        throw new ValidationError('Requested session does not belong to the worktree');
+      }
+      if (command) {
+        const commandInput = /[\r\n]$/.test(command) ? command : `${command}\r`;
+        const queueInput = resolveTerminalServiceDependency('queueSessionInput');
+        queueInput(session, commandInput);
+      }
+      return {
+        sessionId: session.id,
+        log: session.log || '',
+        closed: Boolean(session.closed),
+        created: false,
+      };
     }
 
     if (hasPrompt) {
@@ -102,13 +153,10 @@ export class TerminalService implements ITerminalService {
     }
 
     const getOrCreate = resolveTerminalServiceDependency('getOrCreateTerminalSession');
-    const result = await getOrCreate(
-      this.workdir,
-      org,
-      repo,
-      branch,
-      { mode: this.mode }
-    );
+    const result = await getOrCreate(this.workdir, org, repo, branch, {
+      mode: this.mode,
+      forceNew: Boolean(newSession),
+    });
 
     const session = 'session' in result ? result.session : result;
     const created = 'created' in result ? result.created : false;
@@ -143,6 +191,21 @@ export class TerminalService implements ITerminalService {
     }
 
     queueInput(session, input);
+    return { ok: true };
+  }
+
+  /**
+   * Closes a terminal session
+   * @param params - Close parameters
+   * @returns Success result
+   */
+  async closeSession(params: TerminalCloseInput): Promise<TerminalCloseResult> {
+    const { sessionId } = params;
+    if (!sessionId) {
+      throw new ValidationError('sessionId is required');
+    }
+    const dispose = resolveTerminalServiceDependency('disposeSessionById');
+    await dispose(sessionId);
     return { ok: true };
   }
 }
