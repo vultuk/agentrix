@@ -97,6 +97,14 @@ function allocateSessionLabel(key: string, tool: SessionTool): string {
   return `${base} ${counters[counterKey]}`;
 }
 
+function slugifyLabel(label: string): string {
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+}
+
 function resetSessionCountersIfEmpty(key: string): void {
   if (!terminalSessions.has(key)) {
     sessionLabelCounters.delete(key);
@@ -534,6 +542,7 @@ async function spawnTerminalProcess({
   branch,
   useTmux,
   requireTmux = false,
+  tmuxSessionNameOverride,
 }: {
   workdir: string;
   org: string;
@@ -541,6 +550,7 @@ async function spawnTerminalProcess({
   branch: string;
   useTmux?: boolean;
   requireTmux?: boolean;
+  tmuxSessionNameOverride?: string | null;
 }) {
   const { worktreePath } = await resolveTerminalDependency('getWorktreePath')(
     workdir,
@@ -569,7 +579,7 @@ async function spawnTerminalProcess({
   if (useTmux) {
     await resolveTerminalDependency('detectTmux')();
     if (resolveTerminalDependency('isTmuxAvailable')()) {
-      tmuxSessionName = resolveTerminalDependency('makeTmuxSessionName')(org, repo, branch);
+      tmuxSessionName = tmuxSessionNameOverride || resolveTerminalDependency('makeTmuxSessionName')(org, repo, branch);
       tmuxSessionExists = await resolveTerminalDependency('tmuxHasSession')(tmuxSessionName);
       const tmuxArgs = tmuxSessionExists
         ? ['attach-session', '-t', tmuxSessionName]
@@ -622,16 +632,34 @@ async function createTerminalSession(
   org: string,
   repo: string,
   branch: string,
-  options: { useTmux?: boolean; kind?: SessionKind; tool?: SessionTool; requireTmux?: boolean } = {}
+  options: {
+    useTmux?: boolean;
+    kind?: SessionKind;
+    tool?: SessionTool;
+    requireTmux?: boolean;
+    forceUniqueTmux?: boolean;
+  } = {}
 ): Promise<TerminalSession> {
-  const { useTmux = true, kind = 'interactive', tool, requireTmux = false } = options;
+  const { useTmux = true, kind = 'interactive', tool, requireTmux = false, forceUniqueTmux = false } = options;
   const resolvedKind: SessionKind = kind === 'automation' ? 'automation' : 'interactive';
   const key = makeSessionKey(org, repo, branch);
   const resolvedTool: SessionTool = tool ?? (resolvedKind === 'automation' ? 'agent' : 'terminal');
   const label = allocateSessionLabel(key, resolvedTool);
   const createdAt = Date.now();
-  const { child, usingTmux, tmuxSessionName, worktreePath } =
-    await spawnTerminalProcess({ workdir, org, repo, branch, useTmux, requireTmux });
+  const labelSlug = slugifyLabel(label) || 'session';
+  const tmuxSessionNameOverride =
+    Boolean(useTmux && forceUniqueTmux)
+      ? `${resolveTerminalDependency('makeTmuxSessionName')(org, repo, branch)}--${labelSlug}`
+      : undefined;
+  const { child, usingTmux, tmuxSessionName, worktreePath } = await spawnTerminalProcess({
+    workdir,
+    org,
+    repo,
+    branch,
+    useTmux,
+    requireTmux,
+    tmuxSessionNameOverride,
+  });
 
   const session: TerminalSession = {
     id: randomUUID(),
@@ -695,12 +723,12 @@ export async function getOrCreateTerminalSession(
   if (options.forceNew) {
     const requestedTool = options.tool === 'agent' ? 'agent' : 'terminal';
     const requestedKind: SessionKind = options.kind === 'automation' ? 'automation' : 'interactive';
-    const useTmuxForNew = false;
     return createTerminalSession(workdir, org, repo, branch, {
-      useTmux: useTmuxForNew,
+      useTmux: allowTmuxSessions,
       kind: requestedKind,
       tool: requestedTool,
-      requireTmux: useTmuxForNew ? requireTmux : false,
+      requireTmux,
+      forceUniqueTmux: true,
     });
   }
 
