@@ -291,7 +291,7 @@ describe('TerminalService', () => {
     assert.equal(disposeMock.mock.callCount(), 1);
     assert.deepEqual(result, { ok: true });
   });
-});
+
   it('requests agent sessions even when reusing getOrCreate path', async () => {
     const session = { id: 'agent-session', log: '', closed: false };
     const getOrCreateMock = mock.fn(async (_workdir: string, _org: string, _repo: string, _branch: string, options: unknown) => {
@@ -318,3 +318,4 @@ describe('TerminalService', () => {
     assert.equal(result.sessionId, 'agent-session');
     assert.equal(getOrCreateMock.mock.callCount(), 1);
   });
+});

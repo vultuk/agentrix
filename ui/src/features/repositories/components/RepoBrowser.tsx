@@ -569,18 +569,22 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
         const firstNonMain = branches.find(branch => branch !== 'main');
         if (firstNonMain) {
           const key = getWorktreeKey(info.org, info.repo, firstNonMain);
+          let resetPendingContext = false;
           if (sessionMapRef.current.has(key) || knownSessionsRef.current.has(key)) {
             setActiveWorktree({ org: info.org, repo: info.repo, branch: firstNonMain });
             try {
               await openTerminalForWorktree({ org: info.org, repo: info.repo, branch: firstNonMain });
               setPendingWorktreeAction(null);
-              setPendingSessionContext('default');
+              resetPendingContext = true;
             } catch {
               window.alert('Failed to reconnect to the existing session.');
             }
           } else {
-            setPendingSessionContext('default');
             setPendingWorktreeAction({ org: info.org, repo: info.repo, branch: firstNonMain });
+            resetPendingContext = true;
+          }
+          if (resetPendingContext) {
+            setPendingSessionContext('default');
           }
           menus.setIsMobileMenuOpen(false);
         } else {
