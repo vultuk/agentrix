@@ -510,8 +510,12 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
       const isActiveSession = terminal.sessionId === sessionId;
       let fallbackId: string | null = null;
       if (isActiveSession && tabs.length > 1) {
-        const candidateIndex = sessionIndex > 0 ? sessionIndex - 1 : sessionIndex + 1;
-        fallbackId = tabs[candidateIndex]?.id ?? null;
+        if (sessionIndex >= 0) {
+          const candidateIndex = sessionIndex > 0 ? sessionIndex - 1 : sessionIndex + 1;
+          fallbackId = tabs[candidateIndex]?.id ?? null;
+        } else {
+          fallbackId = tabs.find((entry: any) => entry && entry.id !== sessionId)?.id ?? null;
+        }
       }
       setPendingCloseSessionId(sessionId);
       try {
@@ -569,15 +573,14 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
             setActiveWorktree({ org: info.org, repo: info.repo, branch: firstNonMain });
             try {
               await openTerminalForWorktree({ org: info.org, repo: info.repo, branch: firstNonMain });
-            setPendingWorktreeAction(null);
-            setPendingSessionContext('default');
+              setPendingWorktreeAction(null);
+              setPendingSessionContext('default');
             } catch {
               window.alert('Failed to reconnect to the existing session.');
             }
           } else {
             setPendingSessionContext('default');
-          setPendingSessionContext('default');
-          setPendingWorktreeAction({ org: info.org, repo: info.repo, branch: firstNonMain });
+            setPendingWorktreeAction({ org: info.org, repo: info.repo, branch: firstNonMain });
           }
           menus.setIsMobileMenuOpen(false);
         } else {
@@ -791,43 +794,49 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     modals.setConfirmDelete(null);
   };
 
+  const setDashboardError = dashboard.setDashboardError;
+  const setIsDashboardLoading = dashboard.setIsDashboardLoading;
+
   const handleWorktreeAction = useCallback(async (action: string) => {
     if (!pendingWorktreeAction || pendingActionLoading) {
       return;
     }
-    setPendingActionLoading(action);
-    clearDashboardPolling();
-    setActiveRepoDashboard(null);
-    dashboard.setDashboardError(null);
-    dashboard.setIsDashboardLoading(false);
     const worktree = pendingWorktreeAction;
     const isDangerous = action.endsWith('-dangerous');
     const resolvedAction = isDangerous ? action.replace(/-dangerous$/, '') : action;
     const command = getCommandForLaunch(resolvedAction, isDangerous);
+    const sessionTool: 'terminal' | 'agent' =
+      resolvedAction === 'terminal' || resolvedAction === 'vscode' ? 'terminal' : 'agent';
+
+    if (pendingSessionContext === 'new-tab' && sessionTool === 'agent' && !command) {
+      window.alert('No command configured for the selected launch option.');
+      return;
+    }
+
+    setPendingActionLoading(action);
+    clearDashboardPolling();
+    setActiveRepoDashboard(null);
+    setDashboardError(null);
+    setIsDashboardLoading(false);
     setActiveWorktree(worktree);
     try {
-      const sessionTool: 'terminal' | 'agent' =
-        resolvedAction === 'terminal' || resolvedAction === 'vscode' ? 'terminal' : 'agent';
       if (pendingSessionContext === 'new-tab') {
-        if (sessionTool === 'agent' && !command) {
-          window.alert('No command configured for the selected launch option.');
-          setPendingActionLoading(null);
-          return;
-        }
         await openTerminalForWorktree(worktree, {
           newSession: true,
           sessionTool,
           ...(command ? { command } : {}),
         });
       } else {
-        const options = command ? { command } : {};
+        const options: { command?: string; sessionTool?: 'terminal' | 'agent' } = {};
+        if (command) {
+          options.command = command;
+        }
         if (sessionTool === 'agent') {
-          (options as { sessionTool?: 'terminal' | 'agent' }).sessionTool = 'agent';
+          options.sessionTool = 'agent';
         }
         await openTerminalForWorktree(worktree, options);
       }
       setPendingWorktreeAction(null);
-      setPendingSessionContext('default');
       setPendingSessionContext('default');
     } catch (error: any) {
       if (error && error.message === 'AUTH_REQUIRED') {
@@ -840,11 +849,18 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     }
   }, [
     clearDashboardPolling,
+    getCommandForLaunch,
     openTerminalForWorktree,
-    pendingWorktreeAction,
     pendingActionLoading,
     pendingSessionContext,
-    getCommandForLaunch,
+    pendingWorktreeAction,
+    setActiveRepoDashboard,
+    setActiveWorktree,
+    setDashboardError,
+    setIsDashboardLoading,
+    setPendingActionLoading,
+    setPendingSessionContext,
+    setPendingWorktreeAction,
   ]);
 
   const handleDashboardRefresh = useCallback(() => {
@@ -1088,8 +1104,8 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
       openActionMenu: menus.openActionMenu,
       onClosePendingAction: () => {
         if (!pendingActionLoading) {
-      setPendingWorktreeAction(null);
-      setPendingSessionContext('default');
+          setPendingWorktreeAction(null);
+          setPendingSessionContext('default');
         }
       },
       onWorktreeAction: handleWorktreeAction,

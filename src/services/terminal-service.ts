@@ -89,18 +89,6 @@ export class TerminalService implements ITerminalService {
       throw new ValidationError('Terminal access to the main branch is disabled');
     }
 
-    if (sessionId && newSession) {
-      throw new ValidationError('sessionId cannot be combined with newSession');
-    }
-
-    if (hasPrompt && sessionId) {
-      throw new ValidationError('sessionId cannot be combined with prompt launches');
-    }
-
-    if (hasPrompt && newSession) {
-      throw new ValidationError('newSession cannot be combined with prompt launches');
-    }
-
     const attachSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
     if (attachSessionId) {
       const getSession = resolveTerminalServiceDependency('getSessionById');
@@ -128,7 +116,6 @@ export class TerminalService implements ITerminalService {
       if (!command) {
         throw new ValidationError('command must be provided when prompt is included');
       }
-
       const launch = resolveTerminalServiceDependency('launchAgentProcess');
       const { sessionId, createdSession } = await launch({
         command,
@@ -206,9 +193,6 @@ export class TerminalService implements ITerminalService {
    */
   async closeSession(params: TerminalCloseInput): Promise<TerminalCloseResult> {
     const { sessionId } = params;
-    if (!sessionId) {
-      throw new ValidationError('sessionId is required');
-    }
     const dispose = resolveTerminalServiceDependency('disposeSessionById');
     await dispose(sessionId);
     return { ok: true };

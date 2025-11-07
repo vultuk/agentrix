@@ -127,7 +127,6 @@ describe('SessionService', () => {
     assert.equal(Array.isArray(session.sessions), true);
     assert.equal(session.sessions.length, 0);
   });
-});
   it('falls back to persisted snapshot when no live sessions are active', async () => {
     const listSessionsMock = mock.fn(() => []);
     const serialiseMock = mock.fn(() => []);
@@ -158,3 +157,4 @@ describe('SessionService', () => {
     assert.equal(sessions[0]?.branch, 'feature/login');
     assert.equal(sessions[0]?.idle, true);
   });
+});

@@ -2,14 +2,23 @@ import { validateRequired, requireNonEmpty } from '../request-validator.js';
 import { ValidationError } from '../../infrastructure/errors/index.js';
 
 export interface TerminalOpenInput {
+  /** GitHub organisation that owns the repository */
   org: string;
+  /** Repository slug */
   repo: string;
+  /** Worktree branch to operate on */
   branch: string;
+  /** Command to seed into the terminal (may be empty) */
   command: string;
+  /** Indicates whether a prompt field was supplied */
   hasPrompt: boolean;
+  /** Optional AI prompt used for agent sessions */
   prompt?: string;
+  /** Existing session identifier to reattach to */
   sessionId?: string;
+  /** Forces creation of a brand-new session when true */
   newSession?: boolean;
+  /** Session tool being requested ('terminal' for interactive, 'agent' for automation) */
   sessionTool?: 'terminal' | 'agent';
 }
 
