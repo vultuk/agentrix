@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React from 'react';
 import { Bot, Plus, Terminal as TerminalIcon, X } from 'lucide-react';
 import { renderSpinner } from '../../../components/Spinner.js';
 import type { WorktreeSessionTab } from '../../../types/domain.js';
@@ -10,10 +10,9 @@ interface TerminalTabsProps {
   activeSessionId: string | null;
   pendingCloseSessionId: string | null;
   isAddDisabled: boolean;
-  sessionCreationOptions: Array<{ value: string; label: string }>;
   onSelectSession: (sessionId: string) => void;
   onCloseSession: (sessionId: string) => void;
-  onAddSession: (option: string) => void;
+  onAddSession: () => void;
 }
 
 function TerminalTabs({
@@ -21,43 +20,10 @@ function TerminalTabs({
   activeSessionId,
   pendingCloseSessionId,
   isAddDisabled,
-  sessionCreationOptions,
   onSelectSession,
   onCloseSession,
   onAddSession,
 }: TerminalTabsProps) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    function handlePointer(event: PointerEvent) {
-      if (!isMenuOpen) {
-        return;
-      }
-      if (menuRef.current && menuRef.current.contains(event.target as Node)) {
-        return;
-      }
-      setIsMenuOpen(false);
-    }
-    document.addEventListener('pointerdown', handlePointer);
-    return () => document.removeEventListener('pointerdown', handlePointer);
-  }, [isMenuOpen]);
-
-  const handleToggleMenu = useCallback(() => {
-    if (isAddDisabled) {
-      return;
-    }
-    setIsMenuOpen((current) => !current);
-  }, [isAddDisabled]);
-
-  const handleSelectOption = useCallback(
-    (optionValue: string) => {
-      setIsMenuOpen(false);
-      onAddSession(optionValue);
-    },
-    [onAddSession],
-  );
-
   return h(
     'div',
     { className: 'border-b border-neutral-800 bg-neutral-950/70' },
@@ -128,44 +94,17 @@ function TerminalTabs({
             );
           }),
       h(
-        'div',
-        { className: 'ml-auto relative', ref: menuRef },
-        h(
-          'button',
-          {
-            type: 'button',
-            onClick: handleToggleMenu,
-            disabled: isAddDisabled,
-            className:
-              'inline-flex h-7 w-7 items-center justify-center rounded-md border border-neutral-800 text-neutral-300 hover:text-emerald-300 hover:border-emerald-400 transition disabled:opacity-50 disabled:cursor-not-allowed',
-            title: 'New session',
-            'aria-label': 'New session',
-          },
-          isAddDisabled ? renderSpinner('text-emerald-300') : h(Plus, { size: 14 }),
-        ),
-        !isAddDisabled && isMenuOpen
-          ? h(
-              'div',
-              {
-                className:
-                  'absolute right-0 mt-2 min-w-[200px] rounded-md border border-neutral-800 bg-neutral-950 py-1 text-sm shadow-lg z-20',
-              },
-              sessionCreationOptions.map((option) =>
-                h(
-                  'button',
-                  {
-                    key: option.value,
-                    type: 'button',
-                    onClick: () => handleSelectOption(option.value),
-                    className:
-                      'flex w-full items-center gap-2 px-3 py-2 text-left text-neutral-300 hover:bg-neutral-900 hover:text-neutral-50 transition-colors',
-                  },
-                  option.value === 'terminal' ? h(TerminalIcon, { size: 14 }) : h(Bot, { size: 14 }),
-                  h('span', { className: 'truncate' }, option.label),
-                ),
-              ),
-            )
-          : null,
+        'button',
+        {
+          type: 'button',
+          onClick: onAddSession,
+          disabled: isAddDisabled,
+          className:
+            'ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-neutral-800 text-neutral-300 hover:text-emerald-300 hover:border-emerald-400 transition disabled:opacity-50 disabled:cursor-not-allowed',
+          title: 'New session',
+          'aria-label': 'New session',
+        },
+        isAddDisabled ? renderSpinner('text-emerald-300') : h(Plus, { size: 14 }),
       ),
     ),
   );
@@ -176,10 +115,9 @@ interface TabbedTerminalPanelProps {
   activeSessionId: string | null;
   pendingCloseSessionId: string | null;
   isAddDisabled: boolean;
-  sessionCreationOptions: Array<{ value: string; label: string }>;
   onSelectSession: (sessionId: string) => void;
   onCloseSession: (sessionId: string) => void;
-  onAddSession: (option: string) => void;
+  onAddSession: () => void;
   terminalContainerRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -188,7 +126,6 @@ export default function TabbedTerminalPanel({
   activeSessionId,
   pendingCloseSessionId,
   isAddDisabled,
-  sessionCreationOptions,
   onSelectSession,
   onCloseSession,
   onAddSession,
@@ -204,7 +141,7 @@ export default function TabbedTerminalPanel({
       'button',
       {
         type: 'button',
-        onClick: () => onAddSession('terminal'),
+        onClick: onAddSession,
         disabled: isAddDisabled,
         className:
           'inline-flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-925 px-3 py-1.5 text-xs text-neutral-200 hover:text-emerald-300 hover:border-emerald-400 transition disabled:opacity-50 disabled:cursor-not-allowed',
@@ -222,7 +159,6 @@ export default function TabbedTerminalPanel({
       activeSessionId,
       pendingCloseSessionId,
       isAddDisabled,
-      sessionCreationOptions,
       onSelectSession,
       onCloseSession,
       onAddSession,

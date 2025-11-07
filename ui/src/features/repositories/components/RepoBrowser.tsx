@@ -2,7 +2,7 @@ import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } fr
 
 import 'xterm/css/xterm.css';
 import { LogOut } from 'lucide-react';
-import { ISSUE_PLAN_PROMPT_TEMPLATE, PROMPT_AGENT_OPTIONS } from '../../../config/commands.js';
+import { ISSUE_PLAN_PROMPT_TEMPLATE } from '../../../config/commands.js';
 import { REPOSITORY_POLL_INTERVAL_MS, SESSION_POLL_INTERVAL_MS } from '../../../utils/constants.js';
 import { renderSpinner } from '../../../components/Spinner.js';
 import { isIdleAcknowledgementCurrent, getMetadataLastActivityMs, createIdleAcknowledgementEntry } from '../../../utils/activity.js';
@@ -33,14 +33,6 @@ import { closeTerminal } from '../../../services/api/terminalService.js';
 import type { Worktree } from '../../../types/domain.js';
 
 const { createElement: h } = React;
-
-const TAB_SESSION_OPTIONS = [
-  { value: 'terminal', label: 'Terminal' },
-  ...PROMPT_AGENT_OPTIONS.map((option) => ({
-    value: option.value,
-    label: `${option.label} agent`,
-  })),
-];
 
 interface RepoBrowserProps {
   onAuthExpired?: () => void;
@@ -84,7 +76,6 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     onAuthExpired: onAuthExpired,
     onSessionRemoved: sessions.removeTrackedSession
   });
-  const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [pendingCloseSessionId, setPendingCloseSessionId] = useState<string | null>(null);
   
   // Use dashboard hook first (needed by repo data hook)
@@ -496,39 +487,14 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     [activeWorktree, openTerminalForWorktree, terminal.sessionId],
   );
 
-  const handleCreateSessionTab = useCallback(
-    async (sessionType: string) => {
-      if (!activeWorktree || isCreatingSession) {
-        return;
-      }
-      setIsCreatingSession(true);
-      try {
-        if (sessionType === 'terminal') {
-          await openTerminalForWorktree(activeWorktree, { newSession: true, sessionTool: 'terminal' });
-        } else {
-          const command = getCommandForLaunch(sessionType, false);
-          if (!command) {
-            window.alert('No command configured for the selected session type.');
-            return;
-          }
-          await openTerminalForWorktree(activeWorktree, {
-            newSession: true,
-            command,
-            sessionTool: 'agent',
-          });
-        }
-      } catch (error: any) {
-        if (error && error.message === 'AUTH_REQUIRED') {
-          return;
-        }
-        console.error('Failed to create terminal session', error);
-        window.alert('Failed to create a new session. Check server logs for details.');
-      } finally {
-        setIsCreatingSession(false);
-      }
-    },
-    [activeWorktree, getCommandForLaunch, isCreatingSession, openTerminalForWorktree],
-  );
+  const handleCreateSessionTab = useCallback(() => {
+    if (!activeWorktree) {
+      return;
+    }
+    menus.closeActionMenu();
+    setPendingActionLoading(null);
+    setPendingWorktreeAction(activeWorktree);
+  }, [activeWorktree, menus, setPendingActionLoading, setPendingWorktreeAction]);
 
   const handleCloseSessionTab = useCallback(
     async (sessionId: string | null) => {
@@ -834,7 +800,18 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     const command = getCommandForLaunch(resolvedAction, isDangerous);
     setActiveWorktree(worktree);
     try {
-      await openTerminalForWorktree(worktree, command ? { command } : {});
+      const sessionTool: 'terminal' | 'agent' =
+        resolvedAction === 'terminal' || resolvedAction === 'vscode' ? 'terminal' : 'agent';
+      if (sessionTool === 'agent' && !command) {
+        window.alert('No command configured for the selected launch option.');
+        setPendingActionLoading(null);
+        return;
+      }
+      await openTerminalForWorktree(worktree, {
+        newSession: true,
+        sessionTool,
+        ...(command ? { command } : {}),
+      });
       setPendingWorktreeAction(null);
     } catch (error: any) {
       if (error && error.message === 'AUTH_REQUIRED') {
@@ -970,10 +947,10 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   terminalSessions: activeTerminalSessions,
   activeSessionId: terminal.sessionId,
   sessionCreationOptions: TAB_SESSION_OPTIONS,
-  onSessionSelect: handleSelectSessionTab,
+    onSessionSelect: handleSelectSessionTab,
     onSessionClose: handleCloseSessionTab,
     onSessionCreate: handleCreateSessionTab,
-    isSessionCreationPending: isCreatingSession || !activeWorktree,
+    isSessionCreationPending: !activeWorktree,
     pendingCloseSessionId,
     isGitSidebarOpen,
     githubControls,

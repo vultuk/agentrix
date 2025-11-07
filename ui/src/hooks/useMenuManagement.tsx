@@ -101,6 +101,7 @@ export function useMenuManagement({ mobileMenuButtonRef }: UseMenuManagementOpti
     closeMobileMenu,
     openActionMenu,
     toggleActionMenu,
+    closeActionMenu,
     getActionMenuRef,
   };
 }
