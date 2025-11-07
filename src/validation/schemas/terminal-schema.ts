@@ -10,6 +10,7 @@ export interface TerminalOpenInput {
   prompt?: string;
   sessionId?: string;
   newSession?: boolean;
+  sessionTool?: 'terminal' | 'agent';
 }
 
 export interface TerminalSendInput {
@@ -42,6 +43,14 @@ export function validateTerminalOpen(payload: unknown): TerminalOpenInput {
   const sessionIdValue = typeof data['sessionId'] === 'string' ? data['sessionId'].trim() : '';
   const sessionId = sessionIdValue ? sessionIdValue : undefined;
   const newSession = typeof data['newSession'] === 'boolean' ? data['newSession'] : false;
+  const rawSessionTool = typeof data['sessionTool'] === 'string' ? data['sessionTool'].trim().toLowerCase() : '';
+  let sessionTool: 'terminal' | 'agent' | undefined;
+  if (rawSessionTool) {
+    if (rawSessionTool !== 'terminal' && rawSessionTool !== 'agent') {
+      throw new ValidationError('sessionTool must be "terminal" or "agent" when provided');
+    }
+    sessionTool = rawSessionTool;
+  }
 
   if (hasPrompt && typeof prompt !== 'string') {
     throw new ValidationError('prompt must be a string');
@@ -72,6 +81,7 @@ export function validateTerminalOpen(payload: unknown): TerminalOpenInput {
     prompt: prompt as string | undefined,
     sessionId,
     newSession,
+    sessionTool,
   };
 }
 

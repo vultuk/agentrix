@@ -245,8 +245,8 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
     });
   }, [sendResize, onSessionRemoved]);
 
-  const openTerminal = useCallback(async (worktree: Worktree | null, options: { command?: string | null; prompt?: string | null; sessionId?: string | null; newSession?: boolean } = {}) => {
-    const { command = null, prompt = null, sessionId = null, newSession } = options;
+  const openTerminal = useCallback(async (worktree: Worktree | null, options: { command?: string | null; prompt?: string | null; sessionId?: string | null; newSession?: boolean; sessionTool?: 'terminal' | 'agent' } = {}) => {
+    const { command = null, prompt = null, sessionId = null, newSession, sessionTool } = options;
     disposeSocket();
     if (!worktree) {
       disposeTerminal();
@@ -263,6 +263,7 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
         prompt,
         sessionId,
         newSession,
+        sessionTool,
       });
       
       const session = result.sessionId;

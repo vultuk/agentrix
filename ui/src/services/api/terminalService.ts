@@ -38,6 +38,7 @@ export async function openTerminal(
     prompt?: string | null;
     sessionId?: string | null;
     newSession?: boolean;
+    sessionTool?: 'terminal' | 'agent';
   } = {},
 ): Promise<{ sessionId: string | null; created: boolean; log: string }> {
   const payload: {
@@ -48,6 +49,7 @@ export async function openTerminal(
     prompt?: string;
     sessionId?: string;
     newSession?: boolean;
+    sessionTool?: 'terminal' | 'agent';
   } = { org, repo, branch };
 
   if (options.command !== undefined && options.command !== null) {
@@ -64,6 +66,10 @@ export async function openTerminal(
 
   if (typeof options.newSession === 'boolean') {
     payload.newSession = options.newSession;
+  }
+
+  if (options.sessionTool) {
+    payload.sessionTool = options.sessionTool;
   }
 
   const body = await apiPost<OpenTerminalResponse>(

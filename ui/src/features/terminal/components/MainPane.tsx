@@ -18,9 +18,10 @@ interface MainPaneProps {
   terminalContainerRef: React.RefObject<HTMLDivElement | null>;
   terminalSessions: WorktreeSessionTab[];
   activeSessionId: string | null;
+  sessionCreationOptions: Array<{ value: string; label: string }>;
   onSessionSelect: (sessionId: string) => void;
   onSessionClose: (sessionId: string) => void;
-  onSessionCreate: () => void;
+  onSessionCreate: (option: string) => void;
   isSessionCreationPending: boolean;
   pendingCloseSessionId: string | null;
   isGitSidebarOpen: boolean;
@@ -48,6 +49,7 @@ export default function MainPane({
   terminalContainerRef,
   terminalSessions,
   activeSessionId,
+  sessionCreationOptions,
   onSessionSelect,
   onSessionClose,
   onSessionCreate,
@@ -129,10 +131,11 @@ export default function MainPane({
       h(
         'div',
         { className: 'flex-1 min-h-0 flex flex-col lg:flex-row lg:min-w-0' },
-        h(TabbedTerminalPanel, {
+       h(TabbedTerminalPanel, {
           terminalContainerRef,
           sessions: terminalSessions,
           activeSessionId,
+          sessionCreationOptions,
           pendingCloseSessionId,
           isAddDisabled: isSessionCreationPending,
           onSelectSession: onSessionSelect,

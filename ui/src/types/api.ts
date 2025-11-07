@@ -181,6 +181,7 @@ export interface OpenTerminalRequest {
   prompt?: string | null;
   sessionId?: string | null;
   newSession?: boolean;
+  sessionTool?: 'terminal' | 'agent';
 }
 
 export interface OpenTerminalResponse {

@@ -2,7 +2,7 @@ import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } fr
 
 import 'xterm/css/xterm.css';
 import { LogOut } from 'lucide-react';
-import { ISSUE_PLAN_PROMPT_TEMPLATE } from '../../../config/commands.js';
+import { ISSUE_PLAN_PROMPT_TEMPLATE, PROMPT_AGENT_OPTIONS } from '../../../config/commands.js';
 import { REPOSITORY_POLL_INTERVAL_MS, SESSION_POLL_INTERVAL_MS } from '../../../utils/constants.js';
 import { renderSpinner } from '../../../components/Spinner.js';
 import { isIdleAcknowledgementCurrent, getMetadataLastActivityMs, createIdleAcknowledgementEntry } from '../../../utils/activity.js';
@@ -33,6 +33,14 @@ import { closeTerminal } from '../../../services/api/terminalService.js';
 import type { Worktree } from '../../../types/domain.js';
 
 const { createElement: h } = React;
+
+const TAB_SESSION_OPTIONS = [
+  { value: 'terminal', label: 'Terminal' },
+  ...PROMPT_AGENT_OPTIONS.map((option) => ({
+    value: option.value,
+    label: `${option.label} agent`,
+  })),
+];
 
 interface RepoBrowserProps {
   onAuthExpired?: () => void;
@@ -489,13 +497,26 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   );
 
   const handleCreateSessionTab = useCallback(
-    async () => {
+    async (sessionType: string) => {
       if (!activeWorktree || isCreatingSession) {
         return;
       }
       setIsCreatingSession(true);
       try {
-        await openTerminalForWorktree(activeWorktree, { newSession: true });
+        if (sessionType === 'terminal') {
+          await openTerminalForWorktree(activeWorktree, { newSession: true, sessionTool: 'terminal' });
+        } else {
+          const command = getCommandForLaunch(sessionType, false);
+          if (!command) {
+            window.alert('No command configured for the selected session type.');
+            return;
+          }
+          await openTerminalForWorktree(activeWorktree, {
+            newSession: true,
+            command,
+            sessionTool: 'agent',
+          });
+        }
       } catch (error: any) {
         if (error && error.message === 'AUTH_REQUIRED') {
           return;
@@ -506,7 +527,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
         setIsCreatingSession(false);
       }
     },
-    [activeWorktree, isCreatingSession, openTerminalForWorktree],
+    [activeWorktree, getCommandForLaunch, isCreatingSession, openTerminalForWorktree],
   );
 
   const handleCloseSessionTab = useCallback(
@@ -946,9 +967,10 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     isDashboardLoading,
     dashboardError,
     terminalContainerRef,
-    terminalSessions: activeTerminalSessions,
-    activeSessionId: terminal.sessionId,
-    onSessionSelect: handleSelectSessionTab,
+  terminalSessions: activeTerminalSessions,
+  activeSessionId: terminal.sessionId,
+  sessionCreationOptions: TAB_SESSION_OPTIONS,
+  onSessionSelect: handleSelectSessionTab,
     onSessionClose: handleCloseSessionTab,
     onSessionCreate: handleCreateSessionTab,
     isSessionCreationPending: isCreatingSession || !activeWorktree,

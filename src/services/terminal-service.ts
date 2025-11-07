@@ -82,6 +82,7 @@ export class TerminalService implements ITerminalService {
       prompt,
       sessionId,
       newSession,
+      sessionTool,
     } = params;
 
     if (branch.toLowerCase() === 'main') {
@@ -152,10 +153,12 @@ export class TerminalService implements ITerminalService {
       };
     }
 
+    const desiredTool = sessionTool === 'agent' ? 'agent' : 'terminal';
     const getOrCreate = resolveTerminalServiceDependency('getOrCreateTerminalSession');
     const result = await getOrCreate(this.workdir, org, repo, branch, {
       mode: this.mode,
       forceNew: Boolean(newSession),
+      tool: desiredTool,
     });
 
     const session = 'session' in result ? result.session : result;
