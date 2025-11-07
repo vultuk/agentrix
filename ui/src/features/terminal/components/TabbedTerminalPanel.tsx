@@ -1,5 +1,4 @@
-import React, { Fragment } from 'react';
-import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Bot, Plus, Terminal as TerminalIcon, X } from 'lucide-react';
 import { renderSpinner } from '../../../components/Spinner.js';
 import type { WorktreeSessionTab } from '../../../types/domain.js';
@@ -27,6 +26,38 @@ function TerminalTabs({
   onCloseSession,
   onAddSession,
 }: TerminalTabsProps) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handlePointer(event: PointerEvent) {
+      if (!isMenuOpen) {
+        return;
+      }
+      if (menuRef.current && menuRef.current.contains(event.target as Node)) {
+        return;
+      }
+      setIsMenuOpen(false);
+    }
+    document.addEventListener('pointerdown', handlePointer);
+    return () => document.removeEventListener('pointerdown', handlePointer);
+  }, [isMenuOpen]);
+
+  const handleToggleMenu = useCallback(() => {
+    if (isAddDisabled) {
+      return;
+    }
+    setIsMenuOpen((current) => !current);
+  }, [isAddDisabled]);
+
+  const handleSelectOption = useCallback(
+    (optionValue: string) => {
+      setIsMenuOpen(false);
+      onAddSession(optionValue);
+    },
+    [onAddSession],
+  );
+
   return h(
     'div',
     { className: 'border-b border-neutral-800 bg-neutral-950/70' },
@@ -98,52 +129,43 @@ function TerminalTabs({
           }),
       h(
         'div',
-        { className: 'ml-auto relative' },
+        { className: 'ml-auto relative', ref: menuRef },
         h(
-          Menu,
-          { as: Fragment },
-          h(
-            MenuButton,
-            {
-              disabled: isAddDisabled,
-              className:
-                'inline-flex h-7 w-7 items-center justify-center rounded-md border border-neutral-800 text-neutral-300 hover:text-emerald-300 hover:border-emerald-400 transition disabled:opacity-50 disabled:cursor-not-allowed',
-              title: 'New session',
-              'aria-label': 'New session',
-            },
-            isAddDisabled ? renderSpinner('text-emerald-300') : h(Plus, { size: 14 }),
-          ),
-          isAddDisabled
-            ? null
-            : h(
-                MenuItems,
-                {
-                  className:
-                    'absolute right-0 mt-2 min-w-[180px] rounded-md border border-neutral-800 bg-neutral-950 py-1 text-sm shadow-lg z-20 focus:outline-none',
-                },
-                sessionCreationOptions.map((option) =>
-                  h(
-                    MenuItem,
-                    { key: option.value },
-                    ({ active }) =>
-                      h(
-                        'button',
-                        {
-                          type: 'button',
-                          onClick: () => onAddSession(option.value),
-                          className: `flex w-full items-center gap-2 px-3 py-2 text-left ${
-                            active ? 'bg-neutral-900 text-neutral-50' : 'text-neutral-300'
-                          }`,
-                        },
-                        option.value === 'terminal'
-                          ? h(TerminalIcon, { size: 14 })
-                          : h(Bot, { size: 14 }),
-                        h('span', { className: 'truncate' }, option.label),
-                      ),
-                  ),
+          'button',
+          {
+            type: 'button',
+            onClick: handleToggleMenu,
+            disabled: isAddDisabled,
+            className:
+              'inline-flex h-7 w-7 items-center justify-center rounded-md border border-neutral-800 text-neutral-300 hover:text-emerald-300 hover:border-emerald-400 transition disabled:opacity-50 disabled:cursor-not-allowed',
+            title: 'New session',
+            'aria-label': 'New session',
+          },
+          isAddDisabled ? renderSpinner('text-emerald-300') : h(Plus, { size: 14 }),
+        ),
+        !isAddDisabled && isMenuOpen
+          ? h(
+              'div',
+              {
+                className:
+                  'absolute right-0 mt-2 min-w-[200px] rounded-md border border-neutral-800 bg-neutral-950 py-1 text-sm shadow-lg z-20',
+              },
+              sessionCreationOptions.map((option) =>
+                h(
+                  'button',
+                  {
+                    key: option.value,
+                    type: 'button',
+                    onClick: () => handleSelectOption(option.value),
+                    className:
+                      'flex w-full items-center gap-2 px-3 py-2 text-left text-neutral-300 hover:bg-neutral-900 hover:text-neutral-50 transition-colors',
+                  },
+                  option.value === 'terminal' ? h(TerminalIcon, { size: 14 }) : h(Bot, { size: 14 }),
+                  h('span', { className: 'truncate' }, option.label),
                 ),
               ),
-        ),
+            )
+          : null,
       ),
     ),
   );
@@ -182,7 +204,7 @@ export default function TabbedTerminalPanel({
       'button',
       {
         type: 'button',
-        onClick: onAddSession,
+        onClick: () => onAddSession('terminal'),
         disabled: isAddDisabled,
         className:
           'inline-flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-925 px-3 py-1.5 text-xs text-neutral-200 hover:text-emerald-300 hover:border-emerald-400 transition disabled:opacity-50 disabled:cursor-not-allowed',
