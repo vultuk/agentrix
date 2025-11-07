@@ -779,15 +779,15 @@ export async function getOrCreateTerminalSession(
   if (allowTmuxSessions) {
     return createTerminalSession(workdir, org, repo, branch, {
       useTmux: true,
-      kind: 'interactive',
-      tool: 'terminal',
+      kind: options.kind ?? 'interactive',
+      tool: options.tool ?? 'terminal',
       requireTmux,
     });
   }
   return createTerminalSession(workdir, org, repo, branch, {
     useTmux: false,
-    kind: 'interactive',
-    tool: 'terminal',
+    kind: options.kind ?? 'interactive',
+    tool: options.tool ?? 'terminal',
   });
 }
 

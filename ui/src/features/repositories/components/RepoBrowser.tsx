@@ -806,9 +806,9 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     const command = getCommandForLaunch(resolvedAction, isDangerous);
     setActiveWorktree(worktree);
     try {
+      const sessionTool: 'terminal' | 'agent' =
+        resolvedAction === 'terminal' || resolvedAction === 'vscode' ? 'terminal' : 'agent';
       if (pendingSessionContext === 'new-tab') {
-        const sessionTool: 'terminal' | 'agent' =
-          resolvedAction === 'terminal' || resolvedAction === 'vscode' ? 'terminal' : 'agent';
         if (sessionTool === 'agent' && !command) {
           window.alert('No command configured for the selected launch option.');
           setPendingActionLoading(null);
@@ -820,7 +820,11 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
           ...(command ? { command } : {}),
         });
       } else {
-        await openTerminalForWorktree(worktree, command ? { command } : {});
+        const options = command ? { command } : {};
+        if (sessionTool === 'agent') {
+          (options as { sessionTool?: 'terminal' | 'agent' }).sessionTool = 'agent';
+        }
+        await openTerminalForWorktree(worktree, options);
       }
       setPendingWorktreeAction(null);
       setPendingSessionContext('default');
