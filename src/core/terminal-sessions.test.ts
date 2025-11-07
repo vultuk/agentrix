@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { describe, it, mock } from 'node:test';
 
+type TerminalSessionsModule = Awaited<typeof import('./terminal-sessions.js')>;
+type TerminalSessionOverrides = NonNullable<
+  Parameters<TerminalSessionsModule['__setTerminalSessionsTestOverrides']>[0]
+>;
+
 interface TimerHarness {
   setTimeout(fn: () => void, delay: number): number;
   clearTimeout(id: number): void;
@@ -12,7 +17,7 @@ interface TimerHarness {
 }
 
 interface TerminalTestHarness {
-  module: Awaited<typeof import('./terminal-sessions.js')>;
+  module: TerminalSessionsModule;
   spawnMock: ReturnType<typeof mock.fn>;
   emitSessionsUpdateMock: ReturnType<typeof mock.fn>;
   processes: FakePty[];
@@ -110,7 +115,7 @@ class FakePty extends EventEmitter {
   }
 }
 
-async function loadTerminalSessions(): Promise<TerminalTestHarness> {
+async function loadTerminalSessions(overrides?: TerminalSessionOverrides): Promise<TerminalTestHarness> {
   const fakeProcesses: FakePty[] = [];
   const spawnMock = mock.fn(() => {
     const proc = new FakePty();
@@ -137,6 +142,7 @@ async function loadTerminalSessions(): Promise<TerminalTestHarness> {
       timers.setTimeout(fn, delay ?? 0)) as typeof setTimeout,
     clearTimeout: ((id: number | NodeJS.Timeout) =>
       timers.clearTimeout(id as number)) as typeof clearTimeout,
+    ...(overrides ?? {}),
   });
 
   return {
@@ -261,6 +267,25 @@ describe('terminal sessions', () => {
     assert.equal(messages.some((message) => message.includes('"type":"exit"')), true);
     assert.equal(closes.includes(2), true);
     assert.equal(emitSessionsUpdateMock.mock.calls.length > 0, true);
+
+    await disposeAllSessions();
+    await flushMicrotasks();
+    timers.clearAll();
+    module.__setTerminalSessionsTestOverrides();
+  });
+
+  it('uses tmux for isolated automation sessions when available', async () => {
+    mock.reset();
+    const { module, spawnMock, timers } = await loadTerminalSessions({
+      isTmuxAvailable: () => true,
+    });
+    const { createIsolatedTerminalSession, disposeAllSessions } = module;
+
+    const session = await createIsolatedTerminalSession('/workspace', 'org', 'repo', 'feature');
+
+    assert.equal(spawnMock.mock.calls[0]?.arguments[0], 'tmux');
+    assert.equal(session.usingTmux, true);
+    assert.equal(session.kind, 'automation');
 
     await disposeAllSessions();
     await flushMicrotasks();

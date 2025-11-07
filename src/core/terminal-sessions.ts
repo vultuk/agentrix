@@ -667,7 +667,7 @@ export async function createIsolatedTerminalSession(
   branch: string
 ): Promise<TerminalSession> {
   return createTerminalSession(workdir, org, repo, branch, {
-    useTmux: false,
+    useTmux: true,
     kind: 'automation',
   });
 }
