@@ -695,10 +695,7 @@ export async function getOrCreateTerminalSession(
   if (options.forceNew) {
     const requestedTool = options.tool === 'agent' ? 'agent' : 'terminal';
     const requestedKind: SessionKind = options.kind === 'automation' ? 'automation' : 'interactive';
-    const useTmuxForNew =
-      requestedKind === 'automation'
-        ? allowTmuxSessions
-        : false;
+    const useTmuxForNew = false;
     return createTerminalSession(workdir, org, repo, branch, {
       useTmux: useTmuxForNew,
       kind: requestedKind,
