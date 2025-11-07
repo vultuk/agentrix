@@ -2,7 +2,6 @@ import React from 'react';
 import { Menu, RefreshCcw } from 'lucide-react';
 import { renderSpinner } from '../../../components/Spinner.js';
 import GitStatusSidebar from '../../github/components/GitStatusSidebar.js';
-import PortsSidebar from '../../ports/components/PortsSidebar.js';
 import RepositoryDashboard from '../../repositories/components/RepositoryDashboard.js';
 import { REPOSITORY_POLL_INTERVAL_MS, ACTION_BUTTON_CLASS } from '../../../utils/constants.js';
 import type { Worktree, RepoDashboard } from '../../../types/domain.js';
@@ -17,17 +16,15 @@ interface MainPaneProps {
   dashboardError: string | null;
   terminalContainerRef: React.RefObject<HTMLDivElement | null>;
   isGitSidebarOpen: boolean;
-  isPortsSidebarOpen: boolean;
   githubControls: React.ReactNode;
   taskMenuButton: React.ReactNode;
+  portsMenuButton: React.ReactNode;
   planHistoryButton: React.ReactNode;
   gitSidebarButton: React.ReactNode;
-  portsSidebarButton: React.ReactNode;
   registerMobileMenuButton: (node: HTMLButtonElement | null) => void;
   onMobileMenuOpen: () => void;
   onDashboardRefresh: () => void;
   onGitSidebarClose: () => void;
-  onPortsSidebarClose: () => void;
   onAuthExpired: () => void;
   onGitStatusUpdate: (snapshot: any) => void;
   onOpenDiff: (params: { item: any }) => void;
@@ -42,17 +39,15 @@ export default function MainPane({
   dashboardError,
   terminalContainerRef,
   isGitSidebarOpen,
-  isPortsSidebarOpen,
   githubControls,
   taskMenuButton,
+  portsMenuButton,
   planHistoryButton,
   gitSidebarButton,
-  portsSidebarButton,
   registerMobileMenuButton,
   onMobileMenuOpen,
   onDashboardRefresh,
   onGitSidebarClose,
-  onPortsSidebarClose,
   onAuthExpired,
   onGitStatusUpdate,
   onOpenDiff,
@@ -96,12 +91,12 @@ export default function MainPane({
         ),
         h(
           'div',
-          { className: 'flex items-center gap-2 flex-shrink-0' },
+          { className: 'flex flex-wrap items-center justify-end gap-2 flex-shrink-0' },
           githubControls,
           taskMenuButton,
+          portsMenuButton,
           planHistoryButton,
           gitSidebarButton,
-          portsSidebarButton,
           h(
             'button',
             {
@@ -122,11 +117,6 @@ export default function MainPane({
         h('div', {
           ref: terminalContainerRef,
           className: 'flex-1 bg-neutral-950 min-h-0 min-w-0 overflow-hidden relative',
-        }),
-        h(PortsSidebar, {
-          isOpen: isPortsSidebarOpen,
-          onClose: onPortsSidebarClose,
-          onAuthExpired,
         }),
         h(GitStatusSidebar, {
           isOpen: isGitSidebarOpen,
@@ -163,9 +153,10 @@ export default function MainPane({
         ),
         h(
           'div',
-          { className: 'flex items-center gap-2' },
+          { className: 'flex flex-wrap items-center gap-2 justify-end' },
           githubControls,
           taskMenuButton,
+          portsMenuButton,
           h(
             'button',
             {
@@ -214,7 +205,8 @@ export default function MainPane({
       },
       h(
         'div',
-        { className: 'flex h-16 items-center justify-end gap-2 px-4 py-3 border-b border-neutral-800 bg-neutral-925/80' },
+        { className: 'flex h-16 items-center justify-end gap-2 flex-wrap px-4 py-3 border-b border-neutral-800 bg-neutral-925/80' },
+        portsMenuButton,
         taskMenuButton,
         h(
           'button',
