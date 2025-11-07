@@ -29,7 +29,7 @@ import MainPane from '../../terminal/components/MainPane.js';
 import Sidebar from './Sidebar.js';
 import ModalContainer from '../../terminal/components/ModalContainer.js';
 import { PortsMenu } from '../../ports/components/PortsMenu.js';
-import { closeTerminal } from '../../services/api/terminalService.js';
+import { closeTerminal } from '../../../services/api/terminalService.js';
 import type { Worktree } from '../../../types/domain.js';
 
 const { createElement: h } = React;
