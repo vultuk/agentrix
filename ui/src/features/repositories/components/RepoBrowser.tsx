@@ -946,7 +946,6 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     terminalContainerRef,
   terminalSessions: activeTerminalSessions,
   activeSessionId: terminal.sessionId,
-  sessionCreationOptions: TAB_SESSION_OPTIONS,
     onSessionSelect: handleSelectSessionTab,
     onSessionClose: handleCloseSessionTab,
     onSessionCreate: handleCreateSessionTab,
