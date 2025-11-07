@@ -62,6 +62,7 @@ describe('SessionService', () => {
       detectTmux: detectMock,
       isTmuxAvailable: isAvailableMock,
       serialiseSessions: serialiseMock,
+      loadPersistedSessionsSnapshot: async () => [],
     });
 
     const service = new SessionService('/work');
@@ -109,6 +110,7 @@ describe('SessionService', () => {
       runTmux: runTmuxMock,
       discoverRepositories: discoverMock,
       serialiseSessions: serialiseMock,
+      loadPersistedSessionsSnapshot: async () => [],
     });
 
     const service = createSessionService('/work');
@@ -126,3 +128,33 @@ describe('SessionService', () => {
     assert.equal(session.sessions.length, 0);
   });
 });
+  it('falls back to persisted snapshot when no live sessions are active', async () => {
+    const listSessionsMock = mock.fn(() => []);
+    const serialiseMock = mock.fn(() => []);
+    const persistedSnapshot = [
+      {
+        org: 'acme',
+        repo: 'demo',
+        branch: 'feature/login',
+        idle: true,
+        lastActivityAt: '2024-01-01T00:00:00.000Z',
+        sessions: [],
+      },
+    ];
+
+    __setSessionServiceTestOverrides({
+      listActiveSessions: listSessionsMock,
+      serialiseSessions: serialiseMock,
+      loadPersistedSessionsSnapshot: async () => persistedSnapshot,
+      detectTmux: async () => {},
+      isTmuxAvailable: () => false,
+      makeSessionKey: (org: string, repo: string, branch: string) => `${org}/${repo}/${branch}`,
+    });
+
+    const service = new SessionService('/work');
+    const sessions = await service.listSessions();
+
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0]?.branch, 'feature/login');
+    assert.equal(sessions[0]?.idle, true);
+  });

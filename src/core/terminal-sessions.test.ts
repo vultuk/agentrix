@@ -20,6 +20,8 @@ interface TerminalTestHarness {
   module: TerminalSessionsModule;
   spawnMock: ReturnType<typeof mock.fn>;
   emitSessionsUpdateMock: ReturnType<typeof mock.fn>;
+  persistSessionsSnapshotMock: ReturnType<typeof mock.fn>;
+  loadPersistedSessionsSnapshotMock: ReturnType<typeof mock.fn>;
   processes: FakePty[];
   timers: TimerHarness;
 }
@@ -123,6 +125,8 @@ async function loadTerminalSessions(overrides?: TerminalSessionOverrides): Promi
     return proc;
   });
   const emitSessionsUpdateMock = mock.fn();
+  const persistSessionsSnapshotMock = mock.fn(async () => {});
+  const loadPersistedSessionsSnapshotMock = mock.fn(async () => []);
   const timers = createTimerHarness();
 
   const module = await import(`./terminal-sessions.js?test=${Date.now()}-${Math.random()}`);
@@ -134,6 +138,8 @@ async function loadTerminalSessions(overrides?: TerminalSessionOverrides): Promi
     makeTmuxSessionName: () => 'tmux-session',
     tmuxHasSession: async () => false,
     emitSessionsUpdate: (payload) => emitSessionsUpdateMock(payload),
+    persistSessionsSnapshot: (payload) => persistSessionsSnapshotMock(payload),
+    loadPersistedSessionsSnapshot: () => loadPersistedSessionsSnapshotMock(),
     setInterval: ((fn: () => void, delay?: number) =>
       timers.setInterval(fn, delay ?? 0)) as typeof setInterval,
     clearInterval: ((id: number | NodeJS.Timeout) =>
@@ -149,6 +155,8 @@ async function loadTerminalSessions(overrides?: TerminalSessionOverrides): Promi
     module,
     spawnMock,
     emitSessionsUpdateMock,
+    persistSessionsSnapshotMock,
+    loadPersistedSessionsSnapshotMock,
     processes: fakeProcesses,
     timers,
   };
@@ -162,7 +170,8 @@ async function flushMicrotasks(): Promise<void> {
 describe('terminal sessions', () => {
   it('creates interactive sessions, queues input, and reuses existing sessions', async () => {
     mock.reset();
-    const { module, spawnMock, emitSessionsUpdateMock, processes, timers } = await loadTerminalSessions();
+    const { module, spawnMock, emitSessionsUpdateMock, persistSessionsSnapshotMock, processes, timers } =
+      await loadTerminalSessions();
     const { getOrCreateTerminalSession, queueSessionInput, listActiveSessions, disposeAllSessions } = module;
 
     const session = await getOrCreateTerminalSession('/workspace', 'org', 'repo', 'feature', {
@@ -206,11 +215,122 @@ describe('terminal sessions', () => {
     assert.equal(active.length, 1);
     assert.equal(active[0]?.id, session.id);
     assert.equal(emitSessionsUpdateMock.mock.calls.length > 0, true);
+    assert.equal(persistSessionsSnapshotMock.mock.calls.length > 0, true);
 
     await disposeAllSessions();
     await flushMicrotasks();
     timers.clearAll();
     module.__setTerminalSessionsTestOverrides();
+  });
+
+  it('persists session snapshots whenever updates are broadcast', async () => {
+    mock.reset();
+    const { module, persistSessionsSnapshotMock } = await loadTerminalSessions();
+    const { getOrCreateTerminalSession } = module;
+
+    await getOrCreateTerminalSession('/workspace', 'org', 'repo', 'feature', {
+      mode: 'pty',
+    });
+
+    assert.ok(persistSessionsSnapshotMock.mock.calls.length > 0);
+  });
+
+  it('does not persist when disposing all sessions during shutdown', async () => {
+    mock.reset();
+    const { module, persistSessionsSnapshotMock } = await loadTerminalSessions();
+    const { getOrCreateTerminalSession, disposeAllSessions } = module;
+
+    await getOrCreateTerminalSession('/workspace', 'org', 'repo', 'feature', {
+      mode: 'pty',
+    });
+
+    const initialCalls = persistSessionsSnapshotMock.mock.calls.length;
+    await disposeAllSessions();
+    const afterCalls = persistSessionsSnapshotMock.mock.calls.length;
+    assert.equal(afterCalls, initialCalls);
+  });
+
+  it('rehydrates tmux sessions from snapshot when tmux state is available', async () => {
+    mock.reset();
+    const tmuxHasSessionMock = mock.fn(async () => true);
+    const detectTmuxMock = mock.fn(async () => {});
+    const isTmuxAvailableMock = mock.fn(() => true);
+    const persistedSummaries = [
+      {
+        org: 'acme',
+        repo: 'demo',
+        branch: 'feature/login',
+        idle: false,
+        lastActivityAt: '2024-01-01T00:00:00.000Z',
+        sessions: [
+          {
+            id: 'snapshot-1',
+            label: 'Terminal 9',
+            kind: 'interactive',
+            tool: 'terminal',
+            idle: false,
+            usingTmux: true,
+            lastActivityAt: '2024-01-01T00:00:00.000Z',
+            createdAt: '2024-01-01T00:00:00.000Z',
+            tmuxSessionName: 'tmux-acme-demo-feature',
+          },
+        ],
+      },
+    ];
+    const { module, spawnMock } = await loadTerminalSessions({
+      loadPersistedSessionsSnapshot: async () => persistedSummaries,
+      tmuxHasSession: (name: string) => tmuxHasSessionMock(name),
+      detectTmux: () => detectTmuxMock(),
+      isTmuxAvailable: () => isTmuxAvailableMock(),
+    });
+
+    await module.rehydrateTmuxSessionsFromSnapshot('/workspace', { mode: 'auto' });
+
+    assert.equal(spawnMock.mock.calls.length > 0, true);
+    const sessions = module.listActiveSessions();
+    assert.equal(sessions.length, 1);
+    const rehydrated = sessions[0];
+    assert.ok(rehydrated);
+    assert.equal(rehydrated.label, 'Terminal 9');
+    assert.equal(rehydrated.tmuxSessionName, 'tmux-acme-demo-feature');
+    assert.equal(rehydrated.org, 'acme');
+    assert.equal(rehydrated.repo, 'demo');
+    assert.equal(rehydrated.branch, 'feature/login');
+  });
+
+  it('skips rehydration when tmux sessions no longer exist', async () => {
+    mock.reset();
+    const persistedSummaries = [
+      {
+        org: 'acme',
+        repo: 'demo',
+        branch: 'feature/login',
+        idle: false,
+        lastActivityAt: null,
+        sessions: [
+          {
+            id: 'snapshot-1',
+            label: 'Terminal 1',
+            kind: 'interactive',
+            tool: 'terminal',
+            idle: false,
+            usingTmux: true,
+            lastActivityAt: null,
+            createdAt: null,
+            tmuxSessionName: 'tmux-missing',
+          },
+        ],
+      },
+    ];
+    const { module } = await loadTerminalSessions({
+      loadPersistedSessionsSnapshot: async () => persistedSummaries,
+      tmuxHasSession: async () => false,
+      isTmuxAvailable: () => true,
+      detectTmux: async () => {},
+    });
+
+    await module.rehydrateTmuxSessionsFromSnapshot('/workspace', { mode: 'auto' });
+    assert.equal(module.listActiveSessions().length, 0);
   });
 
   it('broadcasts to watchers and disposes sessions by id', async () => {

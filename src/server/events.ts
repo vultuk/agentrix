@@ -1,6 +1,7 @@
 import type { ServerResponse } from 'node:http';
 import { discoverRepositories } from '../core/git.js';
 import { listActiveSessions, serialiseSessions } from '../core/terminal-sessions.js';
+import { loadPersistedSessionsSnapshot } from '../core/session-persistence.js';
 import { getEventTypes, subscribeToEvents } from '../core/event-bus.js';
 import { listTasks } from '../core/tasks.js';
 import type { AuthManager } from '../types/auth.js';
@@ -23,6 +24,7 @@ interface EventStreamDependencies {
   discoverRepositories: typeof discoverRepositories;
   listActiveSessions: typeof listActiveSessions;
   serialiseSessions: typeof serialiseSessions;
+  loadPersistedSessionsSnapshot: typeof loadPersistedSessionsSnapshot;
   getEventTypes: typeof getEventTypes;
   subscribeToEvents: typeof subscribeToEvents;
   listTasks: typeof listTasks;
@@ -32,6 +34,7 @@ const defaultDependencies: EventStreamDependencies = {
   discoverRepositories,
   listActiveSessions,
   serialiseSessions,
+  loadPersistedSessionsSnapshot,
   getEventTypes,
   subscribeToEvents,
   listTasks,
@@ -51,11 +54,15 @@ function getDependency<K extends keyof EventStreamDependencies>(key: K): EventSt
 
 async function sendInitialSnapshots(res: ServerResponse, workdir: string): Promise<void> {
   const eventTypes = getDependency('getEventTypes')();
-  const [reposSnapshot, sessionsSnapshot, tasksSnapshot] = await Promise.all([
+  const [reposSnapshot, rawSessionsSnapshot, tasksSnapshot] = await Promise.all([
     getDependency('discoverRepositories')(workdir).catch(() => ({})),
     Promise.resolve(getDependency('serialiseSessions')(getDependency('listActiveSessions')())),
     Promise.resolve(getDependency('listTasks')()).catch(() => []),
   ]);
+  const sessionsSnapshot =
+    Array.isArray(rawSessionsSnapshot) && rawSessionsSnapshot.length > 0
+      ? rawSessionsSnapshot
+      : await getDependency('loadPersistedSessionsSnapshot')().catch(() => []);
 
   writeEvent(res, { event: eventTypes.REPOS_UPDATE, data: { data: reposSnapshot } });
   writeEvent(res, { event: eventTypes.SESSIONS_UPDATE, data: { sessions: sessionsSnapshot } });

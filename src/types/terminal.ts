@@ -78,6 +78,7 @@ export interface TerminalSessionSnapshot {
   usingTmux: boolean;
   lastActivityAt: string | null;
   createdAt: string | null;
+  tmuxSessionName?: string | null;
 }
 
 export interface WorktreeSessionSummary {

@@ -76,6 +76,7 @@ export interface WorktreeSessionTab {
   usingTmux: boolean;
   lastActivityAt: string | null;
   createdAt: string | null;
+  tmuxSessionName?: string | null;
 }
 
 export interface WorktreeSession {

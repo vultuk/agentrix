@@ -2,7 +2,7 @@
  * Hook for managing real-time event stream connection
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createEventStream } from '../utils/eventStream.js';
 
 interface UseEventStreamOptions {
@@ -21,40 +21,62 @@ export function useEventStream({
   onDisconnect,
 }: UseEventStreamOptions) {
   const [isConnected, setIsConnected] = useState(false);
+  const handlersRef = useRef({
+    onRepos,
+    onSessions,
+    onTasks,
+    onConnect,
+    onDisconnect,
+  });
+
+  useEffect(() => {
+    handlersRef.current = {
+      onRepos,
+      onSessions,
+      onTasks,
+      onConnect,
+      onDisconnect,
+    };
+  }, [onRepos, onSessions, onTasks, onConnect, onDisconnect]);
 
   useEffect(() => {
     const stop = createEventStream({
       onRepos: (payload: any) => {
-        if (onRepos) {
-          onRepos(payload);
+        const handler = handlersRef.current.onRepos;
+        if (handler) {
+          handler(payload);
         }
       },
       onSessions: (payload: any) => {
-        if (onSessions) {
-          onSessions(payload);
+        const handler = handlersRef.current.onSessions;
+        if (handler) {
+          handler(payload);
         }
       },
       onTasks: (payload: any) => {
-        if (onTasks) {
-          onTasks(payload);
+        const handler = handlersRef.current.onTasks;
+        if (handler) {
+          handler(payload);
         }
       },
       onConnect: () => {
         setIsConnected(true);
-        if (onConnect) {
-          onConnect();
+        const handler = handlersRef.current.onConnect;
+        if (handler) {
+          handler();
         }
       },
       onDisconnect: () => {
         setIsConnected(false);
-        if (onDisconnect) {
-          onDisconnect();
+        const handler = handlersRef.current.onDisconnect;
+        if (handler) {
+          handler();
         }
       },
     });
 
     return stop;
-  }, [onRepos, onSessions, onTasks, onConnect, onDisconnect]);
+  }, []);
 
   return {
     isConnected,

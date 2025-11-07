@@ -51,6 +51,10 @@ export function useSessionManagement() {
           typeof entry.lastActivityAt === 'string' ? entry.lastActivityAt : null;
         const createdAt =
           typeof entry.createdAt === 'string' ? entry.createdAt : null;
+        const tmuxSessionName =
+          typeof entry.tmuxSessionName === 'string' && entry.tmuxSessionName.trim().length > 0
+            ? entry.tmuxSessionName.trim()
+            : null;
         return {
           id,
           label,
@@ -60,6 +64,7 @@ export function useSessionManagement() {
           usingTmux: Boolean(entry.usingTmux),
           lastActivityAt,
           createdAt,
+          tmuxSessionName,
         };
       })
       .filter((value): value is NonNullable<typeof value> => Boolean(value));

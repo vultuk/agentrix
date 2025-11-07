@@ -17,6 +17,7 @@ import {
   tmuxHasSession,
 } from './tmux.js';
 import { emitSessionsUpdate } from './event-bus.js';
+import { persistSessionsSnapshot, loadPersistedSessionsSnapshot } from './session-persistence.js';
 
 const IDLE_TIMEOUT_MS = 90 * 1000;
 const IDLE_SWEEP_INTERVAL_MS = 5 * 1000;
@@ -29,6 +30,8 @@ interface TerminalSessionDependencies {
   makeTmuxSessionName: typeof makeTmuxSessionName;
   tmuxHasSession: typeof tmuxHasSession;
   emitSessionsUpdate: typeof emitSessionsUpdate;
+  persistSessionsSnapshot: typeof persistSessionsSnapshot;
+  loadPersistedSessionsSnapshot: typeof loadPersistedSessionsSnapshot;
   setInterval: typeof setInterval;
   clearInterval: typeof clearInterval;
   setTimeout: typeof setTimeout;
@@ -43,6 +46,8 @@ const defaultTerminalSessionDependencies: TerminalSessionDependencies = {
   makeTmuxSessionName,
   tmuxHasSession,
   emitSessionsUpdate,
+  persistSessionsSnapshot,
+  loadPersistedSessionsSnapshot,
   setInterval: globalThis.setInterval.bind(globalThis),
   clearInterval: globalThis.clearInterval.bind(globalThis),
   setTimeout: globalThis.setTimeout.bind(globalThis),
@@ -86,6 +91,22 @@ function stopIdleMonitorIfInactive() {
     resolveTerminalDependency('clearInterval')(idleMonitorTimer);
     idleMonitorTimer = null;
   }
+}
+
+let persistenceSuppressed = false;
+
+function broadcastSessionsUpdate(
+  snapshot?: WorktreeSessionSummary[],
+  options: { persist?: boolean } = {},
+): void {
+  const payload = snapshot ?? serialiseSessions(listActiveSessions());
+  resolveTerminalDependency('emitSessionsUpdate')(payload);
+  if (options.persist === false || persistenceSuppressed) {
+    return;
+  }
+  void resolveTerminalDependency('persistSessionsSnapshot')(payload).catch((error) => {
+    console.warn('[agentrix] Failed to persist sessions snapshot:', error);
+  });
 }
 
 function allocateSessionLabel(key: string, tool: SessionTool): string {
@@ -147,6 +168,7 @@ function buildSessionSnapshot(session: TerminalSession): TerminalSessionSnapshot
     usingTmux: Boolean(session.usingTmux),
     lastActivityAt,
     createdAt,
+    tmuxSessionName: typeof session.tmuxSessionName === 'string' ? session.tmuxSessionName : null,
   };
 }
 
@@ -164,7 +186,7 @@ function addSession(session: TerminalSession): void {
   bucket.set(session.id, session);
   terminalSessionsById.set(session.id, session);
   ensureIdleMonitor();
-  resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
+  broadcastSessionsUpdate();
 }
 
 function removeSession(session: TerminalSession): void {
@@ -263,7 +285,7 @@ export function queueSessionInput(session: TerminalSession, input: string | Buff
     session.pendingInputs.push(value);
   }
   if (becameActive) {
-    resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
+    broadcastSessionsUpdate();
   }
 }
 
@@ -308,7 +330,7 @@ function handleSessionOutput(session: TerminalSession, chunk: string | Buffer): 
   session.log = trimLogBuffer((session.log || '') + text);
   broadcast(session, 'output', { chunk: text });
   if (becameActive) {
-    emitSessionsUpdate(serialiseSessions(listActiveSessions()));
+    broadcastSessionsUpdate();
   }
 }
 
@@ -381,7 +403,7 @@ function runIdleSweep() {
   });
 
   if (changed) {
-    resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
+    broadcastSessionsUpdate();
   }
 }
 
@@ -420,7 +442,7 @@ function handleSessionExit(session: TerminalSession, code: number, signal: strin
     session.waiters.forEach((resolve) => resolve());
     session.waiters = [];
   }
-  resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
+  broadcastSessionsUpdate();
 }
 
 export function makeSessionKey(org: string, repo: string, branch: string): string {
@@ -471,7 +493,7 @@ export async function disposeSessionByKey(key: string): Promise<void> {
   }
   const tasks = sessions.map((session) => terminateSession(session).catch(() => {}));
   await Promise.allSettled(tasks);
-  resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
+  broadcastSessionsUpdate();
 }
 
 export async function disposeSessionsForRepository(org: string, repo: string): Promise<void> {
@@ -492,7 +514,7 @@ export async function disposeSessionsForRepository(org: string, repo: string): P
   }
   const tasks = targets.map((session) => terminateSession(session).catch(() => {}));
   await Promise.allSettled(tasks);
-  resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
+  broadcastSessionsUpdate();
 }
 
 export async function disposeSessionById(sessionId: string): Promise<void> {
@@ -501,7 +523,7 @@ export async function disposeSessionById(sessionId: string): Promise<void> {
     return;
   }
   await terminateSession(session);
-  resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
+  broadcastSessionsUpdate();
 }
 
 export async function disposeAllSessions(): Promise<void> {
@@ -509,14 +531,19 @@ export async function disposeAllSessions(): Promise<void> {
   if (activeSessions.length === 0) {
     return;
   }
-  const closures = activeSessions.map((session) =>
-    terminateSession(session, { signal: 'SIGTERM', forceAfter: 0 }).catch(() => {}),
-  );
-  await Promise.allSettled(closures);
-  terminalSessions.clear();
-  terminalSessionsById.clear();
-  stopIdleMonitorIfInactive();
-  resolveTerminalDependency('emitSessionsUpdate')([]);
+  persistenceSuppressed = true;
+  try {
+    const closures = activeSessions.map((session) =>
+      terminateSession(session, { signal: 'SIGTERM', forceAfter: 0 }).catch(() => {}),
+    );
+    await Promise.allSettled(closures);
+    terminalSessions.clear();
+    terminalSessionsById.clear();
+    stopIdleMonitorIfInactive();
+  } finally {
+    persistenceSuppressed = false;
+  }
+  broadcastSessionsUpdate([], { persist: false });
 }
 
 export function getSessionById(sessionId: string): TerminalSession | undefined {
@@ -525,6 +552,93 @@ export function getSessionById(sessionId: string): TerminalSession | undefined {
 
 export function listActiveSessions(): TerminalSession[] {
   return Array.from(terminalSessionsById.values()).filter((session) => session && !session.closed);
+}
+
+export async function rehydrateTmuxSessionsFromSnapshot(
+  workdir: string,
+  options: { mode?: string } = {},
+): Promise<void> {
+  if (!workdir || terminalSessionsById.size > 0) {
+    return;
+  }
+  const mode = typeof options.mode === 'string' ? options.mode.toLowerCase() : 'auto';
+  if (mode === 'pty') {
+    return;
+  }
+  let summaries: WorktreeSessionSummary[];
+  try {
+    summaries = await resolveTerminalDependency('loadPersistedSessionsSnapshot')();
+  } catch (error) {
+    console.warn('[agentrix] Failed to load persisted sessions snapshot for rehydration:', error);
+    return;
+  }
+  if (!Array.isArray(summaries) || summaries.length === 0) {
+    return;
+  }
+
+  try {
+    await resolveTerminalDependency('detectTmux')();
+  } catch (error) {
+    console.warn('[agentrix] Failed to detect tmux during session rehydration:', error);
+    return;
+  }
+  if (!resolveTerminalDependency('isTmuxAvailable')()) {
+    return;
+  }
+
+  const tmuxHasSession = resolveTerminalDependency('tmuxHasSession');
+
+  for (const summary of summaries) {
+    if (!summary || !summary.sessions || !Array.isArray(summary.sessions)) {
+      continue;
+    }
+    for (const snapshot of summary.sessions) {
+      if (!snapshot || !snapshot.usingTmux) {
+        continue;
+      }
+      const tmuxSessionName =
+        typeof (snapshot as { tmuxSessionName?: string }).tmuxSessionName === 'string'
+          ? (snapshot as { tmuxSessionName?: string }).tmuxSessionName
+          : null;
+      if (!tmuxSessionName) {
+        continue;
+      }
+      try {
+        const exists = await tmuxHasSession(tmuxSessionName);
+        if (!exists) {
+          continue;
+        }
+        const session = await createTerminalSession(workdir, summary.org, summary.repo, summary.branch, {
+          useTmux: true,
+          tool: snapshot.tool ?? 'terminal',
+          kind: snapshot.kind ?? (snapshot.tool === 'agent' ? 'automation' : 'interactive'),
+          tmuxSessionName,
+          resumeFromTmux: true,
+        });
+        if (typeof snapshot.label === 'string' && snapshot.label.trim().length > 0) {
+          session.label = snapshot.label;
+        }
+        if (typeof snapshot.lastActivityAt === 'string') {
+          const parsed = Date.parse(snapshot.lastActivityAt);
+          if (!Number.isNaN(parsed)) {
+            session.lastActivityAt = parsed;
+          }
+        }
+        if (typeof snapshot.createdAt === 'string') {
+          const createdAtParsed = Date.parse(snapshot.createdAt);
+          if (!Number.isNaN(createdAtParsed)) {
+            session.createdAt = createdAtParsed;
+          }
+        }
+        session.idle = Boolean(snapshot.idle);
+      } catch (error) {
+        console.warn(
+          `[agentrix] Failed to rehydrate tmux session ${tmuxSessionName} for ${summary.org}/${summary.repo}:${summary.branch}:`,
+          error,
+        );
+      }
+    }
+  }
 }
 
 export function addSocketWatcher(session: TerminalSession, socket: unknown): void {
@@ -544,6 +658,7 @@ async function spawnTerminalProcess({
   useTmux,
   requireTmux = false,
   tmuxSessionNameOverride,
+  reattachOnly = false,
 }: {
   workdir: string;
   org: string;
@@ -552,6 +667,7 @@ async function spawnTerminalProcess({
   useTmux?: boolean;
   requireTmux?: boolean;
   tmuxSessionNameOverride?: string | null;
+  reattachOnly?: boolean;
 }) {
   const { worktreePath } = await resolveTerminalDependency('getWorktreePath')(
     workdir,
@@ -582,6 +698,10 @@ async function spawnTerminalProcess({
     if (resolveTerminalDependency('isTmuxAvailable')()) {
       tmuxSessionName = tmuxSessionNameOverride || resolveTerminalDependency('makeTmuxSessionName')(org, repo, branch);
       tmuxSessionExists = await resolveTerminalDependency('tmuxHasSession')(tmuxSessionName);
+      if (reattachOnly && !tmuxSessionExists) {
+        throw new Error(`tmux session ${tmuxSessionName} not found`);
+      }
+
       const tmuxArgs = tmuxSessionExists
         ? ['attach-session', '-t', tmuxSessionName]
         : ['new-session', '-s', tmuxSessionName, '-x', '120', '-y', '36'];
@@ -639,19 +759,31 @@ async function createTerminalSession(
     tool?: SessionTool;
     requireTmux?: boolean;
     forceUniqueTmux?: boolean;
+    tmuxSessionName?: string | null;
+    resumeFromTmux?: boolean;
   } = {}
 ): Promise<TerminalSession> {
-  const { useTmux = true, kind = 'interactive', tool, requireTmux = false, forceUniqueTmux = false } = options;
+  const {
+    useTmux = true,
+    kind = 'interactive',
+    tool,
+    requireTmux = false,
+    forceUniqueTmux = false,
+    tmuxSessionName: tmuxSessionNameOverride,
+    resumeFromTmux = false,
+  } = options;
   const resolvedKind: SessionKind = kind === 'automation' ? 'automation' : 'interactive';
   const key = makeSessionKey(org, repo, branch);
   const resolvedTool: SessionTool = tool ?? (resolvedKind === 'automation' ? 'agent' : 'terminal');
   const label = allocateSessionLabel(key, resolvedTool);
   const createdAt = Date.now();
   const labelSlug = slugifyLabel(label) || 'session';
-  const tmuxSessionNameOverride =
-    Boolean(useTmux && forceUniqueTmux)
-      ? `${resolveTerminalDependency('makeTmuxSessionName')(org, repo, branch)}--${labelSlug}`
-      : undefined;
+  let effectiveTmuxSessionName: string | undefined;
+  if (typeof tmuxSessionNameOverride === 'string' && tmuxSessionNameOverride.trim().length > 0) {
+    effectiveTmuxSessionName = tmuxSessionNameOverride.trim();
+  } else if (useTmux && forceUniqueTmux) {
+    effectiveTmuxSessionName = `${resolveTerminalDependency('makeTmuxSessionName')(org, repo, branch)}--${labelSlug}`;
+  }
   const { child, usingTmux, tmuxSessionName, worktreePath } = await spawnTerminalProcess({
     workdir,
     org,
@@ -659,7 +791,8 @@ async function createTerminalSession(
     branch,
     useTmux,
     requireTmux,
-    tmuxSessionNameOverride,
+    tmuxSessionNameOverride: effectiveTmuxSessionName,
+    reattachOnly: resumeFromTmux,
   });
 
   const session: TerminalSession = {
@@ -703,7 +836,7 @@ async function createTerminalSession(
     markSessionReady(session);
   }, 150);
 
-  resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
+  broadcastSessionsUpdate();
 
   return session;
 }

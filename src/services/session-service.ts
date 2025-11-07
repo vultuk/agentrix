@@ -7,6 +7,7 @@ import {
   runTmux,
 } from '../core/tmux.js';
 import { listActiveSessions, makeSessionKey, serialiseSessions } from '../core/terminal-sessions.js';
+import { loadPersistedSessionsSnapshot } from '../core/session-persistence.js';
 import type { TerminalSessionSnapshot } from '../types/terminal.js';
 
 export interface SessionInfo {
@@ -28,6 +29,7 @@ type SessionServiceDependencyOverrides = Partial<{
   listActiveSessions: typeof listActiveSessions;
   makeSessionKey: typeof makeSessionKey;
   serialiseSessions: typeof serialiseSessions;
+  loadPersistedSessionsSnapshot: typeof loadPersistedSessionsSnapshot;
 }>;
 
 const sessionServiceDependencies = {
@@ -40,6 +42,7 @@ const sessionServiceDependencies = {
   listActiveSessions,
   makeSessionKey,
   serialiseSessions,
+  loadPersistedSessionsSnapshot,
 } as const;
 
 let sessionServiceTestOverrides: SessionServiceDependencyOverrides | null = null;
@@ -88,8 +91,19 @@ export class SessionService {
     const listSessionsFn = resolveSessionServiceDependency('listActiveSessions');
     const serialise = resolveSessionServiceDependency('serialiseSessions');
     const makeKey = resolveSessionServiceDependency('makeSessionKey');
+    const loadPersisted = resolveSessionServiceDependency('loadPersistedSessionsSnapshot');
 
-    const summaries = serialise(listSessionsFn());
+    let summaries = serialise(listSessionsFn());
+    if (!Array.isArray(summaries) || summaries.length === 0) {
+      try {
+        const persisted = await loadPersisted();
+        if (Array.isArray(persisted) && persisted.length > 0) {
+          summaries = persisted;
+        }
+      } catch (error) {
+        console.warn('[agentrix] Failed to load persisted sessions snapshot:', error);
+      }
+    }
 
     summaries.forEach((entry) => {
       if (!entry || !entry.org || !entry.repo || !entry.branch) {
