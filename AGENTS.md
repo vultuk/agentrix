@@ -27,8 +27,3 @@
 - Keep TypeScript strict: avoid `any`, prefer explicit interfaces in `src/types` and `ui/src/types` (or feature-local types when truly scoped).
 - Enforce SOLID: domain logic stays under `src/core`, UI feature logic stays inside its feature folder, and shared utilities remain framework-agnostic.
 - Stay DRY: extract duplicate flows into helpers or hooks, and centralize modal rendering via the existing modal containers rather than scattered dialogs.
-
-## Operational Notes
-- Worktrees live under `[workdir]/org/repo/{repository,<worktree>}`; `core/git` discovers and manages them, so keep that structure intact.
-- Terminal sessions (`core/terminal-sessions`) rely on PTY + optional tmux; check logs if `/api/terminal/open` misbehaves.
-- Auth flows depend on `core/auth` and `ui/src/context/AuthContext.tsx`; respect cookie settings and session lifetimes when adjusting either side.
