@@ -58,6 +58,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   } = browserState;
   
   const pendingTaskProcessorRef = useRef<((task: any, pending: any) => void) | null>(null);
+  const [pendingSessionContext, setPendingSessionContext] = useState<'default' | 'new-tab'>('default');
   
   // Mobile menu ref
   const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -493,6 +494,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     }
     menus.closeActionMenu();
     setPendingActionLoading(null);
+    setPendingSessionContext('new-tab');
     setPendingWorktreeAction(activeWorktree);
   }, [activeWorktree, menus, setPendingActionLoading, setPendingWorktreeAction]);
 
@@ -567,12 +569,15 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
             setActiveWorktree({ org: info.org, repo: info.repo, branch: firstNonMain });
             try {
               await openTerminalForWorktree({ org: info.org, repo: info.repo, branch: firstNonMain });
-              setPendingWorktreeAction(null);
+            setPendingWorktreeAction(null);
+            setPendingSessionContext('default');
             } catch {
               window.alert('Failed to reconnect to the existing session.');
             }
           } else {
-            setPendingWorktreeAction({ org: info.org, repo: info.repo, branch: firstNonMain });
+            setPendingSessionContext('default');
+          setPendingSessionContext('default');
+          setPendingWorktreeAction({ org: info.org, repo: info.repo, branch: firstNonMain });
           }
           menus.setIsMobileMenuOpen(false);
         } else {
@@ -653,6 +658,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
         pendingWorktreeAction.repo === repo
       ) {
         setPendingWorktreeAction(null);
+        setPendingSessionContext('default');
       }
       if (
         activeWorktree &&
@@ -800,19 +806,25 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     const command = getCommandForLaunch(resolvedAction, isDangerous);
     setActiveWorktree(worktree);
     try {
-      const sessionTool: 'terminal' | 'agent' =
-        resolvedAction === 'terminal' || resolvedAction === 'vscode' ? 'terminal' : 'agent';
-      if (sessionTool === 'agent' && !command) {
-        window.alert('No command configured for the selected launch option.');
-        setPendingActionLoading(null);
-        return;
+      if (pendingSessionContext === 'new-tab') {
+        const sessionTool: 'terminal' | 'agent' =
+          resolvedAction === 'terminal' || resolvedAction === 'vscode' ? 'terminal' : 'agent';
+        if (sessionTool === 'agent' && !command) {
+          window.alert('No command configured for the selected launch option.');
+          setPendingActionLoading(null);
+          return;
+        }
+        await openTerminalForWorktree(worktree, {
+          newSession: true,
+          sessionTool,
+          ...(command ? { command } : {}),
+        });
+      } else {
+        await openTerminalForWorktree(worktree, command ? { command } : {});
       }
-      await openTerminalForWorktree(worktree, {
-        newSession: true,
-        sessionTool,
-        ...(command ? { command } : {}),
-      });
       setPendingWorktreeAction(null);
+      setPendingSessionContext('default');
+      setPendingSessionContext('default');
     } catch (error: any) {
       if (error && error.message === 'AUTH_REQUIRED') {
         return;
@@ -827,7 +839,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     openTerminalForWorktree,
     pendingWorktreeAction,
     pendingActionLoading,
-    menus,
+    pendingSessionContext,
     getCommandForLaunch,
   ]);
 
@@ -1072,7 +1084,8 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
       openActionMenu: menus.openActionMenu,
       onClosePendingAction: () => {
         if (!pendingActionLoading) {
-          setPendingWorktreeAction(null);
+      setPendingWorktreeAction(null);
+      setPendingSessionContext('default');
         }
       },
       onWorktreeAction: handleWorktreeAction,
