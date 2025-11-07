@@ -118,6 +118,13 @@ export function usePendingTaskProcessor({
           : hasKnownSession
           ? null
           : getCommandForLaunch(pending.launchOption, pending.dangerousMode);
+      const isAgentLaunch =
+        pending.kind === 'prompt' ||
+        ['codex', 'claude', 'cursor'].includes(
+          typeof pending.launchOption === 'string' ? pending.launchOption : '',
+        );
+      const sessionTool: 'terminal' | 'agent' = isAgentLaunch ? 'agent' : 'terminal';
+      const agentOptions = sessionTool === 'agent' && !hasKnownSession ? { sessionTool } : {};
 
       void (async () => {
         try {
@@ -125,11 +132,15 @@ export function usePendingTaskProcessor({
             await openTerminal(worktree, {
               command: pending.command,
               prompt: pending.promptValue,
+              sessionTool,
             });
           } else if (resolvedCommand) {
-            await openTerminal(worktree, { command: resolvedCommand });
+            await openTerminal(worktree, {
+              command: resolvedCommand,
+              ...agentOptions,
+            });
           } else {
-            await openTerminal(worktree);
+            await openTerminal(worktree, agentOptions);
           }
           setPendingWorktreeAction(null);
         } catch (error: any) {
