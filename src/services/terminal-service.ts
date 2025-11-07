@@ -154,11 +154,13 @@ export class TerminalService implements ITerminalService {
     }
 
     const desiredTool = sessionTool === 'agent' ? 'agent' : 'terminal';
+    const desiredKind = desiredTool === 'agent' ? 'automation' : 'interactive';
     const getOrCreate = resolveTerminalServiceDependency('getOrCreateTerminalSession');
     const result = await getOrCreate(this.workdir, org, repo, branch, {
       mode: this.mode,
       forceNew: Boolean(newSession),
       tool: desiredTool,
+      kind: desiredKind,
     });
 
     const session = 'session' in result ? result.session : result;

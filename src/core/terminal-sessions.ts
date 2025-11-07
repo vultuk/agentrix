@@ -684,7 +684,7 @@ export async function getOrCreateTerminalSession(
   org: string,
   repo: string,
   branch: string,
-  options: { mode?: string; forceNew?: boolean; tool?: SessionTool } = {}
+  options: { mode?: string; forceNew?: boolean; tool?: SessionTool; kind?: SessionKind } = {}
 ) {
   const rawMode = typeof options['mode'] === 'string' ? options['mode'].toLowerCase() : 'auto';
   const mode = rawMode === 'tmux' || rawMode === 'pty' ? rawMode : 'auto';
@@ -694,9 +694,10 @@ export async function getOrCreateTerminalSession(
 
   if (options.forceNew) {
     const requestedTool = options.tool === 'agent' ? 'agent' : 'terminal';
+    const requestedKind: SessionKind = options.kind === 'automation' ? 'automation' : 'interactive';
     return createTerminalSession(workdir, org, repo, branch, {
       useTmux: allowTmuxSessions,
-      kind: 'interactive',
+      kind: requestedKind,
       tool: requestedTool,
       requireTmux,
     });
