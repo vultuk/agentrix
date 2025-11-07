@@ -164,6 +164,7 @@ function addSession(session: TerminalSession): void {
   bucket.set(session.id, session);
   terminalSessionsById.set(session.id, session);
   ensureIdleMonitor();
+  resolveTerminalDependency('emitSessionsUpdate')(serialiseSessions(listActiveSessions()));
 }
 
 function removeSession(session: TerminalSession): void {
