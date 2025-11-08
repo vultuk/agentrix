@@ -1,9 +1,15 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { RepositoriesData, AddRepositoryResult } from '../services/repository-service.js';
 import type { CreateWorktreeResult } from '../services/worktree-service.js';
-import type { TerminalOpenResult, TerminalSendResult } from '../services/terminal-service.js';
+import type { TerminalOpenResult, TerminalSendResult, TerminalCloseResult } from '../services/terminal-service.js';
 import type { AuthResult } from '../services/auth-service.js';
-import type { WorktreeCreateInput, WorktreeDeleteInput, TerminalOpenInput, TerminalSendInput } from '../validation/index.js';
+import type {
+  WorktreeCreateInput,
+  WorktreeDeleteInput,
+  TerminalOpenInput,
+  TerminalSendInput,
+  TerminalCloseInput,
+} from '../validation/index.js';
 
 /**
  * Interface for repository service operations
@@ -77,6 +83,13 @@ export interface ITerminalService {
    * @returns Success result
    */
   sendInput(params: TerminalSendInput): Promise<TerminalSendResult>;
+
+  /**
+   * Closes an active terminal session
+   * @param params - Close parameters
+   * @returns Success result
+   */
+  closeSession(params: TerminalCloseInput): Promise<TerminalCloseResult>;
 }
 
 /**
@@ -107,4 +120,3 @@ export interface IAuthService {
    */
   getStatus(req: IncomingMessage): Promise<AuthResult>;
 }
-

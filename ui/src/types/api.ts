@@ -3,13 +3,14 @@
  */
 
 import type {
-    Commands, IssueDetails,
-    Plan,
-    RepositoryData,
-    RepositoryDashboard,
-    Task,
-    TerminalSession,
-    GitStatus
+  Commands,
+  IssueDetails,
+  Plan,
+  RepositoryData,
+  RepositoryDashboard,
+  Task,
+  WorktreeSession,
+  GitStatus,
 } from './domain.js';
 
 // Generic API response
@@ -176,23 +177,28 @@ export interface OpenTerminalRequest {
   org: string;
   repo: string;
   branch: string;
-  command?: string;
+  command?: string | null;
+  prompt?: string | null;
+  sessionId?: string | null;
+  newSession?: boolean;
+  sessionTool?: 'terminal' | 'agent';
 }
 
 export interface OpenTerminalResponse {
   sessionId: string;
-  tmux?: boolean;
-  restored?: boolean;
+  log: string;
+  closed: boolean;
+  created: boolean;
 }
 
 export interface FetchSessionsResponse {
-  sessions: TerminalSession[];
+  sessions: WorktreeSession[];
 }
 
 // Events API (SSE)
 export interface EventStreamCallbacks {
   onRepos?: (data: RepositoryData) => void;
-  onSessions?: (data: TerminalSession[]) => void;
+  onSessions?: (data: { sessions: WorktreeSession[] }) => void;
   onTasks?: (data: Task[]) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;

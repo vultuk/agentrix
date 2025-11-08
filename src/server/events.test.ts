@@ -73,6 +73,7 @@ describe('createEventStreamHandler', () => {
       listTasks: () => [
         { id: 'task-1', status: 'running' },
       ],
+      loadPersistedSessionsSnapshot: async () => [],
       subscribeToEvents: (event: string, handler: (payload: unknown) => void) => {
         subscriptionHandlers.set(event, handler);
         return () => {
@@ -149,6 +150,7 @@ describe('createEventStreamHandler', () => {
       discoverRepositories: async () => ({ ok: true }),
       listActiveSessions: () => [],
       listTasks: () => [],
+      loadPersistedSessionsSnapshot: async () => [],
       subscribeToEvents: () => () => {},
     });
 
@@ -169,4 +171,3 @@ describe('createEventStreamHandler', () => {
     assert.equal((context.res.end as ReturnType<typeof mock.fn>).mock.calls.length > 0, true);
   });
 });
-

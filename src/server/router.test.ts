@@ -73,6 +73,7 @@ function createStubHandlers() {
     createTerminalHandlers: () => ({
       open: async () => {},
       send: async () => {},
+      close: async () => {},
     }),
     createConfigHandlers: () => ({
       commands: async () => {},

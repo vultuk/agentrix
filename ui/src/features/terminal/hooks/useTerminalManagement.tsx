@@ -119,44 +119,84 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
     }
   }, []);
 
-  const setupTerminal = useCallback((initialLog: string) => {
-    disposeTerminal();
-    if (!terminalContainerRef.current) {
+  const pendingSetupRef = useRef<{ log: string; attempts: number } | null>(null);
+
+  const initializeTerminal = useCallback(
+    (initialLog: string) => {
+      disposeTerminal();
+      if (!terminalContainerRef.current) {
+        return false;
+      }
+      const term = new Terminal({
+        allowTransparency: true,
+        convertEol: true,
+        cursorBlink: true,
+        fontFamily: 'JetBrains Mono, Menlo, Consolas, monospace',
+        fontSize: 13,
+        theme: terminalTheme,
+        scrollback: 8000,
+      });
+      const fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
+      terminalRef.current = term;
+      fitAddonRef.current = fitAddon;
+      term.open(terminalContainerRef.current);
+      term.focus();
+      if (initialLog) {
+        term.write(initialLog);
+      }
+      term.onData((data: string) => {
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          socketRef.current.send(JSON.stringify({ type: 'input', data }));
+        }
+      });
+      term.onResize(({ cols, rows }: { cols: number; rows: number }) => {
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          socketRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
+        }
+      });
+      requestAnimationFrame(() => {
+        sendResize();
+        term.focus();
+      });
+      return true;
+    },
+    [disposeTerminal, sendResize, terminalTheme],
+  );
+
+  const scheduleDeferredSetup = useCallback(() => {
+    if (!pendingSetupRef.current) {
       return;
     }
-    const term = new Terminal({
-      allowTransparency: true,
-      convertEol: true,
-      cursorBlink: true,
-      fontFamily: 'JetBrains Mono, Menlo, Consolas, monospace',
-      fontSize: 13,
-      theme: terminalTheme,
-      scrollback: 8000
-    });
-    const fitAddon = new FitAddon();
-    term.loadAddon(fitAddon);
-    terminalRef.current = term;
-    fitAddonRef.current = fitAddon;
-    term.open(terminalContainerRef.current);
-    term.focus();
-    if (initialLog) {
-      term.write(initialLog);
-    }
-    term.onData((data: string) => {
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-        socketRef.current.send(JSON.stringify({ type: 'input', data }));
-      }
-    });
-    term.onResize(({ cols, rows }: { cols: number; rows: number }) => {
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-        socketRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
-      }
-    });
     requestAnimationFrame(() => {
-      sendResize();
-      term.focus();
+      const pending = pendingSetupRef.current;
+      if (!pending) {
+        return;
+      }
+      if (terminalContainerRef.current && initializeTerminal(pending.log)) {
+        pendingSetupRef.current = null;
+        return;
+      }
+      if (pending.attempts <= 0) {
+        pendingSetupRef.current = null;
+        return;
+      }
+      pending.attempts -= 1;
+      scheduleDeferredSetup();
     });
-  }, [disposeTerminal, sendResize, terminalTheme]);
+  }, [initializeTerminal]);
+
+  const setupTerminal = useCallback(
+    (initialLog: string) => {
+      if (terminalContainerRef.current) {
+        initializeTerminal(initialLog);
+        return;
+      }
+      pendingSetupRef.current = { log: initialLog, attempts: 10 };
+      scheduleDeferredSetup();
+    },
+    [initializeTerminal, scheduleDeferredSetup],
+  );
 
   useEffect(() => {
     const term = terminalRef.current;
@@ -245,8 +285,8 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
     });
   }, [sendResize, onSessionRemoved]);
 
-  const openTerminal = useCallback(async (worktree: Worktree | null, options: { command?: string; prompt?: string } = {}) => {
-    const { command, prompt } = options;
+  const openTerminal = useCallback(async (worktree: Worktree | null, options: { command?: string | null; prompt?: string | null; sessionId?: string | null; newSession?: boolean; sessionTool?: 'terminal' | 'agent' } = {}) => {
+    const { command, prompt, sessionId, newSession, sessionTool } = options;
     disposeSocket();
     if (!worktree) {
       disposeTerminal();
@@ -258,13 +298,13 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
     closedByProcessRef.current = false;
     initSuppressedRef.current = true;
     try {
-      const result = await terminalService.openTerminal(
-        worktree.org,
-        worktree.repo,
-        worktree.branch,
-        command || null,
-        prompt || null
-      );
+      const result = await terminalService.openTerminal(worktree.org, worktree.repo, worktree.branch, {
+        command,
+        prompt,
+        sessionId,
+        newSession,
+        sessionTool,
+      });
       
       const session = result.sessionId;
       const created = result.created;

@@ -2,17 +2,33 @@ import { validateRequired, requireNonEmpty } from '../request-validator.js';
 import { ValidationError } from '../../infrastructure/errors/index.js';
 
 export interface TerminalOpenInput {
+  /** GitHub organisation that owns the repository */
   org: string;
+  /** Repository slug */
   repo: string;
+  /** Worktree branch to operate on */
   branch: string;
+  /** Command to seed into the terminal (may be empty) */
   command: string;
+  /** Indicates whether a prompt field was supplied */
   hasPrompt: boolean;
+  /** Optional AI prompt used for agent sessions */
   prompt?: string;
+  /** Existing session identifier to reattach to */
+  sessionId?: string;
+  /** Forces creation of a brand-new session when true */
+  newSession?: boolean;
+  /** Session tool being requested ('terminal' for interactive, 'agent' for automation) */
+  sessionTool?: 'terminal' | 'agent';
 }
 
 export interface TerminalSendInput {
   sessionId: string;
   input: string;
+}
+
+export interface TerminalCloseInput {
+  sessionId: string;
 }
 
 /**
@@ -33,6 +49,17 @@ export function validateTerminalOpen(payload: unknown): TerminalOpenInput {
   const command = typeof data['command'] === 'string' ? data['command'].trim() : '';
   const hasPrompt = Object.prototype.hasOwnProperty.call(data, 'prompt');
   const prompt = hasPrompt ? data['prompt'] : undefined;
+  const sessionIdValue = typeof data['sessionId'] === 'string' ? data['sessionId'].trim() : '';
+  const sessionId = sessionIdValue ? sessionIdValue : undefined;
+  const newSession = typeof data['newSession'] === 'boolean' ? data['newSession'] : false;
+  const rawSessionTool = typeof data['sessionTool'] === 'string' ? data['sessionTool'].trim().toLowerCase() : '';
+  let sessionTool: 'terminal' | 'agent' | undefined;
+  if (rawSessionTool) {
+    if (rawSessionTool !== 'terminal' && rawSessionTool !== 'agent') {
+      throw new ValidationError('sessionTool must be "terminal" or "agent" when provided');
+    }
+    sessionTool = rawSessionTool;
+  }
 
   if (hasPrompt && typeof prompt !== 'string') {
     throw new ValidationError('prompt must be a string');
@@ -42,7 +69,29 @@ export function validateTerminalOpen(payload: unknown): TerminalOpenInput {
     throw new ValidationError('command must be provided when prompt is included');
   }
 
-  return { org, repo, branch, command, hasPrompt, prompt: prompt as string | undefined };
+  if (sessionId && newSession) {
+    throw new ValidationError('sessionId cannot be combined with newSession');
+  }
+
+  if (sessionId && hasPrompt) {
+    throw new ValidationError('sessionId cannot be combined with prompt');
+  }
+
+  if (newSession && hasPrompt) {
+    throw new ValidationError('newSession cannot be combined with prompt');
+  }
+
+  return {
+    org,
+    repo,
+    branch,
+    command,
+    hasPrompt,
+    prompt: prompt as string | undefined,
+    sessionId,
+    newSession,
+    sessionTool,
+  };
 }
 
 /**
@@ -58,4 +107,16 @@ export function validateTerminalSend(payload: unknown): TerminalSendInput {
   const input = typeof data['input'] === 'string' ? data['input'] : '';
 
   return { sessionId, input };
+}
+
+/**
+ * Validates a terminal close request
+ */
+export function validateTerminalClose(payload: unknown): TerminalCloseInput {
+  if (!payload || typeof payload !== 'object') {
+    throw new ValidationError('Invalid request payload');
+  }
+  const data = payload as Record<string, unknown>;
+  const sessionId = requireNonEmpty(data['sessionId'], 'sessionId');
+  return { sessionId };
 }

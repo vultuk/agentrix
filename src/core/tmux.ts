@@ -81,7 +81,7 @@ export function parseTmuxSessionName(sessionName: string): TmuxSessionInfo | nul
   }
   const remainder = sessionName.slice(TMUX_SESSION_PREFIX.length);
   const parts = remainder.split('--');
-  if (parts.length !== 3) {
+  if (parts.length < 3) {
     return null;
   }
   const [org, repo, branch] = parts;

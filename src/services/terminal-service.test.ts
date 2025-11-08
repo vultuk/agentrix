@@ -21,7 +21,7 @@ describe('TerminalService', () => {
       assert.equal(org, 'acme');
       assert.equal(repo, 'demo');
       assert.equal(branch, 'feature');
-      assert.deepEqual(options, { mode: 'auto' });
+      assert.deepEqual(options, { mode: 'auto', forceNew: false, tool: 'terminal', kind: 'interactive' });
       return { session, created: true };
     });
 
@@ -123,6 +123,95 @@ describe('TerminalService', () => {
     assert.equal(getSessionByIdMock.mock.callCount(), 1);
   });
 
+  it('attaches to an explicit session without creating new ones', async () => {
+    const existingSession = { id: 'session-fixed', org: 'acme', repo: 'demo', branch: 'feature', log: 'state', closed: false };
+    const getSessionByIdMock = mock.fn((id: string) => {
+      assert.equal(id, 'session-fixed');
+      return existingSession;
+    });
+    const getOrCreateMock = mock.fn();
+
+    __setTerminalServiceTestOverrides({
+      getSessionById: getSessionByIdMock,
+      getOrCreateTerminalSession: getOrCreateMock,
+    });
+
+    const service = new TerminalService('/work');
+    const result = await service.openTerminal({
+      org: 'acme',
+      repo: 'demo',
+      branch: 'feature',
+      sessionId: 'session-fixed',
+      hasPrompt: false,
+      command: '',
+    });
+
+    assert.deepEqual(result, {
+      sessionId: 'session-fixed',
+      log: 'state',
+      closed: false,
+      created: false,
+    });
+    assert.equal(getSessionByIdMock.mock.callCount(), 1);
+    assert.equal(getOrCreateMock.mock.callCount(), 0);
+  });
+
+  it('forces creation of a brand new session when requested', async () => {
+    const session = { id: 'session-new', log: '', closed: false };
+    const getOrCreateMock = mock.fn(async (_workdir: string, _org: string, _repo: string, _branch: string, options: unknown) => {
+      assert.deepEqual(options, { mode: 'auto', forceNew: true, tool: 'terminal', kind: 'interactive' });
+      return { session, created: true };
+    });
+
+    __setTerminalServiceTestOverrides({
+      getOrCreateTerminalSession: getOrCreateMock,
+    });
+
+    const service = new TerminalService('/work');
+    const result = await service.openTerminal({
+      org: 'acme',
+      repo: 'demo',
+      branch: 'feature',
+      newSession: true,
+      hasPrompt: false,
+      command: '',
+    });
+
+    assert.equal(getOrCreateMock.mock.callCount(), 1);
+    assert.deepEqual(result, {
+      sessionId: 'session-new',
+      log: '',
+      closed: false,
+      created: true,
+    });
+  });
+
+  it('respects explicit session tool when creating new sessions', async () => {
+    const session = { id: 'agent-session', log: '', closed: false };
+    const getOrCreateMock = mock.fn(async (_workdir: string, _org: string, _repo: string, _branch: string, options: unknown) => {
+      assert.deepEqual(options, { mode: 'auto', forceNew: true, tool: 'agent', kind: 'automation' });
+      return { session, created: true };
+    });
+
+    __setTerminalServiceTestOverrides({
+      getOrCreateTerminalSession: getOrCreateMock,
+    });
+
+    const service = new TerminalService('/work');
+    const result = await service.openTerminal({
+      org: 'acme',
+      repo: 'demo',
+      branch: 'feature',
+      newSession: true,
+      sessionTool: 'agent',
+      command: 'codex',
+      hasPrompt: false,
+    });
+
+    assert.equal(getOrCreateMock.mock.callCount(), 1);
+    assert.equal(result.sessionId, 'agent-session');
+  });
+
   it('throws when launched session cannot be resolved', async () => {
     const launchMock = mock.fn(async () => ({ sessionId: 'missing', createdSession: false }));
     const getSessionMock = mock.fn(() => undefined);
@@ -186,5 +275,47 @@ describe('TerminalService', () => {
       }
     );
   });
-});
 
+  it('closes sessions via dispose helper', async () => {
+    const disposeMock = mock.fn(async (sessionId: string) => {
+      assert.equal(sessionId, 'session-close');
+    });
+
+    __setTerminalServiceTestOverrides({
+      disposeSessionById: disposeMock,
+    });
+
+    const service = new TerminalService('/work');
+    const result = await service.closeSession({ sessionId: 'session-close' });
+
+    assert.equal(disposeMock.mock.callCount(), 1);
+    assert.deepEqual(result, { ok: true });
+  });
+
+  it('requests agent sessions even when reusing getOrCreate path', async () => {
+    const session = { id: 'agent-session', log: '', closed: false };
+    const getOrCreateMock = mock.fn(async (_workdir: string, _org: string, _repo: string, _branch: string, options: unknown) => {
+      assert.deepEqual(options, { mode: 'auto', forceNew: false, tool: 'agent', kind: 'automation' });
+      return { session, created: true };
+    });
+
+    __setTerminalServiceTestOverrides({
+      getOrCreateTerminalSession: getOrCreateMock,
+      queueSessionInput: mock.fn(),
+    });
+
+    const service = new TerminalService('/work');
+    const result = await service.openTerminal({
+      org: 'acme',
+      repo: 'demo',
+      branch: 'feature',
+      command: 'codex run',
+      hasPrompt: false,
+      sessionId: undefined,
+      sessionTool: 'agent',
+    } as any);
+
+    assert.equal(result.sessionId, 'agent-session');
+    assert.equal(getOrCreateMock.mock.callCount(), 1);
+  });
+});

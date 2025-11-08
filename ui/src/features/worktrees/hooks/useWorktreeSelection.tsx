@@ -103,8 +103,15 @@ export function useWorktreeSelection({
           setIdleAcknowledgementsSnapshot(new Map(nextAcknowledgements));
           acknowledgementSet = true;
         }
+        const preferredSessionId =
+          sessionMapRef.current.get(key) ||
+          (Array.isArray(metadata?.sessions) ? metadata.sessions[0]?.id : null);
         try {
-          await openTerminalForWorktree(worktree);
+          if (preferredSessionId) {
+            await openTerminalForWorktree(worktree, { sessionId: preferredSessionId });
+          } else {
+            await openTerminalForWorktree(worktree);
+          }
           setPendingWorktreeAction(null);
         } catch (error: any) {
           if (acknowledgementSet) {

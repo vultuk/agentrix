@@ -2,7 +2,7 @@
  * Hook return types and parameters
  */
 
-import type { IssueDetails, RepositoryData, Task, TerminalSession } from './domain.js';
+import type { IssueDetails, RepositoryData, Task, WorktreeSession } from './domain.js';
 
 // useAuth hook
 export interface UseAuthReturn {
@@ -58,7 +58,7 @@ export interface UseTerminalReturn {
 // useEventStream hook
 export interface UseEventStreamParams {
   onRepos?: (data: RepositoryData) => void;
-  onSessions?: (sessions: TerminalSession[]) => void;
+  onSessions?: (payload: { sessions: WorktreeSession[] }) => void;
   onTasks?: (tasks: Task[]) => void;
 }
 
@@ -105,4 +105,3 @@ export interface UseLocalStorageReturn<T> {
 }
 
 // useDebounce hook - no return type needed, just returns the debounced value
-

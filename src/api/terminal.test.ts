@@ -36,6 +36,7 @@ describe('createTerminalHandlers', () => {
     const terminalService = {
       openTerminal: mock.fn(async () => ({ sessionId: 'abc', log: 'ready', closed: false, created: true })),
       sendInput: mock.fn(),
+      closeSession: mock.fn(),
     } as unknown as TerminalService;
 
     const handlers = createTerminalHandlers('/workdir', { terminalService });
@@ -79,6 +80,7 @@ describe('createTerminalHandlers', () => {
     const terminalService = {
       openTerminal: mock.fn(),
       sendInput: mock.fn(async () => ({ ok: true })),
+      closeSession: mock.fn(),
     } as unknown as TerminalService;
 
     const handlers = createTerminalHandlers('/workdir', { terminalService });
@@ -100,6 +102,36 @@ describe('createTerminalHandlers', () => {
     assert.equal(callArgs.input, 'ls');
 
     assert.equal(sendJson.mock.calls.length, 1);
+    const call = sendJson.mock.calls[0];
+    assert.ok(call);
+    assert.equal(call.arguments[1], 200);
+    assert.deepEqual(call.arguments[2], { ok: true });
+  });
+
+  it('close handler terminates sessions', async () => {
+    const sendJson = mock.fn();
+    __setBaseHandlerTestOverrides({ sendJson });
+
+    const terminalService = {
+      openTerminal: mock.fn(),
+      sendInput: mock.fn(),
+      closeSession: mock.fn(async () => ({ ok: true })),
+    } as unknown as TerminalService;
+
+    const handlers = createTerminalHandlers('/workdir', { terminalService });
+
+    const context = createContext({
+      readJsonBody: async () => ({ sessionId: 'session-42' }),
+    });
+
+    await handlers.close(context);
+    __setBaseHandlerTestOverrides();
+
+    assert.equal(terminalService.closeSession.mock.calls.length, 1);
+    const payload = terminalService.closeSession.mock.calls[0]?.arguments[0];
+    assert.ok(payload);
+    assert.equal(payload.sessionId, 'session-42');
+
     const call = sendJson.mock.calls[0];
     assert.ok(call);
     assert.equal(call.arguments[1], 200);
@@ -168,4 +200,3 @@ describe('createTerminalHandlers', () => {
     assert.match(errorCall.arguments[0] as string, /sessionId is required/i);
   });
 });
-

@@ -6,6 +6,8 @@ import type { WebSocket } from 'ws';
  */
 export type SessionKind = 'interactive' | 'automation';
 
+export type SessionTool = 'terminal' | 'agent';
+
 /**
  * Terminal session mode
  */
@@ -39,7 +41,10 @@ export interface TerminalSession {
   ready: boolean;
   readyTimer: NodeJS.Timeout | null;
   kind: SessionKind;
+  tool: SessionTool;
+  label: string;
   lastActivityAt: number | Date;
+  createdAt: number | Date;
   idle: boolean;
   exitCode?: number;
   exitSignal?: string;
@@ -64,3 +69,23 @@ export interface SessionCreationResult {
   created: boolean;
 }
 
+export interface TerminalSessionSnapshot {
+  id: string;
+  label: string;
+  kind: SessionKind;
+  tool: SessionTool;
+  idle: boolean;
+  usingTmux: boolean;
+  lastActivityAt: string | null;
+  createdAt: string | null;
+  tmuxSessionName?: string | null;
+}
+
+export interface WorktreeSessionSummary {
+  org: string;
+  repo: string;
+  branch: string;
+  idle: boolean;
+  lastActivityAt: string | null;
+  sessions: TerminalSessionSnapshot[];
+}

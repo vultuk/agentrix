@@ -1,4 +1,4 @@
-import React, { Fragment, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import 'xterm/css/xterm.css';
 import { LogOut } from 'lucide-react';
@@ -29,6 +29,7 @@ import MainPane from '../../terminal/components/MainPane.js';
 import Sidebar from './Sidebar.js';
 import ModalContainer from '../../terminal/components/ModalContainer.js';
 import { PortsMenu } from '../../ports/components/PortsMenu.js';
+import { closeTerminal } from '../../../services/api/terminalService.js';
 import type { Worktree } from '../../../types/domain.js';
 
 const { createElement: h } = React;
@@ -57,6 +58,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   } = browserState;
   
   const pendingTaskProcessorRef = useRef<((task: any, pending: any) => void) | null>(null);
+  const [pendingSessionContext, setPendingSessionContext] = useState<'default' | 'new-tab'>('default');
   
   // Mobile menu ref
   const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -75,6 +77,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     onAuthExpired: onAuthExpired,
     onSessionRemoved: sessions.removeTrackedSession
   });
+  const [pendingCloseSessionId, setPendingCloseSessionId] = useState<string | null>(null);
   
   // Use dashboard hook first (needed by repo data hook)
   const dashboard = useDashboard({ onAuthExpired });
@@ -153,7 +156,15 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   
   const knownSessionsRef = sessions.knownSessionsRef;
   const sessionMetadataSnapshot = sessions.sessionMetadataSnapshot;
+  const sessionMetadataRef = sessions.sessionMetadataRef;
   const idleAcknowledgementsSnapshot = sessions.idleAcknowledgementsSnapshot;
+  const activeWorktreeKey = activeWorktree
+    ? getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch)
+    : null;
+  const activeTerminalSessions =
+    activeWorktreeKey && sessionMetadataSnapshot.has(activeWorktreeKey)
+      ? sessionMetadataSnapshot.get(activeWorktreeKey)?.sessions ?? []
+      : [];
   
   const hasRunningTasks = useMemo(
     () => tasks.some((task) => task && (task.status === 'pending' || task.status === 'running')),
@@ -326,7 +337,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     toggleDiffViewInternal(setGitDiffModal);
   }, [toggleDiffViewInternal, setGitDiffModal]);
 
-  const openTerminalForWorktreeRef = useRef<((worktree: Worktree, options?: any) => Promise<any>) | null>(null);
+  const openTerminalForWorktreeRef = useRef<((worktree: Worktree | null, options?: { command?: string | null; prompt?: string | null; sessionId?: string | null; newSession?: boolean }) => Promise<any>) | null>(null);
   
   const { processPendingTask: processPendingWorktree } = usePendingTaskProcessor({
     getWorktreeKey,
@@ -402,7 +413,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
 
   // Sync openTerminalForWorktree function to ref for use in other callbacks
   useEffect(() => {
-    openTerminalForWorktreeRef.current = ((worktree: Worktree | null, options?: { command?: string; prompt?: string }) => {
+    openTerminalForWorktreeRef.current = ((worktree: Worktree | null, options?: { command?: string | null; prompt?: string | null; sessionId?: string | null; newSession?: boolean }) => {
       return openTerminalForWorktree(worktree, options || {}) as any;
     }) as any;
   }, [openTerminalForWorktree]);
@@ -459,6 +470,86 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     },
   });
 
+  const handleSelectSessionTab = useCallback(
+    async (sessionId: string | null) => {
+      if (!activeWorktree || !sessionId || terminal.sessionId === sessionId) {
+        return;
+      }
+      try {
+        await openTerminalForWorktree(activeWorktree, { sessionId });
+      } catch (error: any) {
+        if (error && error.message === 'AUTH_REQUIRED') {
+          return;
+        }
+        console.error('Failed to attach to session', error);
+        window.alert('Failed to attach to the selected session.');
+      }
+    },
+    [activeWorktree, openTerminalForWorktree, terminal.sessionId],
+  );
+
+  const handleCreateSessionTab = useCallback(() => {
+    if (!activeWorktree) {
+      return;
+    }
+    menus.closeActionMenu();
+    setPendingActionLoading(null);
+    setPendingSessionContext('new-tab');
+    setPendingWorktreeAction(activeWorktree);
+  }, [activeWorktree, menus, setPendingActionLoading, setPendingWorktreeAction]);
+
+  const handleCloseSessionTab = useCallback(
+    async (sessionId: string | null) => {
+      if (!activeWorktree || !sessionId || pendingCloseSessionId === sessionId) {
+        return;
+      }
+      const worktreeKey = getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch);
+      const metadata = sessionMetadataRef.current.get(worktreeKey);
+      const tabs = Array.isArray(metadata?.sessions) ? metadata.sessions : [];
+      const sessionIndex = tabs.findIndex((entry: any) => entry && entry.id === sessionId);
+      const isActiveSession = terminal.sessionId === sessionId;
+      let fallbackId: string | null = null;
+      if (isActiveSession && tabs.length > 1) {
+        if (sessionIndex >= 0) {
+          const candidateIndex = sessionIndex > 0 ? sessionIndex - 1 : sessionIndex + 1;
+          fallbackId = tabs[candidateIndex]?.id ?? null;
+        } else {
+          fallbackId = tabs.find((entry: any) => entry && entry.id !== sessionId)?.id ?? null;
+        }
+      }
+      setPendingCloseSessionId(sessionId);
+      try {
+        await closeTerminal(sessionId);
+        if (isActiveSession) {
+          if (fallbackId) {
+            await openTerminalForWorktree(activeWorktree, { sessionId: fallbackId });
+          } else {
+            sessionMapRef.current.delete(worktreeKey);
+            sessionKeyByIdRef.current.delete(sessionId);
+            await openTerminalForWorktree(null, {});
+          }
+        }
+      } catch (error: any) {
+        if (!error || error.message !== 'AUTH_REQUIRED') {
+          console.error('Failed to close terminal session', error);
+          window.alert('Failed to close the session. Check server logs for details.');
+        }
+      } finally {
+        setPendingCloseSessionId((current) => (current === sessionId ? null : current));
+      }
+    },
+    [
+      activeWorktree,
+      pendingCloseSessionId,
+      getWorktreeKey,
+      openTerminalForWorktree,
+      sessionMetadataRef,
+      sessionKeyByIdRef,
+      sessionMapRef,
+      terminal.sessionId,
+    ],
+  );
+
   const handleAddRepo = async () => {
     if (repoOps.isAddingRepo) {
       return;
@@ -478,16 +569,22 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
         const firstNonMain = branches.find(branch => branch !== 'main');
         if (firstNonMain) {
           const key = getWorktreeKey(info.org, info.repo, firstNonMain);
+          let resetPendingContext = false;
           if (sessionMapRef.current.has(key) || knownSessionsRef.current.has(key)) {
             setActiveWorktree({ org: info.org, repo: info.repo, branch: firstNonMain });
             try {
               await openTerminalForWorktree({ org: info.org, repo: info.repo, branch: firstNonMain });
               setPendingWorktreeAction(null);
+              resetPendingContext = true;
             } catch {
               window.alert('Failed to reconnect to the existing session.');
             }
           } else {
             setPendingWorktreeAction({ org: info.org, repo: info.repo, branch: firstNonMain });
+            resetPendingContext = true;
+          }
+          if (resetPendingContext) {
+            setPendingSessionContext('default');
           }
           menus.setIsMobileMenuOpen(false);
         } else {
@@ -568,6 +665,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
         pendingWorktreeAction.repo === repo
       ) {
         setPendingWorktreeAction(null);
+        setPendingSessionContext('default');
       }
       if (
         activeWorktree &&
@@ -700,23 +798,50 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     modals.setConfirmDelete(null);
   };
 
+  const setDashboardError = dashboard.setDashboardError;
+  const setIsDashboardLoading = dashboard.setIsDashboardLoading;
+
   const handleWorktreeAction = useCallback(async (action: string) => {
     if (!pendingWorktreeAction || pendingActionLoading) {
       return;
     }
-    setPendingActionLoading(action);
-    clearDashboardPolling();
-    setActiveRepoDashboard(null);
-    dashboard.setDashboardError(null);
-    dashboard.setIsDashboardLoading(false);
     const worktree = pendingWorktreeAction;
     const isDangerous = action.endsWith('-dangerous');
     const resolvedAction = isDangerous ? action.replace(/-dangerous$/, '') : action;
     const command = getCommandForLaunch(resolvedAction, isDangerous);
+    const sessionTool: 'terminal' | 'agent' =
+      resolvedAction === 'terminal' || resolvedAction === 'vscode' ? 'terminal' : 'agent';
+
+    if (pendingSessionContext === 'new-tab' && sessionTool === 'agent' && !command) {
+      window.alert('No command configured for the selected launch option.');
+      return;
+    }
+
+    setPendingActionLoading(action);
+    clearDashboardPolling();
+    setActiveRepoDashboard(null);
+    setDashboardError(null);
+    setIsDashboardLoading(false);
     setActiveWorktree(worktree);
     try {
-      await openTerminalForWorktree(worktree, command ? { command } : {});
+      if (pendingSessionContext === 'new-tab') {
+        await openTerminalForWorktree(worktree, {
+          newSession: true,
+          sessionTool,
+          ...(command ? { command } : {}),
+        });
+      } else {
+        const options: { command?: string; sessionTool?: 'terminal' | 'agent' } = {};
+        if (command) {
+          options.command = command;
+        }
+        if (sessionTool === 'agent') {
+          options.sessionTool = 'agent';
+        }
+        await openTerminalForWorktree(worktree, options);
+      }
       setPendingWorktreeAction(null);
+      setPendingSessionContext('default');
     } catch (error: any) {
       if (error && error.message === 'AUTH_REQUIRED') {
         return;
@@ -728,11 +853,18 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     }
   }, [
     clearDashboardPolling,
-    openTerminalForWorktree,
-    pendingWorktreeAction,
-    pendingActionLoading,
-    menus,
     getCommandForLaunch,
+    openTerminalForWorktree,
+    pendingActionLoading,
+    pendingSessionContext,
+    pendingWorktreeAction,
+    setActiveRepoDashboard,
+    setActiveWorktree,
+    setDashboardError,
+    setIsDashboardLoading,
+    setPendingActionLoading,
+    setPendingSessionContext,
+    setPendingWorktreeAction,
   ]);
 
   const handleDashboardRefresh = useCallback(() => {
@@ -848,6 +980,13 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     isDashboardLoading,
     dashboardError,
     terminalContainerRef,
+  terminalSessions: activeTerminalSessions,
+  activeSessionId: terminal.sessionId,
+    onSessionSelect: handleSelectSessionTab,
+    onSessionClose: handleCloseSessionTab,
+    onSessionCreate: handleCreateSessionTab,
+    isSessionCreationPending: !activeWorktree,
+    pendingCloseSessionId,
     isGitSidebarOpen,
     githubControls,
     taskMenuButton,
@@ -970,6 +1109,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
       onClosePendingAction: () => {
         if (!pendingActionLoading) {
           setPendingWorktreeAction(null);
+          setPendingSessionContext('default');
         }
       },
       onWorktreeAction: handleWorktreeAction,

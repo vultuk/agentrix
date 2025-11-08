@@ -6,7 +6,9 @@ import {
   parseTmuxSessionName,
   runTmux,
 } from '../core/tmux.js';
-import { listActiveSessions, makeSessionKey } from '../core/terminal-sessions.js';
+import { listActiveSessions, makeSessionKey, serialiseSessions } from '../core/terminal-sessions.js';
+import { loadPersistedSessionsSnapshot } from '../core/session-persistence.js';
+import type { TerminalSessionSnapshot } from '../types/terminal.js';
 
 export interface SessionInfo {
   org: string;
@@ -14,6 +16,7 @@ export interface SessionInfo {
   branch: string;
   idle: boolean;
   lastActivityAt: string | null;
+  sessions: TerminalSessionSnapshot[];
 }
 
 type SessionServiceDependencyOverrides = Partial<{
@@ -25,6 +28,8 @@ type SessionServiceDependencyOverrides = Partial<{
   runTmux: typeof runTmux;
   listActiveSessions: typeof listActiveSessions;
   makeSessionKey: typeof makeSessionKey;
+  serialiseSessions: typeof serialiseSessions;
+  loadPersistedSessionsSnapshot: typeof loadPersistedSessionsSnapshot;
 }>;
 
 const sessionServiceDependencies = {
@@ -36,6 +41,8 @@ const sessionServiceDependencies = {
   runTmux,
   listActiveSessions,
   makeSessionKey,
+  serialiseSessions,
+  loadPersistedSessionsSnapshot,
 } as const;
 
 let sessionServiceTestOverrides: SessionServiceDependencyOverrides | null = null;
@@ -73,48 +80,50 @@ export class SessionService {
    * @returns List of session information
    */
   async listSessions(): Promise<SessionInfo[]> {
-    const sessionLookup = new Map<string, {
-      org: string;
-      repo: string;
-      branch: string;
-      idle: boolean;
-      lastActivityAtMs: number | null;
-    }>();
+    const sessionLookup = new Map<
+      string,
+      {
+        summary: SessionInfo;
+        lastActivityAtMs: number | null;
+      }
+    >();
 
     const listSessionsFn = resolveSessionServiceDependency('listActiveSessions');
+    const serialise = resolveSessionServiceDependency('serialiseSessions');
     const makeKey = resolveSessionServiceDependency('makeSessionKey');
+    const loadPersisted = resolveSessionServiceDependency('loadPersistedSessionsSnapshot');
 
-    // Gather in-memory sessions
-    listSessionsFn().forEach((session) => {
-      if (!session || !session.org || !session.repo || !session.branch) {
+    let summaries = serialise(listSessionsFn());
+    if (!Array.isArray(summaries) || summaries.length === 0) {
+      try {
+        const persisted = await loadPersisted();
+        if (Array.isArray(persisted) && persisted.length > 0) {
+          summaries = persisted;
+        }
+      } catch (error) {
+        console.warn('[agentrix] Failed to load persisted sessions snapshot:', error);
+      }
+    }
+
+    summaries.forEach((entry) => {
+      if (!entry || !entry.org || !entry.repo || !entry.branch) {
         return;
       }
-      const key = makeKey(session.org, session.repo, session.branch);
+      const key = makeKey(entry.org, entry.repo, entry.branch);
       const lastActivityAtMs =
-        typeof session.lastActivityAt === 'number'
-          ? session.lastActivityAt
-          : session.lastActivityAt instanceof Date
-            ? session.lastActivityAt.getTime()
-            : null;
-      const idle = Boolean(session.idle);
-      const existing = sessionLookup.get(key);
-      if (!existing) {
-        sessionLookup.set(key, {
-          org: session.org,
-          repo: session.repo,
-          branch: session.branch,
-          idle,
-          lastActivityAtMs,
-        });
-        return;
-      }
-      existing.idle = existing.idle && idle;
-      if (
-        isFiniteNumber(lastActivityAtMs) &&
-        (!isFiniteNumber(existing.lastActivityAtMs) || lastActivityAtMs > existing.lastActivityAtMs)
-      ) {
-        existing.lastActivityAtMs = lastActivityAtMs;
-      }
+        typeof entry.lastActivityAt === 'string' ? Date.parse(entry.lastActivityAt) : null;
+      const sessions = Array.isArray(entry.sessions) ? entry.sessions : [];
+      sessionLookup.set(key, {
+        summary: {
+          org: entry.org,
+          repo: entry.repo,
+          branch: entry.branch,
+          idle: Boolean(entry.idle),
+          lastActivityAt: entry.lastActivityAt ?? null,
+          sessions,
+        },
+        lastActivityAtMs: Number.isNaN(lastActivityAtMs) ? null : lastActivityAtMs,
+      });
     });
 
     // Discover orphaned tmux sessions
@@ -147,10 +156,14 @@ export class SessionService {
             return;
           }
           sessionLookup.set(key, {
-            org: actual.org,
-            repo: actual.repo,
-            branch: actual.branch,
-            idle: false,
+            summary: {
+              org: actual.org,
+              repo: actual.repo,
+              branch: actual.branch,
+              idle: false,
+              lastActivityAt: null,
+              sessions: [],
+            },
             lastActivityAtMs: null,
           });
         });
@@ -158,14 +171,11 @@ export class SessionService {
     }
 
     // Convert to output format
-    return Array.from(sessionLookup.values()).map((entry) => ({
-      org: entry.org,
-      repo: entry.repo,
-      branch: entry.branch,
-      idle: Boolean(entry.idle),
-      lastActivityAt: isFiniteNumber(entry.lastActivityAtMs)
-        ? new Date(entry.lastActivityAtMs).toISOString()
-        : null,
+    return Array.from(sessionLookup.values()).map(({ summary, lastActivityAtMs }) => ({
+      ...summary,
+      lastActivityAt: isFiniteNumber(lastActivityAtMs)
+        ? new Date(lastActivityAtMs).toISOString()
+        : summary.lastActivityAt,
     }));
   }
 
@@ -210,4 +220,3 @@ export class SessionService {
 export function createSessionService(workdir: string): SessionService {
   return new SessionService(workdir);
 }
-

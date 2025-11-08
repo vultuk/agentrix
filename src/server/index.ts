@@ -5,7 +5,7 @@ import http from 'node:http';
 import { DEFAULT_HOST, DEFAULT_PORT } from '../config/constants.js';
 import { createAuthManager } from '../core/auth.js';
 import { resolveWorkdir } from '../core/workdir.js';
-import { disposeAllSessions } from '../core/terminal-sessions.js';
+import { disposeAllSessions, rehydrateTmuxSessionsFromSnapshot } from '../core/terminal-sessions.js';
 import { generateRandomPassword } from '../utils/random.js';
 import { sendJson } from '../utils/http.js';
 import { createRouter } from './router.js';
@@ -54,6 +54,7 @@ export async function startServer({
 
   const uiProvider = await createUiProvider(uiPath);
   const resolvedWorkdir = workdir ? await resolveWorkdir(workdir) : process.cwd();
+  await rehydrateTmuxSessionsFromSnapshot(resolvedWorkdir, { mode: terminalSessionMode });
   const taskStore = createTaskStore({ root: resolvedWorkdir, logger: console });
   await configureTaskPersistence({
     saveSnapshot: (snapshot: unknown) => taskStore.saveSnapshot(snapshot),
