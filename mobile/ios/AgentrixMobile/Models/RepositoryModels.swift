@@ -39,9 +39,6 @@ extension RepositoryListing {
     var representativeWorktree: WorktreeSummary? {
         worktrees.first(where: { $0.branch != "main" }) ?? worktrees.first
     }
-    var representativeWorktree: WorktreeSummary? {
-        worktrees.first(where: { $0.branch != "main" }) ?? worktrees.first
-    }
 }
 
 struct WorktreeSummary: Identifiable, Hashable {
