@@ -10,7 +10,7 @@ final class AppCoordinator: ObservableObject {
     }
 
     @Published private(set) var services: ServiceRegistry
-    @Published private(set) var route: Route = .checking
+    @Published private(set) var route: Route = .unauthenticated
     @Published var lastError: AgentrixError?
 
     let settings: AppSettingsStore
@@ -18,11 +18,13 @@ final class AppCoordinator: ObservableObject {
     init(settings: AppSettingsStore = AppSettingsStore()) {
         self.settings = settings
         self.services = ServiceRegistry.make(baseURL: settings.baseURL)
-        Task { await refreshAuthStatus() }
+        Task { await refreshAuthStatus(showBlocking: false) }
     }
 
-    func refreshAuthStatus() async {
-        route = .checking
+    func refreshAuthStatus(showBlocking: Bool = true) async {
+        if showBlocking {
+            route = .checking
+        }
         do {
             let authenticated = try await services.auth.status()
             route = authenticated ? .authenticated : .unauthenticated
