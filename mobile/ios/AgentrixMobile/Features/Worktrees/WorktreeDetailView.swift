@@ -66,9 +66,15 @@ struct WorktreeDetailView: View {
             viewModel.updateSessions(sessions)
             viewModel.updateTasks(tasks)
         }
-        .onChange(of: sessions, perform: handleSessionsChange)
-        .onChange(of: tasks, perform: handleTasksChange)
-        .onChange(of: repository, perform: handleRepositoryChange)
+        .onChange(of: sessionChangeTokens) { _ in
+            viewModel.updateSessions(sessions)
+        }
+        .onChange(of: taskChangeTokens) { _ in
+            viewModel.updateTasks(tasks)
+        }
+        .onChange(of: repositoryChangeToken) { _ in
+            viewModel.updateRepository(repository)
+        }
         .onDisappear {
             viewModel.terminalViewModel.disconnect()
         }
@@ -123,15 +129,15 @@ private extension WorktreeDetailView {
         { Task { await viewModel.refreshAll() } }
     }
 
-    func handleSessionsChange(_ newValue: [WorktreeSessionSummary]) {
-        viewModel.updateSessions(newValue)
+    var sessionChangeTokens: [String] {
+        sessions.map(\.id)
     }
 
-    func handleTasksChange(_ newValue: [TaskItem]) {
-        viewModel.updateTasks(newValue)
+    var taskChangeTokens: [String] {
+        tasks.map(\.id)
     }
 
-    func handleRepositoryChange(_ newValue: RepositoryListing) {
-        viewModel.updateRepository(newValue)
+    var repositoryChangeToken: String {
+        repository.id
     }
 }
