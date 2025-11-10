@@ -29,12 +29,10 @@ final class AuthService {
     }
 
     func logout() async {
-        struct EmptyPayload: Encodable {}
         do {
-            _ = try await api.request<AuthStatusResponse, EmptyPayload>(
+            let _: AuthStatusResponse = try await api.request(
                 "/api/auth/logout",
-                method: .post,
-                body: nil
+                method: .post
             )
         } catch {
             // Logging out is best effort
