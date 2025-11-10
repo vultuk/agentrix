@@ -1,7 +1,6 @@
 import Foundation
 
 /// Stores persisted configuration shared across the app lifecycle.
-@MainActor
 final class AppSettingsStore: ObservableObject {
     @Published var baseURLString: String {
         didSet { persist() }

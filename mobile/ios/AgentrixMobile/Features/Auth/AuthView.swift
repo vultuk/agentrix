@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct AuthView: View {
     @StateObject var viewModel: AuthViewModel
@@ -12,8 +13,8 @@ struct AuthView: View {
             Form {
                 Section("Server") {
                     TextField("Base URL", text: $viewModel.baseURLString)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
+                        .textInputAutocapitalization(TextInputAutocapitalization.never)
+                        .keyboardType(UIKeyboardType.URL)
                     Button("Apply") {
                         viewModel.updateBaseURL()
                     }

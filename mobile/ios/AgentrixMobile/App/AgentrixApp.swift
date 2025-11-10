@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @main
 struct AgentrixApp: App {
@@ -25,7 +26,7 @@ struct RootContainerView: View {
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(.systemBackground))
+            .background(Color(uiColor: .systemBackground))
         case .unauthenticated:
             AuthView(
                 viewModel: AuthViewModel(

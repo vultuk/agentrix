@@ -26,7 +26,7 @@ struct TerminalConsoleView: View {
 
             HStack {
                 TextField("Command", text: $viewModel.input)
-                    .textInputAutocapitalization(.never)
+                    .textInputAutocapitalization(TextInputAutocapitalization.never)
                     .font(.system(.body, design: .monospaced))
                     .submitLabel(.send)
                     .onSubmit { viewModel.sendCurrentInput() }
