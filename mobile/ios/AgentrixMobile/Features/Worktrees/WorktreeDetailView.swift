@@ -41,8 +41,8 @@ struct WorktreeDetailView: View {
                 PortsView(
                     ports: viewModel.ports,
                     tunnels: viewModel.tunnels,
-                    refreshAction: { Task { await viewModel.loadPorts() } },
-                    openTunnel: { port in Task { await viewModel.openTunnel(for: port) } }
+                    refreshAction: portRefreshAction,
+                    openTunnel: portTunnelAction
                 )
                 TerminalConsoleView(viewModel: viewModel.terminalViewModel)
             }
@@ -107,5 +107,15 @@ struct WorktreeDetailView: View {
                 }
             }
         }
+    }
+}
+
+private extension WorktreeDetailView {
+    var portRefreshAction: () -> Void {
+        { Task { await viewModel.loadPorts() } }
+    }
+
+    var portTunnelAction: (Int) -> Void {
+        { port in Task { await viewModel.openTunnel(for: port) } }
     }
 }
