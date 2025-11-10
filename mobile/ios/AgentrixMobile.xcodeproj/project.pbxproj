@@ -191,145 +191,145 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = PlansView.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		0E032D7B113E43278924DCC0 /* GitModels.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = GitModels.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		1318745A7CE040E3A18886DE /* WorktreesService.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = WorktreesService.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		19DCAE74256B4032B637318C /* TerminalView.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = TerminalView.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		1B11EECE49BF41209234CFB6 /* TerminalViewModel.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = TerminalViewModel.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		1B6587445EE44CCE86A398F6 /* RepositoriesService.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = RepositoriesService.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		1D6F876D8CD84A47A9BB2F38 /* GitService.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = GitService.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		25AFC5973F4B45189C92CB83 /* TerminalModels.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = TerminalModels.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		3246D038942B4BFC859263CB /* AuthViewModel.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = AuthViewModel.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		35ECBD6C0A95431AA56A7821 /* Assets.xcassets */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = folder.assetcatalog;
 			path = Assets.xcassets;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		3831CBF2241A410D8F96CEF7 /* EventStreamService.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = EventStreamService.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		3B3E7EFA37E64E7491CA8AE3 /* AgentrixAPIClient.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = AgentrixAPIClient.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		3DC689D0DB834509B6368559 /* PortsModels.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = PortsModels.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		42D8CB9A981F4CDDAF7F2E18 /* MarkdownRenderer.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = MarkdownRenderer.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		46E5FC43D6804B4592181472 /* EnvironmentConfig.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = EnvironmentConfig.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		492AB077D16E4DB688058114 /* RepositoryModels.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = RepositoryModels.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		4A7075AC7BE44315B1CA4B06 /* AuthService.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = AuthService.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		52B58DE349214E36A27FDBD4 /* PlansService.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = PlansService.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		530A3844A91F4181B886D66A /* TerminalService.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = TerminalService.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		54AF6EF891104087A698DD28 /* PlanModels.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = PlanModels.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		62AFCB583B01490991396582 /* ErrorTypes.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = ErrorTypes.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		6BBB6BD3E14F435199D86620 /* DashboardModels.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = DashboardModels.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		6DD2739DD2E6462598DF58F6 /* AuthView.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = AuthView.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		6E31FD12627142198CC95D6C /* TasksView.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = TasksView.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		6EE5C8B2B4E348CE94F95EA0 /* AgentrixMobile.app */ = {
 			isa = PBXFileReference;
@@ -342,37 +342,37 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = AppSettings.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		73403F03071342DE8B7F727E /* PortsService.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = PortsService.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		78382F38837E40D591D38A02 /* AppCoordinator.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = AppCoordinator.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		8482A2ADBBC24D16BE5D1930 /* RepositoriesView.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = RepositoriesView.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		86441AFE05414D43802EF5C4 /* RepositoriesViewModel.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = RepositoriesViewModel.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		96253B8255954FB8B8461D59 /* RepoDashboardView.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = RepoDashboardView.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		96D5F1752D814B789CC5D9F1 /* AgentrixMobileUITests.xctest */ = {
 			isa = PBXFileReference;
@@ -385,61 +385,61 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = TaskModels.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		AF791275C8D44ACF9BD967F2 /* AgentrixApp.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = AgentrixApp.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		B7489BEB5E754AF2837402A5 /* WorktreeDetailView.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = WorktreeDetailView.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		B7C06CAD3D5946E185FB744D /* TasksService.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = TasksService.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		B7F771DD0C3049E99A574176 /* GitStatusView.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = GitStatusView.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		C14681E5CA964955948713BB /* AgentrixMobileTests.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = AgentrixMobileTests.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		CAAA7B82B82D4BD28E030D17 /* Info.plist */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = text.plist.xml;
 			path = Info.plist;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		CF33F33D6313415CA45ED046 /* AgentrixMobileUITests.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = AgentrixMobileUITests.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		D5F6CDDB4FD941C4A7CEE8E7 /* PortsView.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = PortsView.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		D77D30A55CF64F94B67E09C4 /* WorktreeViewModel.swift */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = WorktreeViewModel.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 		E8D4DA132607483B82A75F33 /* AgentrixMobileTests.xctest */ = {
 			isa = PBXFileReference;
@@ -452,7 +452,7 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = DashboardService.swift;
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 /* End PBXFileReference section */
 
@@ -483,7 +483,7 @@
 			children = (
 			CF33F33D6313415CA45ED046 /* AgentrixMobileUITests.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = AgentrixMobileUITests;
 		};
 		0AF1945A928C459A8985F1DD /* Repositories */ = {
@@ -492,7 +492,7 @@
 			8482A2ADBBC24D16BE5D1930 /* RepositoriesView.swift */,
 			86441AFE05414D43802EF5C4 /* RepositoriesViewModel.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = Repositories;
 		};
 		19C8596844414C4BB5DCE6C8 /* Auth */ = {
@@ -501,7 +501,7 @@
 			6DD2739DD2E6462598DF58F6 /* AuthView.swift */,
 			3246D038942B4BFC859263CB /* AuthViewModel.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = Auth;
 		};
 		3DA30CE9A80F4A998CD23546 /* Services */ = {
@@ -519,7 +519,7 @@
 			530A3844A91F4181B886D66A /* TerminalService.swift */,
 			1318745A7CE040E3A18886DE /* WorktreesService.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = Services;
 		};
 		431C13CBF9CC4FFA9E2B19F6 /* Dashboard */ = {
@@ -527,7 +527,7 @@
 			children = (
 			96253B8255954FB8B8461D59 /* RepoDashboardView.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = Dashboard;
 		};
 		575E7E4A7CE94CF69B9848C0 /* App */ = {
@@ -537,7 +537,7 @@
 			78382F38837E40D591D38A02 /* AppCoordinator.swift */,
 			70BD2CE761B44BD0B594640C /* AppSettings.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = App;
 		};
 		597C09C207924DEBA19C9D50 /* Terminal */ = {
@@ -546,7 +546,7 @@
 			19DCAE74256B4032B637318C /* TerminalView.swift */,
 			1B11EECE49BF41209234CFB6 /* TerminalViewModel.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = Terminal;
 		};
 		5F503E9745AA44F08F333936 /* Utilities */ = {
@@ -556,7 +556,7 @@
 			62AFCB583B01490991396582 /* ErrorTypes.swift */,
 			42D8CB9A981F4CDDAF7F2E18 /* MarkdownRenderer.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = Utilities;
 		};
 		63387E63AC2F4225BBB2D48A /* Ports */ = {
@@ -564,7 +564,7 @@
 			children = (
 			D5F6CDDB4FD941C4A7CEE8E7 /* PortsView.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = Ports;
 		};
 		7425577F1C3E488EADE3C9CD /* Worktrees */ = {
@@ -573,7 +573,7 @@
 			B7489BEB5E754AF2837402A5 /* WorktreeDetailView.swift */,
 			D77D30A55CF64F94B67E09C4 /* WorktreeViewModel.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = Worktrees;
 		};
 		926FEE25880349DFB119E08C /* Plans */ = {
@@ -581,7 +581,7 @@
 			children = (
 			0DEAEFA6AC5F431DBB9BEFAF /* PlansView.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = Plans;
 		};
 		92810E9E09B54A50B51897AD /* Products */ = {
@@ -591,7 +591,7 @@
 			E8D4DA132607483B82A75F33 /* AgentrixMobileTests.xctest */,
 			96D5F1752D814B789CC5D9F1 /* AgentrixMobileUITests.xctest */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			name = Products;
 		};
 		A4A2BE884821412E8B29A2F2 /* Tasks */ = {
@@ -599,7 +599,7 @@
 			children = (
 			6E31FD12627142198CC95D6C /* TasksView.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = Tasks;
 		};
 		C9D62C81DBFB4D3B92167C50 /* Resources */ = {
@@ -607,7 +607,7 @@
 			children = (
 			35ECBD6C0A95431AA56A7821 /* Assets.xcassets */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = Resources;
 		};
 		D3389BBEAABF4C0EB9A66AB2 /* GitStatus */ = {
@@ -615,7 +615,7 @@
 			children = (
 			B7F771DD0C3049E99A574176 /* GitStatusView.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = GitStatus;
 		};
 		DC326B4DB1CC44A790FB3AFF /* Models */ = {
@@ -629,7 +629,7 @@
 			A45F018AD786460784B83E87 /* TaskModels.swift */,
 			25AFC5973F4B45189C92CB83 /* TerminalModels.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = Models;
 		};
 		DF26FB47D28545C0B0E22468 /* AgentrixMobile */ = {
@@ -643,7 +643,7 @@
 			DFB7ADD4EEBC459EB9F211BD /* Features */,
 			CAAA7B82B82D4BD28E030D17 /* Info.plist */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = AgentrixMobile;
 		};
 		DFB7ADD4EEBC459EB9F211BD /* Features */ = {
@@ -659,7 +659,7 @@
 			A4A2BE884821412E8B29A2F2 /* Tasks */,
 			D3389BBEAABF4C0EB9A66AB2 /* GitStatus */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = Features;
 		};
 		F0AFF50999264282BCA151F7 /* AgentrixMobileTests */ = {
@@ -667,7 +667,7 @@
 			children = (
 			C14681E5CA964955948713BB /* AgentrixMobileTests.swift */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 			path = AgentrixMobileTests;
 		};
 		F1BD73C2886E40D98F19D726 = {
@@ -678,7 +678,7 @@
 			00BD79D127C84CA4B09A1364 /* AgentrixMobileUITests */,
 			92810E9E09B54A50B51897AD /* Products */,
 		);
-			sourceTree = <group>;
+			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
