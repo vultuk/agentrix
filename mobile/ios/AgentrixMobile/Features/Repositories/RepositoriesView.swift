@@ -44,7 +44,7 @@ struct HomeView: View {
             }
             .navigationTitle("Repositories")
             .toolbar {
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                ToolbarItemGroup(placement: .automatic) {
                     Button {
                         Task { await viewModel.refresh() }
                     } label: {
