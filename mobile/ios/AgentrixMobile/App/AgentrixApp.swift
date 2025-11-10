@@ -25,7 +25,6 @@ struct RootContainerView: View {
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(.systemBackground))
         case .unauthenticated:
             AuthView(
                 viewModel: AuthViewModel(

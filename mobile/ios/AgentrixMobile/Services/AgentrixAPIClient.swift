@@ -30,14 +30,6 @@ final class AgentrixAPIClient {
         self.encoder.dateEncodingStrategy = .iso8601
     }
 
-    func request<T: Decodable>(
-        _ path: String,
-        method: HTTPMethod = .get,
-        headers: [String: String] = [:]
-    ) async throws -> T {
-        try await request(path, method: method, body: Optional<EmptyBody>.none as EmptyBody?, headers: headers)
-    }
-
     func request<T: Decodable, Body: Encodable>(
         _ path: String,
         method: HTTPMethod = .get,
@@ -47,14 +39,6 @@ final class AgentrixAPIClient {
         let request = try buildRequest(path, method: method, body: body, headers: headers)
         let (data, response) = try await session.data(for: request)
         return try processResponse(data: data, response: response)
-    }
-
-    func requestVoid(
-        _ path: String,
-        method: HTTPMethod = .post,
-        headers: [String: String] = [:]
-    ) async throws {
-        try await requestVoid(path, method: method, body: Optional<EmptyBody>.none as EmptyBody?, headers: headers)
     }
 
     func requestVoid<Body: Encodable>(
@@ -69,7 +53,7 @@ final class AgentrixAPIClient {
     }
 
     func head(_ path: String) async throws {
-        let request = try buildRequest(path, method: .head, body: Optional<String>.none)
+        let request = try buildRequest(path, method: .head, body: Optional<String>.none, headers: [:])
         let (_, response) = try await session.data(for: request)
         try validate(response: response, data: nil)
     }

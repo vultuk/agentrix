@@ -12,8 +12,6 @@ struct AuthView: View {
             Form {
                 Section("Server") {
                     TextField("Base URL", text: $viewModel.baseURLString)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
                     Button("Apply") {
                         viewModel.updateBaseURL()
                     }

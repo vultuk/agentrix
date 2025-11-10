@@ -93,8 +93,6 @@ struct HomeView: View {
                 Form {
                     Section("Repository") {
                         TextField("Git URL", text: $newRepoURL)
-                            .keyboardType(.URL)
-                            .textInputAutocapitalization(.never)
                         TextField("Init Command (optional)", text: $newRepoInitCommand)
                     }
                 }
