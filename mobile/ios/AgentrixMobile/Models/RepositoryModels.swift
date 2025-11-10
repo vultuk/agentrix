@@ -7,19 +7,11 @@ struct RepositoryEnvelope: Decodable {
 struct RepositoryDTO: Decodable {
     let branches: [String]?
     let initCommand: String?
-    let worktrees: [WorktreeDTO]?
-}
-
-struct WorktreeDTO: Decodable {
-    let branch: String
-    let path: String?
-    let current: Bool?
-    let prunable: Bool?
 }
 
 extension RepositoryDTO {
     static var empty: RepositoryDTO {
-        RepositoryDTO(branches: [], initCommand: nil, worktrees: [])
+        RepositoryDTO(branches: [], initCommand: nil)
     }
 }
 
@@ -29,7 +21,6 @@ struct RepositoryListing: Identifiable, Hashable {
     let name: String
     var branches: [String]
     var initCommand: String
-    var worktrees: [WorktreeSummary]
 
     init(org: String, name: String, dto: RepositoryDTO) {
         self.org = org
@@ -37,7 +28,10 @@ struct RepositoryListing: Identifiable, Hashable {
         self.id = "\(org)/\(name)"
         self.branches = dto.branches ?? []
         self.initCommand = dto.initCommand ?? ""
-        self.worktrees = (dto.worktrees ?? []).map { WorktreeSummary(dto: $0, org: org, repo: name) }
+    }
+
+    var worktrees: [WorktreeSummary] {
+        branches.map { WorktreeSummary(org: org, repo: name, branch: $0) }
     }
 }
 
@@ -46,18 +40,12 @@ struct WorktreeSummary: Identifiable, Hashable {
     let org: String
     let repo: String
     let branch: String
-    let path: String?
-    let isCurrent: Bool
-    let isPrunable: Bool
 
-    init(dto: WorktreeDTO, org: String, repo: String) {
+    init(org: String, repo: String, branch: String) {
         self.org = org
         self.repo = repo
-        self.branch = dto.branch
-        self.id = "\(org)/\(repo)/\(dto.branch)"
-        self.path = dto.path
-        self.isCurrent = dto.current ?? false
-        self.isPrunable = dto.prunable ?? false
+        self.branch = branch
+        self.id = "\(org)/\(repo)/\(branch)"
     }
 }
 
