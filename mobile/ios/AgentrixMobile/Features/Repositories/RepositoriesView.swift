@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 struct HomeView: View {
     @StateObject private var viewModel: RepositoriesViewModel
@@ -94,8 +93,8 @@ struct HomeView: View {
                 Form {
                     Section("Repository") {
                         TextField("Git URL", text: $newRepoURL)
-                            .keyboardType(UIKeyboardType.URL)
-                            .textInputAutocapitalization(TextInputAutocapitalization.never)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
                         TextField("Init Command (optional)", text: $newRepoInitCommand)
                     }
                 }
