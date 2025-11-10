@@ -34,9 +34,11 @@ struct WorktreeDetailView: View {
                 worktreePicker
                 RepoDashboardView(dashboard: viewModel.dashboard)
                 GitStatusView(status: viewModel.gitStatus)
-                PlansView(plans: viewModel.plans, selectedPlan: viewModel.selectedPlan) { plan in
-                    Task { await viewModel.loadPlanContent(plan: plan) }
-                }
+                PlansView(
+                    plans: viewModel.plans,
+                    selectedPlan: viewModel.selectedPlan,
+                    openPlan: planSelectionAction
+                )
                 TasksListView(tasks: viewModel.tasks)
                 PortsView(
                     ports: viewModel.ports,
@@ -52,8 +54,8 @@ struct WorktreeDetailView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
-                    Button("Refresh") { Task { await viewModel.refreshAll() } }
-                    Button("Log Out", role: .destructive) { logoutAction() }
+                    Button("Refresh", action: refreshAllAction)
+                    Button("Log Out", role: .destructive, action: logoutAction)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -64,15 +66,9 @@ struct WorktreeDetailView: View {
             viewModel.updateSessions(sessions)
             viewModel.updateTasks(tasks)
         }
-        .onChange(of: sessions) { newValue in
-            viewModel.updateSessions(newValue)
-        }
-        .onChange(of: tasks) { newValue in
-            viewModel.updateTasks(newValue)
-        }
-        .onChange(of: repository) { newValue in
-            viewModel.updateRepository(newValue)
-        }
+        .onChange(of: sessions, perform: handleSessionsChange)
+        .onChange(of: tasks, perform: handleTasksChange)
+        .onChange(of: repository, perform: handleRepositoryChange)
         .onDisappear {
             viewModel.terminalViewModel.disconnect()
         }
@@ -117,5 +113,25 @@ private extension WorktreeDetailView {
 
     var portTunnelAction: (Int) -> Void {
         { port in Task { await viewModel.openTunnel(for: port) } }
+    }
+
+    var planSelectionAction: (PlanRecord) -> Void {
+        { plan in Task { await viewModel.loadPlanContent(plan: plan) } }
+    }
+
+    var refreshAllAction: () -> Void {
+        { Task { await viewModel.refreshAll() } }
+    }
+
+    func handleSessionsChange(_ newValue: [WorktreeSessionSummary]) {
+        viewModel.updateSessions(newValue)
+    }
+
+    func handleTasksChange(_ newValue: [TaskItem]) {
+        viewModel.updateTasks(newValue)
+    }
+
+    func handleRepositoryChange(_ newValue: RepositoryListing) {
+        viewModel.updateRepository(newValue)
     }
 }
