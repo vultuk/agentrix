@@ -25,12 +25,12 @@ struct HomeView: View {
                                     VStack(alignment: .leading) {
                                         Text(repository.name)
                                             .font(.headline)
-                                        Text(repository.worktrees.first?.branch ?? "No worktrees")
+                                        Text(repository.representativeWorktree?.branch ?? "No worktrees")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    if repository.worktrees.contains(where: { $0.isCurrent }) {
+                                    if repository.representativeWorktree != nil {
                                         Label("Active", systemImage: "sparkles")
                                             .labelStyle(.iconOnly)
                                             .foregroundStyle(.green)
