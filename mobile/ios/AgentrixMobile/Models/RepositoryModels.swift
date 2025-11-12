@@ -26,7 +26,24 @@ struct RepositoryListing: Identifiable, Hashable {
         self.org = org
         self.name = name
         self.id = "\(org)/\(name)"
-        self.branches = dto.branches ?? []
+        if let branches = dto.branches {
+            self.branches = branches.sorted { lhs, rhs in
+                let left = lhs.lowercased()
+                let right = rhs.lowercased()
+                if left == right {
+                    return lhs < rhs
+                }
+                if left == "main" {
+                    return true
+                }
+                if right == "main" {
+                    return false
+                }
+                return lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
+            }
+        } else {
+            self.branches = []
+        }
         self.initCommand = dto.initCommand ?? ""
     }
 
@@ -43,7 +60,7 @@ extension RepositoryListing {
 
 struct WorktreeSummary: Identifiable, Hashable {
     let id: String
-    let org: String
+     let org: String
     let repo: String
     let branch: String
 

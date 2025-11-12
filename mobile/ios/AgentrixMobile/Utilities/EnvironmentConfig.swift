@@ -13,8 +13,9 @@ struct EnvironmentConfig {
         configuration.httpCookieStorage = storage
         configuration.httpCookieAcceptPolicy = .onlyFromMainDocumentDomain
         configuration.waitsForConnectivity = true
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 60
+        // Increased timeouts for WebSocket connections which can take longer to establish
+        configuration.timeoutIntervalForRequest = 60
+        configuration.timeoutIntervalForResource = 300 // 5 minutes for long-lived WebSocket connections
         self.sessionConfiguration = configuration
         self.cookieStorage = storage
     }
@@ -39,6 +40,9 @@ struct EnvironmentConfig {
         var sanitizedPath = path
         if sanitizedPath.hasPrefix("/") {
             sanitizedPath.removeFirst()
+        }
+        if let relativeURL = URL(string: sanitizedPath, relativeTo: baseURL)?.absoluteURL {
+            return relativeURL
         }
         return baseURL.appendingPathComponent(sanitizedPath)
     }

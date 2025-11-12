@@ -1,10 +1,33 @@
 import Foundation
 
 @MainActor
+enum RepositoryDestination: Hashable {
+    case dashboard(RepositoryReference)
+    case worktree(WorktreeReference)
+
+    var repositoryReference: RepositoryReference {
+        switch self {
+        case .dashboard(let reference):
+            return reference
+        case .worktree(let worktree):
+            return RepositoryReference(org: worktree.org, repo: worktree.repo)
+        }
+    }
+
+    var worktreeReference: WorktreeReference? {
+        switch self {
+        case .dashboard:
+            return nil
+        case .worktree(let reference):
+            return reference
+        }
+    }
+}
+
+@MainActor
 final class RepositoriesViewModel: ObservableObject {
     @Published var sections: [RepositorySection] = []
-    @Published var selectedRepositoryID: String?
-    @Published var selectedWorktreeID: String?
+    @Published var selection: RepositoryDestination?
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var sessionSummaries: [WorktreeSessionSummary] = []
@@ -12,11 +35,14 @@ final class RepositoriesViewModel: ObservableObject {
 
     private let services: ServiceRegistry
     private var streamTask: Task<Void, Never>? = nil
+    private var shouldAutoSelectOnNextApply = true
 
-    init(services: ServiceRegistry) {
+    init(services: ServiceRegistry, enableRealtime: Bool = true) {
         self.services = services
         Task { await loadInitialData() }
-        startRealtimeUpdates()
+        if enableRealtime {
+            startRealtimeUpdates()
+        }
     }
 
     deinit {
@@ -24,30 +50,63 @@ final class RepositoriesViewModel: ObservableObject {
     }
 
     var selectedRepository: RepositoryListing? {
-        guard let id = selectedRepositoryID else { return nil }
-        return repository(for: id)
+        guard let selection else { return nil }
+        let reference = selection.repositoryReference
+        return repository(reference: reference)
     }
 
     var selectedWorktree: WorktreeSummary? {
-        guard let current = selectedRepository else { return nil }
-        return current.worktrees.first { $0.id == selectedWorktreeID } ?? current.worktrees.first
+        guard
+            let selection,
+            case .worktree(let worktreeReference) = selection
+        else {
+            return nil
+        }
+        return worktree(reference: worktreeReference)
     }
 
-    func refresh() async {
+    func refresh(skipAutoSelection: Bool = false) async {
+        shouldAutoSelectOnNextApply = !skipAutoSelection
         await loadInitialData()
     }
 
     func selectRepository(_ repository: RepositoryListing) {
-        selectedRepositoryID = repository.id
-        if repository.worktrees.isEmpty {
-            selectedWorktreeID = nil
-        } else if repository.worktrees.contains(where: { $0.id == selectedWorktreeID }) == false {
-            selectedWorktreeID = repository.worktrees.first?.id
+        let destination = defaultSelection(for: repository)
+        if selection == destination {
+            selection = nil
         }
+        selection = destination
     }
 
     func selectWorktree(_ worktree: WorktreeSummary) {
-        selectedWorktreeID = worktree.id
+        let destination: RepositoryDestination = {
+            if worktree.branch.lowercased() == "main" {
+                return .dashboard(RepositoryReference(org: worktree.org, repo: worktree.repo))
+            }
+            return .worktree(WorktreeReference(org: worktree.org, repo: worktree.repo, branch: worktree.branch))
+        }()
+
+        if selection == destination {
+            selection = nil
+        }
+        selection = destination
+    }
+
+    func setSelection(_ destination: RepositoryDestination?) {
+        selection = destination
+    }
+
+    func handleWorktreeCreated(_ summary: WorktreeSummary) async {
+        selection = .worktree(WorktreeReference(org: summary.org, repo: summary.repo, branch: summary.branch))
+        await refresh()
+        selection = .worktree(WorktreeReference(org: summary.org, repo: summary.repo, branch: summary.branch))
+    }
+
+    func handleWorktreeDeleted(_ summary: WorktreeSummary) async {
+        if case .worktree(let reference) = selection, reference.id == summary.id {
+            selection = .dashboard(RepositoryReference(org: summary.org, repo: summary.repo))
+        }
+        await refresh()
     }
 
     func sessions(for worktree: WorktreeReference) -> WorktreeSessionSummary? {
@@ -58,14 +117,16 @@ final class RepositoriesViewModel: ObservableObject {
         isLoading = true
         do {
             let sections = try await services.repositories.fetchRepositories()
-            apply(sections: sections)
+            let autoSelect = shouldAutoSelectOnNextApply
+            shouldAutoSelectOnNextApply = true
+            apply(sections: sections, autoSelect: autoSelect)
             sessionSummaries = try await services.terminal.fetchSessions()
             tasks = try await services.tasks.fetchTasks()
             errorMessage = nil
         } catch let error as AgentrixError {
             errorMessage = error.errorDescription
         } catch {
-            errorMessage = AgentrixError.unreachable.errorDescription
+            errorMessage = error.localizedDescription
         }
         isLoading = false
     }
@@ -78,7 +139,7 @@ final class RepositoriesViewModel: ObservableObject {
                 switch event {
                 case .repositories(let envelope):
                     let sections = RepositoriesService.makeSections(from: envelope.data)
-                    await MainActor.run { self.apply(sections: sections) }
+                    await MainActor.run { self.apply(sections: sections, autoSelect: true) }
                 case .sessions(let sessions):
                     await MainActor.run { self.sessionSummaries = sessions }
                 case .tasks(let tasks):
@@ -88,35 +149,65 @@ final class RepositoriesViewModel: ObservableObject {
         }
     }
 
-    private func apply(sections: [RepositorySection]) {
+    private func apply(sections: [RepositorySection], autoSelect: Bool) {
         self.sections = sections
+
         guard !sections.isEmpty else {
-            selectedRepositoryID = nil
-            selectedWorktreeID = nil
+            selection = nil
             return
         }
-        if let selectedRepositoryID,
-           sections.flatMap({ $0.repositories }).contains(where: { $0.id == selectedRepositoryID }) == false {
-            self.selectedRepositoryID = sections.first?.repositories.first?.id
-        } else if selectedRepositoryID == nil {
-            selectedRepositoryID = sections.first?.repositories.first?.id
+
+        if let selection, isValidSelection(selection) {
+            self.selection = selection
+            return
         }
 
-        if let selectedRepository = selectedRepository,
-           let worktreeID = selectedWorktreeID,
-           selectedRepository.worktrees.contains(where: { $0.id == worktreeID }) {
-            // keep selection
+        if autoSelect, let fallback = sections.first?.repositories.first.flatMap({ defaultSelection(for: $0) }) {
+            selection = fallback
         } else {
-            selectedWorktreeID = selectedRepository?.worktrees.first?.id
+            selection = nil
         }
     }
 
-    private func repository(for id: String) -> RepositoryListing? {
+    private func repository(reference: RepositoryReference) -> RepositoryListing? {
         for section in sections {
-            if let match = section.repositories.first(where: { $0.id == id }) {
+            if let match = section.repositories.first(where: { $0.id == reference.id }) {
                 return match
             }
         }
         return nil
     }
+
+    private func worktree(reference: WorktreeReference) -> WorktreeSummary? {
+        for section in sections {
+            for repository in section.repositories {
+                if let match = repository.worktrees.first(where: { $0.id == reference.id }) {
+                    return match
+                }
+            }
+        }
+        return nil
+    }
+
+    private func defaultSelection(for repository: RepositoryListing) -> RepositoryDestination {
+        if repository.branches.contains(where: { $0.lowercased() == "main" }) {
+            return .dashboard(RepositoryReference(org: repository.org, repo: repository.name))
+        }
+
+        if let firstWorktree = repository.worktrees.first {
+            return .worktree(WorktreeReference(org: firstWorktree.org, repo: firstWorktree.repo, branch: firstWorktree.branch))
+        }
+
+        return .dashboard(RepositoryReference(org: repository.org, repo: repository.name))
+    }
+
+    private func isValidSelection(_ selection: RepositoryDestination) -> Bool {
+        switch selection {
+        case .dashboard(let reference):
+            return repository(reference: reference) != nil
+        case .worktree(let worktreeReference):
+            return worktree(reference: worktreeReference) != nil
+        }
+    }
 }
+

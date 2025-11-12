@@ -103,6 +103,14 @@ export function attachTerminalWebSockets(server: HttpServer, authManager: AuthMa
           closed: Boolean(session.closed),
         })
       );
+      if (session.ready) {
+        socket.send(
+          JSON.stringify({
+            type: 'ready',
+            log: session.log || '',
+          })
+        );
+      }
       if (session.closed) {
         socket.send(
           JSON.stringify({

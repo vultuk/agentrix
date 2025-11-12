@@ -190,13 +190,15 @@ describe('terminal sessions', () => {
     const proc = processes[0];
     assert.ok(proc);
 
+    const initialWrites = proc.write.mock.calls.length;
     queueSessionInput(session, 'ls -la');
-    assert.equal(proc.write.mock.calls.length, 0);
+    assert.equal(proc.write.mock.calls.length, initialWrites);
 
     timers.advance(200);
 
-    assert.equal(proc.write.mock.calls.length, 1);
-    assert.deepEqual(proc.write.mock.calls[0]?.arguments, ['ls -la']);
+    assert.ok(proc.write.mock.calls.length >= initialWrites + 1);
+    const lastCall = proc.write.mock.calls[proc.write.mock.calls.length - 1];
+    assert.deepEqual(lastCall?.arguments, ['ls -la']);
 
     proc.addData('command output');
     await flushMicrotasks();

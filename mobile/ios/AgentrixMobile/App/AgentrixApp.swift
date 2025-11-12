@@ -8,6 +8,7 @@ struct AgentrixApp: App {
         WindowGroup {
             RootContainerView()
                 .environmentObject(coordinator)
+                .tint(.agentrixAccent)
         }
     }
 }

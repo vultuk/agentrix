@@ -62,3 +62,9 @@ struct GitDiffResponse: Decodable {
     let mode: String
     let diff: String
 }
+
+enum GitDiffMode: String {
+    case staged
+    case unstaged
+    case untracked
+}

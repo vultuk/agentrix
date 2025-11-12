@@ -21,6 +21,8 @@ import { persistSessionsSnapshot, loadPersistedSessionsSnapshot } from './sessio
 
 const IDLE_TIMEOUT_MS = 90 * 1000;
 const IDLE_SWEEP_INTERVAL_MS = 5 * 1000;
+const DEFAULT_UTF8_LOCALE = 'en_US.UTF-8';
+const DISABLE_ECHO_COMMAND = 'stty -echo\r';
 
 interface TerminalSessionDependencies {
   spawnPty: typeof pty.spawn;
@@ -148,6 +150,47 @@ function formatTimestamp(value: number | Date | undefined): string | null {
   return ms ? new Date(ms).toISOString() : null;
 }
 
+const PRINTABLE_REGEX = /[\x20-\x7E]/;
+
+function filterNegotiationChunk(session: TerminalSession, chunk: string): string {
+  if (!chunk) {
+    return '';
+  }
+  if (session.sawPrintableOutput) {
+    return chunk;
+  }
+  const firstPrintableIndex = chunk.search(PRINTABLE_REGEX);
+  if (firstPrintableIndex === -1) {
+    return '';
+  }
+  session.sawPrintableOutput = true;
+  return chunk.slice(firstPrintableIndex);
+}
+
+function normaliseUtf8Candidate(value: string | undefined): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (/utf-?8/i.test(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
+function resolveUtf8Locale(...candidates: Array<string | undefined>): string {
+  for (const candidate of candidates) {
+    const normalised = normaliseUtf8Candidate(candidate);
+    if (normalised) {
+      return normalised;
+    }
+  }
+  return DEFAULT_UTF8_LOCALE;
+}
+
 function buildSessionSnapshot(session: TerminalSession): TerminalSessionSnapshot {
   const lastActivityAt = formatTimestamp(session.lastActivityAt);
   const createdAt = formatTimestamp(session.createdAt);
@@ -251,9 +294,9 @@ function noteSessionActivity(session: TerminalSession): boolean {
   return false;
 }
 
-function markSessionReady(session: TerminalSession): void {
+function markSessionReady(session: TerminalSession): boolean {
   if (!session || session.ready) {
-    return;
+    return false;
   }
   session.ready = true;
   if (session.readyTimer) {
@@ -261,6 +304,13 @@ function markSessionReady(session: TerminalSession): void {
     session.readyTimer = null;
   }
   flushPendingInputs(session);
+  const ptyProcess = (session.process || {}) as { cols?: number; rows?: number };
+  broadcast(session, 'ready', {
+    log: session.log || '',
+    cols: typeof ptyProcess.cols === 'number' ? ptyProcess.cols : null,
+    rows: typeof ptyProcess.rows === 'number' ? ptyProcess.rows : null,
+  });
+  return true;
 }
 
 export function queueSessionInput(session: TerminalSession, input: string | Buffer): void {
@@ -327,8 +377,15 @@ function handleSessionOutput(session: TerminalSession, chunk: string | Buffer): 
   markSessionReady(session);
   const becameActive = noteSessionActivity(session);
   const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-  session.log = trimLogBuffer((session.log || '') + text);
-  broadcast(session, 'output', { chunk: text });
+  const filtered = filterNegotiationChunk(session, text);
+  if (!filtered) {
+    if (becameActive) {
+      broadcastSessionsUpdate();
+    }
+    return;
+  }
+  session.log = trimLogBuffer((session.log || '') + filtered);
+  broadcast(session, 'output', { chunk: filtered });
   if (becameActive) {
     broadcastSessionsUpdate();
   }
@@ -682,9 +739,25 @@ async function spawnTerminalProcess({
   let usingTmux = false;
   let tmuxSessionName = null;
   let tmuxSessionExists = false;
+  const termValue = typeof process.env['TERM'] === 'string' && process.env['TERM']!.trim().length > 0
+    ? process.env['TERM']!.trim()
+    : 'xterm-256color';
+  const langValue = resolveUtf8Locale(process.env['LANG']);
+  const lcAllValue = resolveUtf8Locale(process.env['LC_ALL'], langValue);
+  const lcCtypeValue = resolveUtf8Locale(process.env['LC_CTYPE'], lcAllValue);
   const baseEnv: Record<string, string | undefined> = {
     ...process.env,
-    TERM: process.env['TERM'] || 'xterm-256color',
+    TERM: termValue || 'xterm-256color',
+    COLORTERM:
+      typeof process.env['COLORTERM'] === 'string' && process.env['COLORTERM']!.trim().length > 0
+        ? process.env['COLORTERM']!.trim()
+        : 'truecolor',
+    LANG: langValue,
+    LC_ALL: lcAllValue,
+    LC_CTYPE: lcCtypeValue,
+    TERM_PROGRAM: process.env['TERM_PROGRAM'] || 'agentrix',
+    TERM_PROGRAM_VERSION: process.env['TERM_PROGRAM_VERSION'] || '1.0',
+    FORCE_COLOR: process.env['FORCE_COLOR'] || '1',
   };
   if (baseEnv['TMUX']) {
     delete baseEnv['TMUX'];
@@ -721,6 +794,7 @@ async function spawnTerminalProcess({
         env: tmuxEnv,
         cols: 120,
         rows: 36,
+        encoding: 'utf8',
       });
       usingTmux = true;
     } else if (requireTmux) {
@@ -736,6 +810,7 @@ async function spawnTerminalProcess({
       env: baseEnv,
       cols: 120,
       rows: 36,
+      encoding: 'utf8',
     });
   }
 
@@ -818,7 +893,12 @@ async function createTerminalSession(
     lastActivityAt: createdAt,
     createdAt,
     idle: false,
+    sawPrintableOutput: false,
   };
+
+  if (!usingTmux) {
+    session.pendingInputs.unshift(DISABLE_ECHO_COMMAND);
+  }
 
   addSession(session);
 

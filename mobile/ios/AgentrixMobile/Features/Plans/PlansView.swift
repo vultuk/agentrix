@@ -4,9 +4,19 @@ struct PlansView: View {
     let plans: [PlanRecord]
     let selectedPlan: PlanContentResponse.PlanContent?
     let openPlan: (PlanRecord) -> Void
+    var onCreatePlan: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let onCreatePlan {
+                Button {
+                    onCreatePlan()
+                } label: {
+                    Label("New Plan", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
             if plans.isEmpty {
                 ContentUnavailableView("No plans", systemImage: "doc.text", description: Text("Plans appear after automation saves them."))
             } else {

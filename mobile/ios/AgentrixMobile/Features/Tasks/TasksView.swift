@@ -45,7 +45,7 @@ private extension TaskItem {
         case .pending: return .orange
         case .running: return .blue
         case .succeeded, .completed: return .green
-        case .failed: return .red
+        case .failed: return .agentrixError
         }
     }
 }

@@ -49,6 +49,7 @@ export interface TerminalSession {
   exitCode?: number;
   exitSignal?: string;
   exitError?: string;
+  sawPrintableOutput?: boolean;
 }
 
 /**

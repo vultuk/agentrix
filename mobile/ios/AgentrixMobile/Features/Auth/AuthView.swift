@@ -26,7 +26,7 @@ struct AuthView: View {
                     Section {
                         Text(error)
                             .font(.footnote)
-                            .foregroundColor(.red)
+                            .foregroundColor(.agentrixError)
                     }
                 }
 

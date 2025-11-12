@@ -35,7 +35,12 @@ describe('createWorktreeHandlers', () => {
     __setBaseHandlerTestOverrides({ sendJson });
 
     const worktreeService = {
-      createWorktree: mock.fn(async () => ({ branch: 'feature/test', status: 'queued' })),
+      createWorktree: mock.fn(async () => ({
+        taskId: 'task-123',
+        org: 'vultuk',
+        repo: 'agentrix',
+        branch: 'feature/test',
+      })),
       deleteWorktree: mock.fn(),
     } as unknown as WorktreeService;
 
@@ -66,7 +71,12 @@ describe('createWorktreeHandlers', () => {
     const call = sendJson.mock.calls[0];
     assert.ok(call);
     assert.equal(call.arguments[1], 202);
-    assert.deepEqual(call.arguments[2], { branch: 'feature/test', status: 'queued' });
+    assert.deepEqual(call.arguments[2], {
+      taskId: 'task-123',
+      org: 'vultuk',
+      repo: 'agentrix',
+      branch: 'feature/test',
+    });
   });
 
   it('delete handler validates payload and returns result', async () => {

@@ -21,18 +21,36 @@ final class GitService {
         return response.status
     }
 
-    func fetchDiff(org: String, repo: String, branch: String, path: String, mode: String?) async throws -> GitDiffResponse {
+    func fetchDiff(
+        org: String,
+        repo: String,
+        branch: String,
+        path: String,
+        previousPath: String?,
+        mode: String?,
+        status: String?
+    ) async throws -> GitDiffResponse {
         struct Payload: Encodable {
             let org: String
             let repo: String
             let branch: String
             let path: String
             let mode: String?
+            let previousPath: String?
+            let status: String?
         }
         return try await api.request(
             "/api/git/diff",
             method: .post,
-            body: Payload(org: org, repo: repo, branch: branch, path: path, mode: mode)
+            body: Payload(
+                org: org,
+                repo: repo,
+                branch: branch,
+                path: path,
+                mode: mode,
+                previousPath: previousPath,
+                status: status
+            )
         )
     }
 }

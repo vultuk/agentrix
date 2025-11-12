@@ -42,7 +42,7 @@ final class AuthViewModel: ObservableObject {
         } catch let error as AgentrixError {
             errorMessage = error.errorDescription
         } catch {
-            errorMessage = AgentrixError.unreachable.errorDescription
+            errorMessage = error.localizedDescription
         }
         isLoading = false
     }

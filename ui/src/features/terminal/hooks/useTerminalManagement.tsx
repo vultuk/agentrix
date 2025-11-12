@@ -146,6 +146,9 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
         term.write(initialLog);
       }
       term.onData((data: string) => {
+        if (!data || data.length === 0) {
+          return;
+        }
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
           socketRef.current.send(JSON.stringify({ type: 'input', data }));
         }
@@ -224,6 +227,9 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
     });
 
     socket.addEventListener('message', (event: MessageEvent) => {
+      if (typeof event.data !== 'string') {
+        return;
+      }
       let payload: any;
       try {
         payload = JSON.parse(event.data);
@@ -235,8 +241,11 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
           terminalRef.current.reset();
           sendResize();
         }
-        if (terminalRef.current && payload.chunk) {
-          terminalRef.current.write(payload.chunk);
+        if (terminalRef.current) {
+          const chunk = typeof payload.chunk === 'string' ? payload.chunk : '';
+          if (chunk) {
+            terminalRef.current.write(chunk);
+          }
         }
       } else if (payload.type === 'exit') {
         closedByProcessRef.current = true;
@@ -250,8 +259,9 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
           }
         }
       } else if (payload.type === 'init') {
-        if (!initSuppressedRef.current && payload.log && terminalRef.current) {
-          terminalRef.current.write(payload.log);
+        const log = typeof payload.log === 'string' ? payload.log : '';
+        if (!initSuppressedRef.current && log && terminalRef.current) {
+          terminalRef.current.write(log);
         }
         initSuppressedRef.current = false;
         if (payload.closed) {

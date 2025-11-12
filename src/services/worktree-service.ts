@@ -56,6 +56,7 @@ export class WorktreeService implements IWorktreeService {
   async createWorktree(params: WorktreeCreateInput): Promise<CreateWorktreeResult> {
     const { org, repo, branch, prompt, hasPrompt } = params;
     let normalisedBranch = normalizeBranchName(branch);
+    let resolvedBranch: string | null = normalisedBranch || null;
 
     const generator = this.branchNameGenerator as { isConfigured?: boolean; generateBranchName?: (args: unknown) => Promise<string> };
     if (!normalisedBranch && (!generator || !generator.isConfigured)) {
@@ -115,6 +116,7 @@ export class WorktreeService implements IWorktreeService {
             }
             targetBranch = trimmed;
             updateMeta({ branch: targetBranch });
+            resolvedBranch = targetBranch;
             prog.completeStep(STEP_IDS.GENERATE_BRANCH, {
               label: 'Generate branch name',
               message: `Generated branch ${targetBranch}.`,
@@ -133,6 +135,7 @@ export class WorktreeService implements IWorktreeService {
             message: `Using provided branch ${targetBranch}.`,
           });
           updateMeta({ branch: targetBranch });
+          resolvedBranch = targetBranch;
         }
 
         prog.ensureStep(STEP_IDS.SYNC_DEFAULT_BRANCH, 'Sync default branch');
@@ -212,7 +215,7 @@ export class WorktreeService implements IWorktreeService {
       taskId,
       org,
       repo,
-      branch: normalisedBranch || null,
+      branch: resolvedBranch,
     };
   }
 

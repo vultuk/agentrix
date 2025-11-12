@@ -51,7 +51,7 @@ final class AgentrixAPIClient {
     ) async throws -> T {
         let request = try buildRequest(path, method: method, body: body, headers: headers)
         let (data, response) = try await session.data(for: request)
-        return try processResponse(data: data, response: response)
+        return try processResponse(data: data, response: response, request: request)
     }
 
     func requestVoid(
@@ -75,13 +75,13 @@ final class AgentrixAPIClient {
     ) async throws {
         let request = try buildRequest(path, method: method, body: body, headers: headers)
         let (_, response) = try await session.data(for: request)
-        try validate(response: response, data: nil)
+        try validate(response: response, data: nil, request: request)
     }
 
     func head(_ path: String) async throws {
         let request = try buildRequest(path, method: .head, body: Optional<String>.none, headers: [:])
         let (_, response) = try await session.data(for: request)
-        try validate(response: response, data: nil)
+        try validate(response: response, data: nil, request: request)
     }
 
     private func buildRequest<Body: Encodable>(
@@ -97,11 +97,12 @@ final class AgentrixAPIClient {
             request.httpBody = try encoder.encode(body)
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
+        print(request)
         return request
     }
 
-    private func processResponse<T: Decodable>(data: Data, response: URLResponse) throws -> T {
-        try validate(response: response, data: data)
+    private func processResponse<T: Decodable>(data: Data, response: URLResponse, request: URLRequest) throws -> T {
+        try validate(response: response, data: data, request: request)
         guard !(T.self == EmptyResponse.self && data.isEmpty) else {
             return EmptyResponse() as! T
         }
@@ -112,7 +113,7 @@ final class AgentrixAPIClient {
         }
     }
 
-    private func validate(response: URLResponse, data: Data?) throws {
+    private func validate(response: URLResponse, data: Data?, request: URLRequest) throws {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw AgentrixError.invalidResponse
         }
@@ -128,7 +129,10 @@ final class AgentrixAPIClient {
             {
                 throw AgentrixError.server(message: envelope.error)
             }
-            throw AgentrixError.invalidResponse
+            let method = request.httpMethod ?? "GET"
+            let urlDescription = request.url?.absoluteString ?? "request"
+            let reason = HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
+            throw AgentrixError.custom(message: "\(method) \(urlDescription) failed (\(httpResponse.statusCode) \(reason))")
         }
     }
 }
