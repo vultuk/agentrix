@@ -10,6 +10,14 @@ import { isAuthenticationError } from '../../../services/api/api-client.js';
 import { useTheme } from '../../../context/ThemeContext.js';
 import type { Worktree } from '../../../types/domain.js';
 
+const isTerminalDebugEnabled = import.meta.env.MODE !== 'production';
+const terminalDebugLog = (message: string) => {
+  if (!isTerminalDebugEnabled) {
+    return;
+  }
+  console.debug(`[terminal] ${message}`);
+};
+
 type TerminalStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'closed';
 
 interface UseTerminalManagementOptions {
@@ -78,6 +86,10 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const initSuppressedRef = useRef(false);
   const closedByProcessRef = useRef(false);
+  const encoderRef = useRef<TextEncoder | null>(null);
+  const decoderRef = useRef<TextDecoder | null>(null);
+  const connectionSequenceRef = useRef(0);
+  const activeConnectionLabelRef = useRef<string | null>(null);
 
   const sessionMapRef = useRef(new Map<string, string>());
   const sessionKeyByIdRef = useRef(new Map<string, string>());
@@ -94,14 +106,21 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
   }, []);
 
   const disposeSocket = useCallback(() => {
-    if (socketRef.current) {
-      try {
-        socketRef.current.close();
-      } catch (err) {
-        // ignore
-      }
-      socketRef.current = null;
+    const socket = socketRef.current;
+    if (!socket) {
+      return;
     }
+    const label = activeConnectionLabelRef.current;
+    if (label) {
+      terminalDebugLog(`closing connection ${label}`);
+    }
+    try {
+      socket.close();
+    } catch (err) {
+      // ignore
+    }
+    socketRef.current = null;
+    activeConnectionLabelRef.current = null;
   }, []);
 
   const disposeTerminal = useCallback(() => {
@@ -145,12 +164,14 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
       if (initialLog) {
         term.write(initialLog);
       }
+      // Single outbound keyboard path: xterm.js -> TextEncoder -> binary WebSocket frame.
       term.onData((data: string) => {
         if (!data || data.length === 0) {
           return;
         }
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-          socketRef.current.send(JSON.stringify({ type: 'input', data }));
+          const encoder = encoderRef.current || (encoderRef.current = new TextEncoder());
+          socketRef.current.send(encoder.encode(data));
         }
       });
       term.onResize(({ cols, rows }: { cols: number; rows: number }) => {
@@ -210,90 +231,114 @@ export function useTerminalManagement({ onAuthExpired, onSessionRemoved }: UseTe
     term.refresh(0, term.rows - 1);
   }, [terminalTheme]);
 
-  const connectSocket = useCallback((newSessionId: string) => {
-    if (!newSessionId) {
-      return;
-    }
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const socketUrl = `${protocol}://${window.location.host}/api/terminal/socket?sessionId=${encodeURIComponent(
-      newSessionId
-    )}`;
-    const socket = new WebSocket(socketUrl);
-    socketRef.current = socket;
-
-    socket.addEventListener('open', () => {
-      setTerminalStatus('connected');
-      sendResize();
-    });
-
-    socket.addEventListener('message', (event: MessageEvent) => {
-      if (typeof event.data !== 'string') {
+  const connectSocket = useCallback(
+    (newSessionId: string) => {
+      if (!newSessionId) {
         return;
       }
-      let payload: any;
-      try {
-        payload = JSON.parse(event.data);
-      } catch (err) {
-        return;
-      }
-      if (payload.type === 'output') {
-        if (payload.reset && terminalRef.current) {
-          terminalRef.current.reset();
-          sendResize();
+      disposeSocket();
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const socketUrl = `${protocol}://${window.location.host}/api/terminal/socket?sessionId=${encodeURIComponent(
+        newSessionId
+      )}`;
+      const socket = new WebSocket(socketUrl);
+      socket.binaryType = 'arraybuffer';
+      const connectionId = ++connectionSequenceRef.current;
+      const worktreeKey = sessionKeyByIdRef.current.get(newSessionId) ?? 'unknown';
+      const label = `ws#${connectionId}:${newSessionId}`;
+      terminalDebugLog(`opening connection ${label} for ${worktreeKey}`);
+      socketRef.current = socket;
+      activeConnectionLabelRef.current = label;
+
+      socket.addEventListener('open', () => {
+        if (socketRef.current !== socket) {
+          return;
         }
-        if (terminalRef.current) {
-          const chunk = typeof payload.chunk === 'string' ? payload.chunk : '';
-          if (chunk) {
-            terminalRef.current.write(chunk);
+        terminalDebugLog(`connected ${label}`);
+        setTerminalStatus('connected');
+        sendResize();
+      });
+
+      socket.addEventListener('message', (event: MessageEvent) => {
+        if (socketRef.current !== socket) {
+          return;
+        }
+        if (typeof event.data === 'string') {
+          let payload: any;
+          try {
+            payload = JSON.parse(event.data);
+          } catch {
+            return;
           }
-        }
-      } else if (payload.type === 'exit') {
-        closedByProcessRef.current = true;
-        setTerminalStatus('closed');
-        const key = sessionKeyByIdRef.current.get(newSessionId);
-        if (key) {
-          sessionMapRef.current.delete(key);
-          sessionKeyByIdRef.current.delete(newSessionId);
-          if (onSessionRemoved) {
-            onSessionRemoved(key);
+          if (payload.type === 'exit') {
+            closedByProcessRef.current = true;
+            setTerminalStatus('closed');
+            const key = sessionKeyByIdRef.current.get(newSessionId);
+            if (key) {
+              sessionMapRef.current.delete(key);
+              sessionKeyByIdRef.current.delete(newSessionId);
+              if (onSessionRemoved) {
+                onSessionRemoved(key);
+              }
+            }
+          } else if (payload.type === 'init') {
+            const log = typeof payload.log === 'string' ? payload.log : '';
+            if (!initSuppressedRef.current && log && terminalRef.current) {
+              terminalRef.current.write(log);
+            }
+            initSuppressedRef.current = false;
+            if (payload.closed) {
+              closedByProcessRef.current = true;
+              setTerminalStatus('closed');
+            }
+          } else if (payload.type === 'ready') {
+            initSuppressedRef.current = false;
+          } else if (payload.type === 'error') {
+            console.error(payload.message || 'Terminal connection error');
+            setTerminalStatus('error');
+            const key = sessionKeyByIdRef.current.get(newSessionId);
+            if (key) {
+              sessionMapRef.current.delete(key);
+              sessionKeyByIdRef.current.delete(newSessionId);
+              if (onSessionRemoved) {
+                onSessionRemoved(key);
+              }
+            }
           }
+          return;
         }
-      } else if (payload.type === 'init') {
-        const log = typeof payload.log === 'string' ? payload.log : '';
-        if (!initSuppressedRef.current && log && terminalRef.current) {
-          terminalRef.current.write(log);
+        const data = event.data;
+        if (data instanceof ArrayBuffer && terminalRef.current) {
+          // Single inbound path: raw bytes -> UTF-8 decoder -> xterm.js
+          const decoder = decoderRef.current || (decoderRef.current = new TextDecoder('utf-8', { fatal: false }));
+          terminalRef.current.write(decoder.decode(new Uint8Array(data)));
         }
-        initSuppressedRef.current = false;
-        if (payload.closed) {
-          closedByProcessRef.current = true;
+      });
+
+      socket.addEventListener('close', (event: CloseEvent) => {
+        if (socketRef.current !== socket) {
+          return;
+        }
+        socketRef.current = null;
+        activeConnectionLabelRef.current = null;
+        terminalDebugLog(`closed ${label} (code=${event.code})`);
+        if (closedByProcessRef.current) {
           setTerminalStatus('closed');
+        } else {
+          setTerminalStatus('disconnected');
         }
-      } else if (payload.type === 'error') {
-        console.error(payload.message || 'Terminal connection error');
+      });
+
+      socket.addEventListener('error', (event: Event) => {
+        if (socketRef.current !== socket) {
+          return;
+        }
+        terminalDebugLog(`error on ${label}: ${event.type}`);
         setTerminalStatus('error');
-        const key = sessionKeyByIdRef.current.get(newSessionId);
-        if (key) {
-          sessionMapRef.current.delete(key);
-          sessionKeyByIdRef.current.delete(newSessionId);
-          if (onSessionRemoved) {
-            onSessionRemoved(key);
-          }
-        }
-      }
-    });
-
-    socket.addEventListener('close', () => {
-      if (closedByProcessRef.current) {
-        setTerminalStatus('closed');
-      } else {
-        setTerminalStatus('disconnected');
-      }
-    });
-
-    socket.addEventListener('error', () => {
-      setTerminalStatus('error');
-    });
-  }, [sendResize, onSessionRemoved]);
+      });
+    },
+    [sendResize, onSessionRemoved, disposeSocket]
+  );
 
   const openTerminal = useCallback(async (worktree: Worktree | null, options: { command?: string | null; prompt?: string | null; sessionId?: string | null; newSession?: boolean; sessionTool?: 'terminal' | 'agent' } = {}) => {
     const { command, prompt, sessionId, newSession, sessionTool } = options;

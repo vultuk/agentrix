@@ -132,42 +132,6 @@ final class AgentrixMobileTests: XCTestCase {
         XCTAssertEqual(diff.mode, "unstaged")
     }
 
-    func testTerminalByteStreamDecodesSingleKeyWithoutDuplication() {
-        guard let scalar = UnicodeScalar("a") else {
-            XCTFail("Unable to create scalar")
-            return
-        }
-        let payload = [UInt8(scalar.value)]
-        let decoded = TerminalByteStream.decodeInput(payload[...])
-        XCTAssertEqual(decoded, "a")
-    }
-
-    func testTerminalByteStreamPreservesAnsiSequences() {
-        let ansi = "\u{001b}[32mWelcome to Agentrix\u{001b}[0m\r\n"
-        let data = TerminalByteStream.encode(ansi)
-        XCTAssertFalse(data.isEmpty)
-        XCTAssertEqual(data.first, 0x1b)
-        XCTAssertEqual(String(decoding: data, as: UTF8.self), ansi)
-    }
-
-    func testControlSequenceFilterSuppressesControlOnlyData() {
-        var filter = ControlSequenceFilter()
-        let controlChunk = Data([0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x68])
-        XCTAssertTrue(filter.filter(controlChunk).isEmpty)
-        let printable = Data("ls\n".utf8)
-        XCTAssertEqual(filter.filter(printable), printable)
-    }
-
-    func testControlSequenceFilterResetsPrintableDetection() {
-        var filter = ControlSequenceFilter()
-        let noise = Data([0x1b, 0x5b, 0x30, 0x6d])
-        XCTAssertTrue(filter.filter(noise).isEmpty)
-        var printable = filter.filter(Data("pwd".utf8))
-        XCTAssertEqual(String(data: printable, encoding: .utf8), "pwd")
-        filter.reset()
-        XCTAssertTrue(filter.filter(noise).isEmpty)
-    }
-
     // MARK: - Helpers
 
     private func makeMockServices() throws -> ServiceRegistry {

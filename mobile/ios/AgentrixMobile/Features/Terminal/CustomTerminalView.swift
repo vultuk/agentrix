@@ -3,6 +3,7 @@ import SwiftTerm
 #if canImport(UIKit)
 import UIKit
 
+/// `TerminalView` subclass that owns all keyboard focus and forwards bytes once.
 final class CustomTerminalView: TerminalView {
     private var hasActivatedFirstResponder = false
 
@@ -26,10 +27,12 @@ final class CustomTerminalView: TerminalView {
     }
 
     override func insertText(_ text: String) {
+        // Skip UIKit text system to avoid duplicate echoes.
         forwardInput(Array(text.utf8))
     }
 
     override func deleteBackward() {
+        // Send DEL manually so only tmux/shell echoes back.
         forwardInput([UInt8(0x7f)])
     }
 

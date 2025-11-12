@@ -22,7 +22,6 @@ import { persistSessionsSnapshot, loadPersistedSessionsSnapshot } from './sessio
 const IDLE_TIMEOUT_MS = 90 * 1000;
 const IDLE_SWEEP_INTERVAL_MS = 5 * 1000;
 const DEFAULT_UTF8_LOCALE = 'en_US.UTF-8';
-const DISABLE_ECHO_COMMAND = 'stty -echo\r';
 
 interface TerminalSessionDependencies {
   spawnPty: typeof pty.spawn;
@@ -62,6 +61,13 @@ export function __setTerminalSessionsTestOverrides(
   overrides?: Partial<TerminalSessionDependencies>,
 ): void {
   terminalSessionTestOverrides = overrides ?? null;
+}
+
+export function __resetTerminalSessionsState(): void {
+  terminalSessions.clear();
+  terminalSessionsById.clear();
+  sessionLabelCounters.clear();
+  stopIdleMonitorIfInactive();
 }
 
 function resolveTerminalDependency<K extends keyof TerminalSessionDependencies>(
@@ -148,23 +154,6 @@ function normaliseTimestamp(value: number | Date | undefined): number | null {
 function formatTimestamp(value: number | Date | undefined): string | null {
   const ms = normaliseTimestamp(value);
   return ms ? new Date(ms).toISOString() : null;
-}
-
-const PRINTABLE_REGEX = /[\x20-\x7E]/;
-
-function filterNegotiationChunk(session: TerminalSession, chunk: string): string {
-  if (!chunk) {
-    return '';
-  }
-  if (session.sawPrintableOutput) {
-    return chunk;
-  }
-  const firstPrintableIndex = chunk.search(PRINTABLE_REGEX);
-  if (firstPrintableIndex === -1) {
-    return '';
-  }
-  session.sawPrintableOutput = true;
-  return chunk.slice(firstPrintableIndex);
 }
 
 function normaliseUtf8Candidate(value: string | undefined): string | null {
@@ -373,19 +362,39 @@ function broadcast(session: TerminalSession, event: string, payload: Record<stri
   });
 }
 
+function broadcastBinary(session: TerminalSession, buffer: Buffer): void {
+  session.watchers.forEach((watcher) => {
+    const socket = watcher.socket;
+    if (!socket || socket.readyState !== 1) {
+      try {
+        socket?.terminate();
+      } catch {
+        // ignore terminate errors
+      }
+      session.watchers.delete(watcher);
+      return;
+    }
+
+    try {
+      socket.send(buffer, { binary: true });
+    } catch {
+      try {
+        socket.terminate();
+      } catch {
+        // ignore
+      }
+      session.watchers.delete(watcher);
+    }
+  });
+}
+
 function handleSessionOutput(session: TerminalSession, chunk: string | Buffer): void {
   markSessionReady(session);
   const becameActive = noteSessionActivity(session);
   const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-  const filtered = filterNegotiationChunk(session, text);
-  if (!filtered) {
-    if (becameActive) {
-      broadcastSessionsUpdate();
-    }
-    return;
-  }
-  session.log = trimLogBuffer((session.log || '') + filtered);
-  broadcast(session, 'output', { chunk: filtered });
+  session.log = trimLogBuffer((session.log || '') + text);
+  const buffer = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : Buffer.from(chunk);
+  broadcastBinary(session, buffer);
   if (becameActive) {
     broadcastSessionsUpdate();
   }
@@ -893,12 +902,7 @@ async function createTerminalSession(
     lastActivityAt: createdAt,
     createdAt,
     idle: false,
-    sawPrintableOutput: false,
   };
-
-  if (!usingTmux) {
-    session.pendingInputs.unshift(DISABLE_ECHO_COMMAND);
-  }
 
   addSession(session);
 
@@ -928,17 +932,13 @@ export async function getOrCreateTerminalSession(
   branch: string,
   options: { mode?: string; forceNew?: boolean; tool?: SessionTool; kind?: SessionKind } = {}
 ) {
-  const rawMode = typeof options['mode'] === 'string' ? options['mode'].toLowerCase() : 'auto';
-  const mode = rawMode === 'tmux' || rawMode === 'pty' ? rawMode : 'auto';
-  const allowTmuxSessions = mode !== 'pty';
-  const allowPlainSessions = mode !== 'tmux';
-  const requireTmux = mode === 'tmux';
+  const requireTmux = true;
 
   if (options.forceNew) {
     const requestedTool = options.tool === 'agent' ? 'agent' : 'terminal';
     const requestedKind: SessionKind = options.kind === 'automation' ? 'automation' : 'interactive';
     return createTerminalSession(workdir, org, repo, branch, {
-      useTmux: allowTmuxSessions,
+      useTmux: true,
       kind: requestedKind,
       tool: requestedTool,
       requireTmux,
@@ -960,29 +960,7 @@ export async function getOrCreateTerminalSession(
         }
         continue;
       }
-      const sessionUsesTmux = Boolean(session.usingTmux);
-      if (!session.kind) {
-        if (!sessionUsesTmux) {
-          if (mode === 'pty') {
-            return { session, created: false };
-          }
-          continue;
-        }
-        if (!allowTmuxSessions) {
-          continue;
-        }
-        return { session, created: false };
-      }
-      if (session.kind === 'interactive') {
-        if (sessionUsesTmux) {
-          if (!allowTmuxSessions) {
-            continue;
-          }
-          return { session, created: false };
-        }
-        if (!allowPlainSessions) {
-          continue;
-        }
+      if (session.usingTmux) {
         return { session, created: false };
       }
     }
@@ -990,18 +968,11 @@ export async function getOrCreateTerminalSession(
   if (automationCandidate) {
     return { session: automationCandidate, created: false };
   }
-  if (allowTmuxSessions) {
-    return createTerminalSession(workdir, org, repo, branch, {
-      useTmux: true,
-      kind: options.kind ?? 'interactive',
-      tool: options.tool ?? 'terminal',
-      requireTmux,
-    });
-  }
   return createTerminalSession(workdir, org, repo, branch, {
-    useTmux: false,
+    useTmux: true,
     kind: options.kind ?? 'interactive',
     tool: options.tool ?? 'terminal',
+    requireTmux,
   });
 }
 

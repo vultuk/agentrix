@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 @MainActor
 class TerminalViewModel: ObservableObject {
@@ -23,8 +24,12 @@ class TerminalViewModel: ObservableObject {
     private var transcript = Data()
     private var outputHandler: OutputHandler?
     private var terminalReady = false
-    private var pendingOutput = Data()
-    private var controlFilter = ControlSequenceFilter()
+    private var connectionSequence = 0
+    private var activeConnectionLabel: String?
+    private let logger = Logger(subsystem: "com.agentrix.mobile", category: "terminal")
+    private var worktreeLabel: String {
+        "\(worktree.org)/\(worktree.repo)#\(worktree.branch)"
+    }
 
     init(worktree: WorktreeReference, terminalService: TerminalService) {
         self.worktree = worktree
@@ -32,8 +37,12 @@ class TerminalViewModel: ObservableObject {
     }
 
     func attachSession(sessionId: String, initialLog: String) async {
-        if self.sessionId != sessionId {
+        if socketTask != nil || receiveTask != nil {
+            logger.debug("Resetting terminal connection for \(self.worktreeLabel, privacy: .public)")
             resetConnection()
+        }
+        if self.sessionId != sessionId {
+            logger.debug("Binding session \(sessionId, privacy: .public) to \(self.worktreeLabel, privacy: .public)")
         }
         self.sessionId = sessionId
         resetStreamState()
@@ -58,29 +67,26 @@ class TerminalViewModel: ObservableObject {
     }
 
     @MainActor
+    /// Registers the single consumer that feeds bytes into SwiftTerm.
     func setOutputHandler(_ handler: OutputHandler?) {
         outputHandler = handler
-        guard let handler else { return }
-        if terminalReady {
-            if !pendingOutput.isEmpty {
-                handler(pendingOutput, true)
-                pendingOutput.removeAll(keepingCapacity: false)
-            } else if !transcript.isEmpty {
-                handler(transcript, true)
-            }
-        }
+        guard handler != nil else { return }
+        deliverFullTranscriptIfReady()
     }
 
     func send(input string: String) async {
+        guard let data = string.data(using: .utf8) else { return }
+        await send(bytes: data)
+    }
+
+    /// Raw terminal input leaves the device through this single path.
+    func send(bytes data: Data) async {
         guard let socketTask else { return }
-        let payload: [String: Any] = ["type": "input", "data": string]
-        if let data = try? JSONSerialization.data(withJSONObject: payload),
-           let text = String(data: data, encoding: .utf8) {
-            do {
-                try await socketTask.send(.string(text))
-            } catch {
-                state = .error("Terminal input failed")
-            }
+        guard !data.isEmpty else { return }
+        do {
+            try await socketTask.send(.data(data))
+        } catch {
+            state = .error("Terminal input failed")
         }
     }
 
@@ -106,6 +112,11 @@ class TerminalViewModel: ObservableObject {
         // Resume the task to start the connection
         task.resume()
         
+        connectionSequence += 1
+        let label = "ws-\(connectionSequence)-\(sessionId)"
+        activeConnectionLabel = label
+        logger.debug("Opening terminal connection \(label, privacy: .public) for \(worktreeLabel, privacy: .public)")
+
         socketTask = task
         state = .connected
         
@@ -117,16 +128,13 @@ class TerminalViewModel: ObservableObject {
                     case .string(let value):
                         await self?.dispatchSocketMessage(value)
                     case .data(let data):
-                        // Only process binary data if it can be decoded as UTF-8
-                        // handleSocketMessage will validate JSON format
-                        if let text = String(data: data, encoding: .utf8) {
-                            await self?.dispatchSocketMessage(text)
-                        }
+                        await self?.dispatchBinaryMessage(data)
                     @unknown default:
                         break
                     }
                 }
             } catch {
+                guard !Task.isCancelled else { return }
                 await MainActor.run {
                     if let urlError = error as? URLError {
                         switch urlError.code {
@@ -140,6 +148,9 @@ class TerminalViewModel: ObservableObject {
                     } else {
                         self?.state = .error("Terminal connection lost: \(error.localizedDescription)")
                     }
+                    if let label = self?.activeConnectionLabel {
+                        self?.logger.error("Terminal connection \(label, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+                    }
                 }
             }
         }
@@ -151,11 +162,21 @@ class TerminalViewModel: ObservableObject {
         }
     }
 
+    private func dispatchBinaryMessage(_ data: Data) async {
+        await MainActor.run {
+            self.handleBinaryMessage(data)
+        }
+    }
+
     private func resetConnection() {
         receiveTask?.cancel()
         receiveTask = nil
+        if let label = activeConnectionLabel {
+            logger.debug("Closing terminal connection \(label, privacy: .public) for \(worktreeLabel, privacy: .public)")
+        }
         socketTask?.cancel()
         socketTask = nil
+        activeConnectionLabel = nil
         if state == .connected || state == .connecting {
             state = .idle
         }
@@ -178,7 +199,7 @@ class TerminalViewModel: ObservableObject {
             handleReadyEvent()
         case "output":
             if let chunk = event.chunk {
-                appendTranscript(chunk)
+                appendTextToTranscript(chunk)
             }
         case "exit":
             state = .closed
@@ -191,108 +212,46 @@ class TerminalViewModel: ObservableObject {
 
     @MainActor
     private func replaceTranscript(with text: String) {
-        pendingOutput.removeAll(keepingCapacity: true)
-        log = ""
-        transcript.removeAll(keepingCapacity: true)
-        appendTranscript(text, replacing: true)
+        log = text
+        transcript = Data(text.utf8)
+        deliverFullTranscriptIfReady()
     }
 
     @MainActor
-    private func appendTranscript(_ text: String, replacing: Bool = false) {
-        let delta = TerminalByteStream.encode(text)
-        guard !delta.isEmpty else { return }
-        let hadPrinted = controlFilter.hasPrintedVisibleGlyph
-        let filtered = controlFilter.filter(delta)
-        guard !filtered.isEmpty else { return }
-        let fragment = String(decoding: filtered, as: UTF8.self)
-        if replacing {
-            log = fragment
-            transcript = filtered
-        } else {
-            log.append(fragment)
-            transcript.append(filtered)
+    private func appendTextToTranscript(_ text: String) {
+        guard !text.isEmpty else { return }
+        let data = Data(text.utf8)
+        log.append(text)
+        transcript.append(data)
+        if terminalReady, let handler = outputHandler {
+            handler(data, false)
         }
-        if terminalReady {
-            outputHandler?(filtered, replacing)
-            return
-        }
-        pendingOutput.append(filtered)
-        if !hadPrinted && controlFilter.hasPrintedVisibleGlyph {
-            markTerminalReady()
+    }
+
+    /// Handles binary stdout from tmux/shell and forwards it once to the SwiftTerm view.
+    private func handleBinaryMessage(_ data: Data) {
+        guard !data.isEmpty else { return }
+        transcript.append(data)
+        let fragment = String(decoding: data, as: UTF8.self)
+        log.append(fragment)
+        if terminalReady, let handler = outputHandler {
+            handler(data, false)
         }
     }
 
     private func handleReadyEvent() {
-        markTerminalReady()
-    }
-
-    private func flushPendingOutputToHandler() {
-        guard terminalReady, let handler = outputHandler else { return }
-        if !pendingOutput.isEmpty {
-            handler(pendingOutput, true)
-            pendingOutput.removeAll(keepingCapacity: false)
-        } else if !transcript.isEmpty {
-            handler(transcript, true)
-        }
+        terminalReady = true
+        deliverFullTranscriptIfReady()
     }
 
     private func resetStreamState() {
         terminalReady = false
-        pendingOutput.removeAll(keepingCapacity: true)
-        controlFilter.reset()
+        transcript.removeAll(keepingCapacity: true)
+        log = ""
     }
 
-    private func markTerminalReady() {
-        guard !terminalReady else { return }
-        terminalReady = true
-        flushPendingOutputToHandler()
-    }
-}
-
-enum TerminalByteStream {
-    static func encode(_ text: String) -> Data {
-        Data(text.utf8)
-    }
-
-    static func decodeInput(_ bytes: ArraySlice<UInt8>) -> String? {
-        guard !bytes.isEmpty else { return nil }
-        if let direct = String(bytes: bytes, encoding: .utf8) {
-            return direct
-        }
-        let buffer = Array(bytes)
-        guard !buffer.isEmpty else { return nil }
-        return String(bytes: buffer, encoding: .utf8)
-    }
-
-}
-
-struct ControlSequenceFilter {
-    private(set) var hasPrintedVisibleGlyph = false
-
-    mutating func reset() {
-        hasPrintedVisibleGlyph = false
-    }
-
-    mutating func filter(_ data: Data) -> Data {
-        guard !data.isEmpty else { return Data() }
-        if hasPrintedVisibleGlyph {
-            return data
-        }
-        var printableCount = 0
-        var consideredCount = 0
-        for byte in data {
-            if byte == 0x0a || byte == 0x0d {
-                continue
-            }
-            consideredCount += 1
-            if byte >= 0x20 && byte <= 0x7e {
-                printableCount += 1
-            }
-        }
-        if printableCount >= 2 || (consideredCount > 0 && Double(printableCount) / Double(max(consideredCount, 1)) >= 0.3) {
-            hasPrintedVisibleGlyph = true
-            return data
-        }
-        return Data()
+    private func deliverFullTranscriptIfReady() {
+        guard terminalReady, let handler = outputHandler, !transcript.isEmpty else { return }
+        handler(transcript, true)
     }
 }

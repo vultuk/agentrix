@@ -38,7 +38,7 @@
     "agentrix": "bin/agentrix.js"
   },
   "scripts": {
-    "test": "tsx --test --test-concurrency=4 src/**/*.test.ts",
+    "test": "tsx --test --test-concurrency=1 src/**/*.test.ts",
     "test:coverage": "c8 --clean --reporter=text --reporter=lcov tsx --test --test-concurrency=4 src/**/*.test.ts",
     "start": "node bin/agentrix.js",
     "dev": "node bin/agentrix.js",

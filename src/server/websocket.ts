@@ -1,6 +1,6 @@
 import type { Server as HttpServer, IncomingMessage } from 'node:http';
 import type { Socket } from 'node:net';
-import type { WebSocket, WebSocketServer as WSServer } from 'ws';
+import type { WebSocket, WebSocketServer as WSServer, RawData } from 'ws';
 import { WebSocketServer } from 'ws';
 import type { AuthManager } from '../types/auth.js';
 
@@ -66,11 +66,18 @@ export function attachTerminalWebSockets(server: HttpServer, authManager: AuthMa
 
       getDependency('addSocketWatcher')(session, socket);
 
-      socket.on('message', (data) => {
+      socket.on('message', (data: RawData, isBinary: boolean) => {
         if (session.closed) {
           return;
         }
-        const raw = typeof data === 'string' ? data : data.toString('utf8');
+        if (isBinary) {
+          const buffer = normaliseRawData(data);
+          if (buffer.length > 0) {
+            getDependency('queueSessionInput')(session, buffer);
+          }
+          return;
+        }
+        const raw = typeof data === 'string' ? data : normaliseRawData(data).toString('utf8');
         let parsed;
         try {
           parsed = JSON.parse(raw);
@@ -87,7 +94,7 @@ export function attachTerminalWebSockets(server: HttpServer, authManager: AuthMa
           if (Number.isInteger(cols) && Number.isInteger(rows) && cols > 0 && rows > 0) {
             session.process.resize(cols, rows);
           }
-        } else {
+        } else if (raw) {
           getDependency('queueSessionInput')(session, raw);
         }
       });
@@ -171,4 +178,14 @@ export function attachTerminalWebSockets(server: HttpServer, authManager: AuthMa
   }
 
   return { wss, close };
+}
+
+function normaliseRawData(data: RawData): Buffer {
+  if (Buffer.isBuffer(data)) {
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return Buffer.concat(data);
+  }
+  return Buffer.from(data);
 }

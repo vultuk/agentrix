@@ -7,6 +7,7 @@ import AppKit
 #endif
 import UniformTypeIdentifiers
 
+/// Coalesces streamed bytes before flushing them into SwiftTerm.
 final class TerminalOutputAccumulator {
     private var buffer = Data()
     private var flushScheduled = false
@@ -105,7 +106,10 @@ struct SwiftTermTerminalView: UIViewRepresentable {
         }
 
         func bind(to terminalView: TerminalView) {
-            self.terminalView = terminalView
+            if self.terminalView !== terminalView {
+                self.terminalView?.terminalDelegate = nil
+                self.terminalView = terminalView
+            }
             terminalView.terminalDelegate = self
             Task { @MainActor in
                 self.viewModel.setOutputHandler(self.outputSink)
@@ -157,9 +161,11 @@ struct SwiftTermTerminalView: UIViewRepresentable {
             // Future enhancement: surfaced in UI if needed.
         }
 
+        /// Entry point for the single outbound input path: SwiftTerm -> WebSocket.
         func send(source: TerminalView, data: ArraySlice<UInt8>) {
-            guard let string = TerminalByteStream.decodeInput(data), !string.isEmpty else { return }
-            Task { await viewModel.send(input: string) }
+            let payload = Data(data)
+            guard !payload.isEmpty else { return }
+            Task { await viewModel.send(bytes: payload) }
         }
 
         func scrolled(source: TerminalView, position: Double) {
@@ -273,7 +279,10 @@ struct SwiftTermTerminalView: NSViewRepresentable {
         }
 
         func bind(to terminalView: TerminalView) {
-            self.terminalView = terminalView
+            if self.terminalView !== terminalView {
+                self.terminalView?.terminalDelegate = nil
+                self.terminalView = terminalView
+            }
             terminalView.terminalDelegate = self
             Task { @MainActor in
                 self.viewModel.setOutputHandler(self.outputSink)
@@ -340,9 +349,11 @@ struct SwiftTermTerminalView: NSViewRepresentable {
             // Future enhancement: surfaced in UI if needed.
         }
 
+        /// Entry point for the single outbound input path: SwiftTerm -> WebSocket.
         func send(source: TerminalView, data: ArraySlice<UInt8>) {
-            guard let string = TerminalByteStream.decodeInput(data), !string.isEmpty else { return }
-            Task { await viewModel.send(input: string) }
+            let payload = Data(data)
+            guard !payload.isEmpty else { return }
+            Task { await viewModel.send(bytes: payload) }
         }
 
         func scrolled(source: TerminalView, position: Double) {

@@ -150,11 +150,6 @@ final class TerminalSessionsStore: ObservableObject {
         await attachActiveSessionIfNeeded(force: true)
     }
 
-    func sendInput(_ text: String) {
-        guard let viewModel = activeSessionViewModel else { return }
-        Task { await viewModel.send(input: text) }
-    }
-
     private func updateSessionsList(with snapshots: [WorktreeSessionSnapshot]) {
         sessions = snapshots
         let ids = Set(snapshots.map(\.id))
@@ -237,4 +232,3 @@ final class TerminalSessionsStore: ObservableObject {
         )
     }
 }
-

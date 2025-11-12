@@ -10,7 +10,7 @@ class FakeWebSocket extends EventEmitter {
   public sent: Array<string | Buffer> = [];
   public closed = false;
 
-  send(data: string | Buffer): void {
+  send(data: string | Buffer, _options?: unknown): void {
     this.sent.push(data);
   }
 
@@ -206,14 +206,14 @@ describe('attachTerminalWebSockets', () => {
     assert.equal(overrides.addSocketWatcher.mock.calls[0]?.arguments[0], session);
     assert.equal(client.sent.some((message) => String(message).includes('"type":"init"')), true);
 
-    client.emit('message', Buffer.from('{"type":"input","data":"ls"}'));
-    client.emit('message', Buffer.from('{"type":"resize","cols":"80","rows":"24"}'));
-    client.emit('message', Buffer.from('{"type":"resize","cols":"bad","rows":"0"}'));
-    client.emit('message', 'raw-bytes');
-    client.emit('message', Buffer.from('{"type":"input"}'));
+    client.emit('message', Buffer.from('ls'), true);
+    client.emit('message', '{"type":"resize","cols":"80","rows":"24"}', false);
+    client.emit('message', '{"type":"resize","cols":"bad","rows":"0"}', false);
+    client.emit('message', 'raw-bytes', false);
+    client.emit('message', '{"type":"input"}', false);
 
     assert.equal(overrides.queueSessionInput.mock.calls.length, 3);
-    assert.deepEqual(overrides.queueSessionInput.mock.calls[0]?.arguments, [session, 'ls']);
+    assert.equal(Buffer.isBuffer(overrides.queueSessionInput.mock.calls[0]?.arguments?.[1]), true);
     assert.equal(
       overrides.queueSessionInput.mock.calls.some((call) => call?.arguments?.[1] === 'raw-bytes'),
       true,
