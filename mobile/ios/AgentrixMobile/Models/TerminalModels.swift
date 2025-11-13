@@ -1,5 +1,37 @@
 import Foundation
 
+enum TerminalSessionTool: String, Decodable {
+    case terminal
+    case agent
+
+    var displayName: String {
+        switch self {
+        case .terminal:
+            return "Terminal"
+        case .agent:
+            return "Agent"
+        }
+    }
+
+    var kindValue: String {
+        switch self {
+        case .terminal:
+            return "interactive"
+        case .agent:
+            return "automation"
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .terminal:
+            return "Terminal session"
+        case .agent:
+            return "Agent session"
+        }
+    }
+}
+
 struct TerminalOpenResponse: Decodable {
     let sessionId: String
     let log: String
@@ -16,6 +48,14 @@ struct WorktreeSessionSnapshot: Decodable, Identifiable {
     let lastActivityAt: Date?
     let createdAt: Date?
     let tmuxSessionName: String?
+
+    var sessionTool: TerminalSessionTool? {
+        TerminalSessionTool(rawValue: tool)
+    }
+
+    var sessionAccessibilityLabel: String {
+        sessionTool?.accessibilityLabel ?? "\(tool.capitalized) session"
+    }
 }
 
 struct WorktreeSessionSummary: Decodable, Identifiable {

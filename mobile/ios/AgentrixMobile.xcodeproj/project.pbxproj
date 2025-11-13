@@ -25,10 +25,10 @@
 		6155C141CD8C4B838EE1B044 /* EventStreamService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3831CBF2241A410D8F96CEF7 /* EventStreamService.swift */; };
 		64A82C19A49A49D98D6E9ED3 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70BD2CE761B44BD0B594640C /* AppSettings.swift */; };
 		674700F82EC3DFAA0080F7E7 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 674700F72EC3DFAA0080F7E7 /* SwiftTerm */; };
-		FEA0F1CB1593BD8BA12BF8A3 /* CustomTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B070A21FF8A62965B3AF2C2 /* CustomTerminalView.swift */; };
 		68A4F4A0D6334164A7BADE0B /* RepositoriesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B6587445EE44CCE86A398F6 /* RepositoriesService.swift */; };
 		6EAF9B3989164CECB628FFC8 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E7F4E12B40E4AD68EBF82E6 /* Theme.swift */; };
 		6EE93078E6DB47439B80DB01 /* PortsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DC689D0DB834509B6368559 /* PortsModels.swift */; };
+		63B526145FF376F913F8560E /* TerminalSessionVisualStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AD5FCD820F1D3333C32BB28 /* TerminalSessionVisualStyle.swift */; };
 		74F4C51C546B47D68DBBBEC0 /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19DCAE74256B4032B637318C /* TerminalView.swift */; };
 		7A0132F58C144C1BBE16E1E4 /* RepoDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96253B8255954FB8B8461D59 /* RepoDashboardView.swift */; };
 		86C9A0169A1F47D7A9D9D81B /* TasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E31FD12627142198CC95D6C /* TasksView.swift */; };
@@ -48,6 +48,7 @@
 		AC0BEE0FE2AB4C64B0F73E9B /* IssuePresentationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B80282D9B64D5B970243D1 /* IssuePresentationState.swift */; };
 		AC1731B9FC9748B79205A639 /* DiffPresentationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C5C81BB50C4A039C2F6D2E /* DiffPresentationState.swift */; };
 		AE6340CFE3014AA0A5BE8156 /* TerminalService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530A3844A91F4181B886D66A /* TerminalService.swift */; };
+		E554DAFC43C3885B88FE21F9 /* TerminalSessionStyleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFBB7D91E1F97356467377C7 /* TerminalSessionStyleTests.swift */; };
 		B8F20F83CDEE4C01A5511C4E /* GitDiffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FAFC804E96D4EA18BC8C696 /* GitDiffView.swift */; };
 		BB39580AF26A4E64B844EEE2 /* PortsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73403F03071342DE8B7F727E /* PortsService.swift */; };
 		C9A2688B25794FF2904EACB7 /* WorktreesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1318745A7CE040E3A18886DE /* WorktreesService.swift */; };
@@ -61,6 +62,7 @@
 		FBEF21AC9852489993755A6C /* AgentrixMobileUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF33F33D6313415CA45ED046 /* AgentrixMobileUITests.swift */; };
 		FD11D7D0290846FFBEDADD60 /* WorktreeDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7489BEB5E754AF2837402A5 /* WorktreeDetailView.swift */; };
 		FE2C0E14D75447F6A4F7FD9D /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3246D038942B4BFC859263CB /* AuthViewModel.swift */; };
+		FEA0F1CB1593BD8BA12BF8A3 /* CustomTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B070A21FF8A62965B3AF2C2 /* CustomTerminalView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -119,10 +121,10 @@
 		86441AFE05414D43802EF5C4 /* RepositoriesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoriesViewModel.swift; sourceTree = "<group>"; };
 		8FAFC804E96D4EA18BC8C696 /* GitDiffView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitDiffView.swift; sourceTree = "<group>"; };
 		93E3847F5172415C9B6E61A0 /* CommandModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandModels.swift; sourceTree = "<group>"; };
-		9B070A21FF8A62965B3AF2C2 /* CustomTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomTerminalView.swift; sourceTree = "<group>"; };
 		96253B8255954FB8B8461D59 /* RepoDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepoDashboardView.swift; sourceTree = "<group>"; };
 		96D5F1752D814B789CC5D9F1 /* AgentrixMobileUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = AgentrixMobileUITests.xctest; path = .xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		98C1F02B883D4A20BBEC9B56 /* IssueModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssueModels.swift; sourceTree = "<group>"; };
+		9B070A21FF8A62965B3AF2C2 /* CustomTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomTerminalView.swift; sourceTree = "<group>"; };
 		A3C5C81BB50C4A039C2F6D2E /* DiffPresentationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffPresentationState.swift; sourceTree = "<group>"; };
 		A45F018AD786460784B83E87 /* TaskModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskModels.swift; sourceTree = "<group>"; };
 		AF791275C8D44ACF9BD967F2 /* AgentrixApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentrixApp.swift; sourceTree = "<group>"; };
@@ -136,7 +138,9 @@
 		D5F6CDDB4FD941C4A7CEE8E7 /* PortsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortsView.swift; sourceTree = "<group>"; };
 		D77D30A55CF64F94B67E09C4 /* WorktreeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeViewModel.swift; sourceTree = "<group>"; };
 		E4B7F5D1234A4DA5B2A5F5AA /* SwiftTermTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftTermTerminalView.swift; sourceTree = "<group>"; };
+		5AD5FCD820F1D3333C32BB28 /* TerminalSessionVisualStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionVisualStyle.swift; sourceTree = "<group>"; };
 		E8D4DA132607483B82A75F33 /* AgentrixMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = AgentrixMobileTests.xctest; path = .xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		EFBB7D91E1F97356467377C7 /* TerminalSessionStyleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionStyleTests.swift; sourceTree = "<group>"; };
 		FEDA99F029504BCAB4ADF39B /* DashboardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -237,6 +241,7 @@
 				19DCAE74256B4032B637318C /* TerminalView.swift */,
 				1B11EECE49BF41209234CFB6 /* TerminalViewModel.swift */,
 				2AC69FBBAB1D4CCE96AE9E3A /* TerminalSessionsStore.swift */,
+				5AD5FCD820F1D3333C32BB28 /* TerminalSessionVisualStyle.swift */,
 				E4B7F5D1234A4DA5B2A5F5AA /* SwiftTermTerminalView.swift */,
 				9B070A21FF8A62965B3AF2C2 /* CustomTerminalView.swift */,
 			);
@@ -367,6 +372,7 @@
 			isa = PBXGroup;
 			children = (
 				C14681E5CA964955948713BB /* AgentrixMobileTests.swift */,
+				EFBB7D91E1F97356467377C7 /* TerminalSessionStyleTests.swift */,
 			);
 			path = AgentrixMobileTests;
 			sourceTree = "<group>";
@@ -540,6 +546,7 @@
 				FEA0F1CB1593BD8BA12BF8A3 /* CustomTerminalView.swift in Sources */,
 				0543D60F6CD845828BD989A3 /* TerminalViewModel.swift in Sources */,
 				A5CAE8CAA6D7472781DABDE5 /* TerminalSessionsStore.swift in Sources */,
+				63B526145FF376F913F8560E /* TerminalSessionVisualStyle.swift in Sources */,
 				FD11D7D0290846FFBEDADD60 /* WorktreeDetailView.swift in Sources */,
 				A3DD6894A7F04EE9BA6E0448 /* WorktreeViewModel.swift in Sources */,
 				580610920E8F4A599C171A2F /* DashboardModels.swift in Sources */,
@@ -576,6 +583,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A2BA7A2454294D629FB86BE8 /* AgentrixMobileTests.swift in Sources */,
+				E554DAFC43C3885B88FE21F9 /* TerminalSessionStyleTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -656,7 +664,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				INFOPLIST_FILE = AgentrixMobile/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -687,7 +695,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				INFOPLIST_FILE = AgentrixMobile/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

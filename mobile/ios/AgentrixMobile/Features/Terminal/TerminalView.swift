@@ -127,10 +127,13 @@ private struct TerminalSessionTab: View {
     let selectAction: () -> Void
     let closeAction: () -> Void
 
+    private var style: TerminalSessionVisualStyle {
+        TerminalSessionVisualStyle(snapshot: session)
+    }
+
     private var statusColor: Color {
-        if isActive { return .agentrixAccent }
         if session.idle { return .orange }
-        return .white.opacity(0.45)
+        return style.statusIndicatorColor(isActive: isActive)
     }
 
     var body: some View {
@@ -144,6 +147,8 @@ private struct TerminalSessionTab: View {
                 .font(.system(.callout, design: .monospaced).weight(.semibold))
                 .foregroundStyle(isActive ? Color.white : Color.white.opacity(0.7))
                 .lineLimit(1)
+
+            sessionTypeBadge
 
             if isClosing {
                 ProgressView()
@@ -176,7 +181,7 @@ private struct TerminalSessionTab: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(
-                            Color.agentrixAccent.opacity(isActive ? 0.8 : 0.25),
+                            style.borderColor(isActive: isActive),
                             lineWidth: isActive ? 1.6 : 1
                         )
                         .matchedGeometryEffect(id: "terminal-tab-\(session.id)", in: namespace, isSource: isActive)
@@ -186,7 +191,24 @@ private struct TerminalSessionTab: View {
         .onTapGesture {
             selectAction()
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(session.label). \(style.sessionTypeAnnouncement)")
+        .accessibilityValue(style.accessibilityValue(isActive: isActive, isIdle: session.idle, isClosing: isClosing))
+        .accessibilityHint(isClosing ? "Session is closing." : "Double-tap to focus this session.")
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: isActive)
+    }
+
+    private var sessionTypeBadge: some View {
+        Text(style.badgeLabel.uppercased())
+            .font(.caption2.weight(.bold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(style.badgeBackground(isActive: isActive))
+            )
+            .foregroundStyle(style.badgeForeground)
+            .accessibilityHidden(true)
     }
 }
 
