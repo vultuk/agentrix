@@ -46,8 +46,13 @@ export function __setRepositoryCacheSnapshot(snapshot: RepositoriesMap | null): 
  * @returns Updated repository data
  */
 export async function refreshRepositoryCache(workdir: string): Promise<RepositoriesMap> {
-  const data = await activeDependencies.discoverRepositories(workdir);
-  repositoryCacheSnapshot = data;
-  activeDependencies.emitReposUpdate(data);
-  return data;
+  try {
+    const data = await activeDependencies.discoverRepositories(workdir);
+    repositoryCacheSnapshot = data;
+    activeDependencies.emitReposUpdate(data);
+    return data;
+  } catch (error) {
+    repositoryCacheSnapshot = null;
+    throw error;
+  }
 }

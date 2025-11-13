@@ -47,6 +47,11 @@ describe('refreshRepositoryCache', () => {
 
   it('propagates discovery errors without emitting updates', async () => {
     const error = new Error('discovery failed');
+    const staleSnapshot = {
+      org: {
+        repo: {},
+      },
+    };
 
     const discover = mock.fn(async () => {
       throw error;
@@ -58,8 +63,11 @@ describe('refreshRepositoryCache', () => {
       emitReposUpdate: emit,
     });
 
+    __setRepositoryCacheSnapshot(staleSnapshot);
+
     await assert.rejects(() => refreshRepositoryCache('/tmp/workdir'), /discovery failed/);
     assert.equal(emit.mock.calls.length, 0);
+    assert.strictEqual(getRepositoryCacheSnapshot(), null);
   });
 
   it('stores the refreshed snapshot for later retrieval', async () => {
