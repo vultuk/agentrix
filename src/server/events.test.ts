@@ -4,6 +4,7 @@ import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import { createEventStreamHandler, __setEventStreamTestOverrides } from './events.js';
 import type { AuthManager } from '../types/auth.js';
 import type { RequestContext } from '../types/http.js';
+import { __setRepositoryCacheSnapshot } from '../utils/repository-cache.js';
 
 function createAuthManager(isAuthenticated: boolean): AuthManager {
   return {
@@ -52,6 +53,7 @@ function createContext(): RequestContext & { writes: string[]; close: () => void
 
 describe('createEventStreamHandler', () => {
   beforeEach(() => {
+    __setRepositoryCacheSnapshot(null);
     __setEventStreamTestOverrides({
       getEventTypes: () => ({
         REPOS_UPDATE: 'repos:update',
@@ -85,6 +87,7 @@ describe('createEventStreamHandler', () => {
 
   afterEach(() => {
     __setEventStreamTestOverrides();
+    __setRepositoryCacheSnapshot(null);
     subscriptionHandlers.clear();
     unsubscribedEvents.length = 0;
   });
@@ -169,5 +172,42 @@ describe('createEventStreamHandler', () => {
       true,
     );
     assert.equal((context.res.end as ReturnType<typeof mock.fn>).mock.calls.length > 0, true);
+  });
+
+  it('uses cached repository snapshot when available', async () => {
+    const cachedSnapshot = { org: { repo: { branches: ['main'] } } };
+    const discover = mock.fn(async () => {
+      throw new Error('should not query repositories when cache exists');
+    });
+    __setRepositoryCacheSnapshot(cachedSnapshot);
+    __setEventStreamTestOverrides({
+      getEventTypes: () => ({
+        REPOS_UPDATE: 'repos:update',
+        SESSIONS_UPDATE: 'sessions:update',
+        TASKS_UPDATE: 'tasks:update',
+      }),
+      discoverRepositories: discover,
+      listActiveSessions: () => [],
+      listTasks: () => [],
+      loadPersistedSessionsSnapshot: async () => [],
+      subscribeToEvents: () => () => {},
+    });
+
+    const handler = createEventStreamHandler({
+      authManager: createAuthManager(true),
+      workdir: '/workdir',
+    });
+    const context = createContext();
+
+    await handler(context);
+    context.close();
+
+    assert.equal(discover.mock.calls.length, 0);
+    const reposEventIndex = context.writes.findIndex((chunk) => chunk.startsWith('event: repos:update'));
+    assert.notEqual(reposEventIndex, -1);
+    const dataLine = context.writes[reposEventIndex + 1];
+    assert.ok(dataLine?.startsWith('data: '));
+    const payload = JSON.parse(dataLine.slice('data: '.length));
+    assert.deepEqual(payload.data, cachedSnapshot);
   });
 });

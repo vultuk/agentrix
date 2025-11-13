@@ -6,6 +6,7 @@ import { getEventTypes, subscribeToEvents } from '../core/event-bus.js';
 import { listTasks } from '../core/tasks.js';
 import type { AuthManager } from '../types/auth.js';
 import type { RequestContext } from '../types/http.js';
+import { getRepositoryCacheSnapshot } from '../utils/repository-cache.js';
 
 const HEARTBEAT_INTERVAL_MS = 15000;
 
@@ -54,8 +55,9 @@ function getDependency<K extends keyof EventStreamDependencies>(key: K): EventSt
 
 async function sendInitialSnapshots(res: ServerResponse, workdir: string): Promise<void> {
   const eventTypes = getDependency('getEventTypes')();
+  const cachedRepos = getRepositoryCacheSnapshot();
   const [reposSnapshot, rawSessionsSnapshot, tasksSnapshot] = await Promise.all([
-    getDependency('discoverRepositories')(workdir).catch(() => ({})),
+    cachedRepos ? Promise.resolve(cachedRepos) : getDependency('discoverRepositories')(workdir).catch(() => ({})),
     Promise.resolve(getDependency('serialiseSessions')(getDependency('listActiveSessions')())),
     Promise.resolve(getDependency('listTasks')()).catch(() => []),
   ]);
