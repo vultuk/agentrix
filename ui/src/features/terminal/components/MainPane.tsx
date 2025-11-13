@@ -21,7 +21,9 @@ interface MainPaneProps {
   onSessionSelect: (sessionId: string) => void;
   onSessionClose: (sessionId: string) => void;
   onSessionCreate: () => void;
+  onQuickLaunchSession?: (tool: 'terminal' | 'agent') => void;
   isSessionCreationPending: boolean;
+  isQuickSessionPending?: boolean;
   pendingCloseSessionId: string | null;
   isGitSidebarOpen: boolean;
   githubControls: React.ReactNode;
@@ -51,7 +53,9 @@ export default function MainPane({
   onSessionSelect,
   onSessionClose,
   onSessionCreate,
+  onQuickLaunchSession,
   isSessionCreationPending,
+  isQuickSessionPending = false,
   pendingCloseSessionId,
   isGitSidebarOpen,
   githubControls,
@@ -138,6 +142,8 @@ export default function MainPane({
           onSelectSession: onSessionSelect,
           onCloseSession: onSessionClose,
           onAddSession: onSessionCreate,
+          onQuickLaunchSession,
+          isQuickLaunchPending: isQuickSessionPending,
         }),
         h(GitStatusSidebar, {
           isOpen: isGitSidebarOpen,

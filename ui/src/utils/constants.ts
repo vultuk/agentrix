@@ -61,6 +61,7 @@ export const REPOSITORY_DASHBOARD_POLL_INTERVAL_MS = 60000;
 export const SESSION_POLL_INTERVAL_MS = 60000;
 
 export const ORGANISATION_COLLAPSE_STORAGE_KEY = 'agentrix:collapsed-organisations';
+export const PREFERRED_SESSION_TOOL_STORAGE_KEY = 'agentrix:preferred-session-tool';
 
 export const TASK_STATUS_LABELS = Object.freeze({
   pending: 'Pending',
@@ -89,4 +90,3 @@ export const TASK_STATUS_INDICATOR_CLASSES = Object.freeze({
 export const ACTION_BUTTON_CLASS = 'inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors';
 
 export const ACKNOWLEDGEMENT_ACTIVITY_TOLERANCE_MS = 1500;
-
