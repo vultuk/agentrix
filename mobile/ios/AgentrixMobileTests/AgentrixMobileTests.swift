@@ -1,7 +1,34 @@
 import XCTest
+import UIKit
 @testable import AgentrixMobile
 
 final class AgentrixMobileTests: XCTestCase {
+    @MainActor
+    func testTerminalKeyboardCanBeDismissedAndRestored() {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+        let rootViewController = UIViewController()
+        window.rootViewController = rootViewController
+        window.makeKeyAndVisible()
+        defer {
+            window.isHidden = true
+        }
+
+        let terminalView = CustomTerminalView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        rootViewController.view.addSubview(terminalView)
+
+        terminalView.requestKeyboardFocus()
+        waitForRunLoop()
+        XCTAssertTrue(terminalView.isFirstResponder, "Terminal should gain focus when requested")
+
+        terminalView.requestKeyboardDismissal()
+        waitForRunLoop()
+        XCTAssertFalse(terminalView.isFirstResponder, "Terminal should resign first responder when dismissed")
+
+        terminalView.requestKeyboardFocus()
+        waitForRunLoop()
+        XCTAssertTrue(terminalView.isFirstResponder, "Terminal should regain focus after a tap/refocus request")
+    }
+
     func testRepositoryListingIdentifier() {
         let dto = RepositoryDTO(branches: ["main"], initCommand: "")
         let listing = RepositoryListing(org: "acme", name: "web", dto: dto)
@@ -166,6 +193,11 @@ final class AgentrixMobileTests: XCTestCase {
             try await Task.sleep(nanoseconds: 50_000_000)
         }
         XCTFail("Timed out waiting for sections to load")
+    }
+
+    @MainActor
+    private func waitForRunLoop() {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
     }
 
     @MainActor
