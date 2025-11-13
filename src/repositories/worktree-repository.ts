@@ -223,6 +223,9 @@ export async function createWorktree(
   const { repoRoot, repositoryPath } = resolveRepositoryPaths(workdir, org, repo);
   
   const folderName = deriveWorktreeFolderName(branchName);
+  if (folderName === '.' || folderName === '..') {
+    throw new Error('Invalid worktree folder name derived from branch');
+  }
   const targetPath = path.join(repoRoot, folderName);
 
   try {

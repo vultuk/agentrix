@@ -277,5 +277,16 @@ describe('worktree-repository', () => {
         }
       );
     });
+
+    it('rejects invalid derived folder names', async () => {
+      await assert.rejects(
+        createWorktree('/work', 'acme', 'demo', '.'),
+        (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.match(error.message, /Invalid worktree folder name derived from branch/);
+          return true;
+        }
+      );
+    });
   });
 });
