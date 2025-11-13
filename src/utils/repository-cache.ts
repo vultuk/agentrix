@@ -13,6 +13,7 @@ const defaultDependencies: Dependencies = {
 };
 
 let activeDependencies: Dependencies = { ...defaultDependencies };
+let repositoryCacheSnapshot: RepositoriesMap | null = null;
 
 /**
  * @internal Utility for tests to override repository discovery dependencies
@@ -26,13 +27,27 @@ export function __setRepositoryCacheTestOverrides(overrides?: Partial<Dependenci
 }
 
 /**
+ * Retrieves the current repository cache snapshot, if any
+ */
+export function getRepositoryCacheSnapshot(): RepositoriesMap | null {
+  return repositoryCacheSnapshot;
+}
+
+/**
+ * @internal Utility for tests to set the repository cache snapshot
+ */
+export function __setRepositoryCacheSnapshot(snapshot: RepositoriesMap | null): void {
+  repositoryCacheSnapshot = snapshot;
+}
+
+/**
  * Refreshes the repository cache by discovering repositories and emitting an update event
  * @param workdir - Work directory root
  * @returns Updated repository data
  */
 export async function refreshRepositoryCache(workdir: string): Promise<RepositoriesMap> {
   const data = await activeDependencies.discoverRepositories(workdir);
+  repositoryCacheSnapshot = data;
   activeDependencies.emitReposUpdate(data);
   return data;
 }
-

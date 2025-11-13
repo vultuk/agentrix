@@ -1,10 +1,17 @@
 import assert from 'node:assert/strict';
-import { describe, it, mock } from 'node:test';
+import { describe, it, mock, afterEach } from 'node:test';
 
 import {
   __setRepositoryCacheTestOverrides,
+  __setRepositoryCacheSnapshot,
+  getRepositoryCacheSnapshot,
   refreshRepositoryCache,
 } from './repository-cache.js';
+
+afterEach(() => {
+  __setRepositoryCacheSnapshot(null);
+  __setRepositoryCacheTestOverrides();
+});
 
 describe('refreshRepositoryCache', () => {
   it('refreshes repositories and emits update events', async () => {
@@ -28,18 +35,14 @@ describe('refreshRepositoryCache', () => {
       emitReposUpdate: emit,
     });
 
-    try {
-      const result = await refreshRepositoryCache('/tmp/workdir');
+    const result = await refreshRepositoryCache('/tmp/workdir');
 
-      assert.deepEqual(result, sample);
-      assert.equal(discover.mock.calls.length, 1);
-      assert.equal(emit.mock.calls.length, 1);
-      const [firstCall] = emit.mock.calls as Array<{ arguments: unknown[] }>;
-      assert.ok(firstCall);
-      assert.strictEqual(firstCall.arguments[0], sample);
-    } finally {
-      __setRepositoryCacheTestOverrides();
-    }
+    assert.deepEqual(result, sample);
+    assert.equal(discover.mock.calls.length, 1);
+    assert.equal(emit.mock.calls.length, 1);
+    const [firstCall] = emit.mock.calls as Array<{ arguments: unknown[] }>;
+    assert.ok(firstCall);
+    assert.strictEqual(firstCall.arguments[0], sample);
   });
 
   it('propagates discovery errors without emitting updates', async () => {
@@ -55,12 +58,39 @@ describe('refreshRepositoryCache', () => {
       emitReposUpdate: emit,
     });
 
-    try {
-      await assert.rejects(() => refreshRepositoryCache('/tmp/workdir'), /discovery failed/);
-      assert.equal(emit.mock.calls.length, 0);
-    } finally {
-      __setRepositoryCacheTestOverrides();
-    }
+    await assert.rejects(() => refreshRepositoryCache('/tmp/workdir'), /discovery failed/);
+    assert.equal(emit.mock.calls.length, 0);
+  });
+
+  it('stores the refreshed snapshot for later retrieval', async () => {
+    const sample = {
+      vultuk: {
+        agentrix: {
+          branches: ['main'],
+          initCommand: '',
+        },
+      },
+    };
+
+    __setRepositoryCacheTestOverrides({
+      discoverRepositories: mock.fn(async () => sample),
+      emitReposUpdate: mock.fn(),
+    });
+
+    await refreshRepositoryCache('/tmp/workdir');
+    assert.strictEqual(getRepositoryCacheSnapshot(), sample);
   });
 });
 
+describe('repository cache snapshot helpers', () => {
+  it('allows tests to preset the snapshot', () => {
+    const preset = {
+      org: {
+        repo: {},
+      },
+    };
+
+    __setRepositoryCacheSnapshot(preset);
+    assert.strictEqual(getRepositoryCacheSnapshot(), preset);
+  });
+});
