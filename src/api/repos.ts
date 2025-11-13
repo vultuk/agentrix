@@ -1,5 +1,5 @@
 import { createRepositoryService, type RepositoryService } from '../services/index.js';
-import { handleHeadRequest } from '../utils/http.js';
+import { handleHeadRequest, sendJson } from '../utils/http.js';
 import { asyncHandler } from '../infrastructure/errors/index.js';
 import { createHandler } from './base-handler.js';
 import type { RequestContext } from '../types/http.js';
@@ -23,10 +23,7 @@ export function createRepoHandlers(workdir: string, overrides: RepoHandlersOverr
     }
     
     const data = await repositoryService.listRepositories();
-    context.res.setHeader('Cache-Control', 'no-store');
-    context.res.statusCode = 200;
-    context.res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    context.res.end(JSON.stringify({ data }));
+    sendJson(context.res, 200, { data });
   });
 
   const create = createHandler({
