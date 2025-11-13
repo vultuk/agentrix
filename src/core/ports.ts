@@ -83,7 +83,7 @@ export function __setPortsTestOverrides(overrides?: Partial<PortsDependencies>):
  */
 export async function listActivePorts(): Promise<number[]> {
   try {
-    const platform = activeDependencies.platform ?? process.platform;
+    const platform = activeDependencies.platform;
     const commandSpec = resolvePortListCommand(platform);
     if (!commandSpec) {
       throw new Error(`Port listing is not supported on platform: ${platform}`);
