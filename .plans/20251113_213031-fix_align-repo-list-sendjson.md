@@ -2,7 +2,7 @@
 - Align `createRepoHandlers.list` so it responds via the shared `sendJson` helper, keeping headers in sync with the rest of the API surface.
 
 **Analysis**
-- The list handler in `src/api/repos.ts:14-31` manually sets status, headers, and stringifies payloads, duplicating logic already centralized in `sendJson` (`src/utils/http.ts:8-16`).  
+- The list handler in `src/api/repos.ts:19-27` manually sets status, headers, and stringifies payloads, duplicating logic already centralized in `sendJson` (`src/utils/http.ts:8-16`).  
 - Any future adjustments to JSON responses (extra headers, telemetry, content negotiation) would bypass this handler, risking inconsistent behavior or missing instrumentation.  
 - `sendJson` already enforces `Cache-Control: no-store`, satisfying the requirement to retain the cache override.
 
