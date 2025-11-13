@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as tasksService from '../../../services/api/tasksService.js';
 import { isAuthenticationError } from '../../../services/api/api-client.js';
+import type { Task } from '../../../types/domain.js';
 
 interface UseTaskManagementOptions {
   onAuthExpired?: () => void;
@@ -79,35 +80,26 @@ export function useTaskManagement({ onAuthExpired, onTaskComplete }: UseTaskMana
   }, [onAuthExpired, processPendingTask]);
 
   const applyTaskUpdate = useCallback(
-    (payload: any) => {
-      if (!payload || typeof payload !== 'object') {
+    (taskUpdates: Task[]) => {
+      if (taskUpdates.length === 0) {
         return;
       }
 
       const map = new Map(taskMapRef.current);
 
-      const upsertTask = (task: any) => {
-        if (!task || typeof task !== 'object' || !task.id) {
+      taskUpdates.forEach((taskUpdate) => {
+        if (!taskUpdate || typeof taskUpdate !== 'object' || !taskUpdate.id) {
           return;
         }
-        if (task.removed) {
-          map.delete(task.id);
-          pendingLaunchesRef.current.delete(task.id);
+        const nextTask = taskUpdate as Task & { removed?: boolean };
+        if (nextTask.removed) {
+          map.delete(nextTask.id);
+          pendingLaunchesRef.current.delete(nextTask.id);
           return;
         }
-        map.set(task.id, task);
-        processPendingTask(task);
-      };
-
-      if (Array.isArray(payload.tasks)) {
-        payload.tasks.forEach((task: any) => {
-          upsertTask(task);
-        });
-      } else if (payload.task) {
-        upsertTask(payload.task);
-      } else {
-        return;
-      }
+        map.set(nextTask.id, nextTask);
+        processPendingTask(nextTask);
+      });
 
       taskMapRef.current = map;
       const sorted = Array.from(map.values()).sort((a, b) => {
