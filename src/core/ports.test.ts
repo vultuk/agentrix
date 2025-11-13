@@ -51,6 +51,50 @@ describe('ports core utilities', () => {
         /Failed to list active ports: ss not found/,
       );
     });
+
+    it('uses macOS-specific command when platform is darwin', async () => {
+      const execMock = mock.fn(async () => ({ stdout: '8080\n3000\n', stderr: '' }));
+      __setPortsTestOverrides({ execCommand: execMock, platform: 'darwin' });
+
+      const ports = await listActivePorts();
+
+      assert.deepEqual(ports, [3000, 8080]);
+      assert.equal(execMock.mock.callCount(), 1);
+      const invocation = execMock.mock.calls[0];
+      assert.ok(invocation);
+      assert.equal(
+        invocation.arguments[0],
+        "lsof -nP -iTCP -sTCP:LISTEN | awk 'NR>1 {print $9}' | awk -F ':' '{print $NF}' | sort -n | uniq",
+      );
+      assert.deepEqual(invocation.arguments[1], { shell: '/bin/sh' });
+    });
+
+    it('uses Windows-specific command when platform is win32', async () => {
+      const execMock = mock.fn(async () => ({ stdout: '80\n443\n', stderr: '' }));
+      __setPortsTestOverrides({ execCommand: execMock, platform: 'win32' });
+
+      const ports = await listActivePorts();
+
+      assert.deepEqual(ports, [80, 443]);
+      const invocation = execMock.mock.calls[0];
+      assert.ok(invocation);
+      assert.equal(
+        invocation.arguments[0],
+        'powershell.exe -NoLogo -NoProfile -Command "Get-NetTCPConnection -State Listen | Select-Object -ExpandProperty LocalPort | Sort-Object -Unique"',
+      );
+      assert.equal(invocation.arguments[1], undefined);
+    });
+
+    it('throws when no command is available for the platform', async () => {
+      const execMock = mock.fn(async () => ({ stdout: '', stderr: '' }));
+      __setPortsTestOverrides({ execCommand: execMock, platform: 'aix' });
+
+      await assert.rejects(
+        () => listActivePorts(),
+        /Failed to list active ports: Port listing is not supported on platform: aix/,
+      );
+      assert.equal(execMock.mock.callCount(), 0);
+    });
   });
 
   describe('createPortTunnelManager', () => {
