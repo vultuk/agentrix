@@ -19,6 +19,11 @@ final class WorktreeDetailViewModel: ObservableObject {
     @Published var isDeletingWorktree = false
     @Published private(set) var commandConfig: CommandConfig = .defaults
     @Published private(set) var isLoadingCommandConfig = false
+    @Published var selectedTab: WorktreeDetailTab {
+        didSet {
+            persistSelectedTab()
+        }
+    }
 
     lazy var terminalStore: TerminalSessionsStore = {
         let reference = WorktreeReference(org: repository.org, repo: repository.name, branch: worktree.branch)
@@ -38,6 +43,12 @@ final class WorktreeDetailViewModel: ObservableObject {
     private let worktreeCreatedHandler: (WorktreeSummary) async -> Void
     private let worktreeDeletedHandler: (WorktreeSummary) async -> Void
     private var hasLoadedCommandConfig = false
+    private let tabDefaults: UserDefaults
+    let shouldAutoConnectTerminal: Bool
+
+    static func tabStorageKey(for worktree: WorktreeSummary) -> String {
+        "worktree.selectedTab.\(worktree.org)/\(worktree.repo)/\(worktree.branch)"
+    }
 
     init(
         repository: RepositoryListing,
@@ -46,7 +57,10 @@ final class WorktreeDetailViewModel: ObservableObject {
         sessions: [WorktreeSessionSummary],
         tasks: [TaskItem],
         onWorktreeCreated: @escaping (WorktreeSummary) async -> Void,
-        onWorktreeDeleted: @escaping (WorktreeSummary) async -> Void = { _ in }
+        onWorktreeDeleted: @escaping (WorktreeSummary) async -> Void = { _ in },
+        autoRefreshOnInit: Bool = true,
+        autoConnectTerminal: Bool = true,
+        userDefaults: UserDefaults = .standard
     ) {
         self.repository = repository
         self.worktree = selectedWorktree
@@ -54,8 +68,13 @@ final class WorktreeDetailViewModel: ObservableObject {
         self.tasks = tasks
         self.worktreeCreatedHandler = onWorktreeCreated
         self.worktreeDeletedHandler = onWorktreeDeleted
+        self.tabDefaults = userDefaults
+        self.shouldAutoConnectTerminal = autoConnectTerminal
+        self.selectedTab = WorktreeDetailViewModel.restoreSelectedTab(for: selectedWorktree, defaults: userDefaults)
         updateSessions(sessions)
-        Task { await refreshAll() }
+        if autoRefreshOnInit {
+            Task { await refreshAll() }
+        }
     }
 
     func refreshAll() async {
@@ -346,5 +365,19 @@ private extension WorktreeDetailViewModel {
         if errorMessage == AgentrixError.unreachable.errorDescription {
             errorMessage = nil
         }
+    }
+
+    static func restoreSelectedTab(for worktree: WorktreeSummary, defaults: UserDefaults) -> WorktreeDetailTab {
+        if
+            let rawValue = defaults.string(forKey: tabStorageKey(for: worktree)),
+            let stored = WorktreeDetailTab(rawValue: rawValue)
+        {
+            return stored
+        }
+        return .terminal
+    }
+
+    func persistSelectedTab() {
+        tabDefaults.set(selectedTab.rawValue, forKey: Self.tabStorageKey(for: worktree))
     }
 }

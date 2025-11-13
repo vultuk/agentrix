@@ -115,7 +115,7 @@ class TerminalViewModel: ObservableObject {
         connectionSequence += 1
         let label = "ws-\(connectionSequence)-\(sessionId)"
         activeConnectionLabel = label
-        logger.debug("Opening terminal connection \(label, privacy: .public) for \(worktreeLabel, privacy: .public)")
+        logger.debug("Opening terminal connection \(label, privacy: .public) for \(self.worktreeLabel, privacy: .public)")
 
         socketTask = task
         state = .connected
@@ -172,7 +172,7 @@ class TerminalViewModel: ObservableObject {
         receiveTask?.cancel()
         receiveTask = nil
         if let label = activeConnectionLabel {
-            logger.debug("Closing terminal connection \(label, privacy: .public) for \(worktreeLabel, privacy: .public)")
+            logger.debug("Closing terminal connection \(label, privacy: .public) for \(self.worktreeLabel, privacy: .public)")
         }
         socketTask?.cancel()
         socketTask = nil

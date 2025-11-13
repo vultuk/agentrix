@@ -1,53 +1,37 @@
 import Foundation
 
 @MainActor
-enum TerminalSessionTool: String {
-    case terminal
-    case agent
-
-    var displayName: String {
-        switch self {
-        case .terminal:
-            return "Terminal"
-        case .agent:
-            return "Agent"
-        }
-    }
-
-    var kindValue: String {
-        switch self {
-        case .terminal:
-            return "interactive"
-        case .agent:
-            return "automation"
-        }
-    }
-}
-
-@MainActor
 final class TerminalSessionsStore: ObservableObject {
     @Published private(set) var sessions: [WorktreeSessionSnapshot] = []
     @Published private(set) var activeSessionId: String?
     @Published private(set) var activeSessionViewModel: TerminalViewModel?
     @Published private(set) var isOpeningSession = false
+    @Published private(set) var openingTool: TerminalSessionTool?
+    @Published private(set) var openingLaunchLabel: String?
+    @Published private(set) var openingActionIdentifier: String?
     @Published private(set) var closingSessionIds: Set<String> = []
 
     private var worktree: WorktreeReference
     private let service: TerminalService
     private let setError: (AgentrixError) -> Void
     private let clearError: () -> Void
+    private let viewModelFactory: (WorktreeReference, TerminalService) -> TerminalViewModel
     private var viewModels: [String: TerminalViewModel] = [:]
 
     init(
         worktree: WorktreeReference,
         service: TerminalService,
         setError: @escaping (AgentrixError) -> Void,
-        clearError: @escaping () -> Void
+        clearError: @escaping () -> Void,
+        viewModelFactory: ((WorktreeReference, TerminalService) -> TerminalViewModel)? = nil
     ) {
         self.worktree = worktree
         self.service = service
         self.setError = setError
         self.clearError = clearError
+        self.viewModelFactory = viewModelFactory ?? { reference, terminalService in
+            TerminalViewModel(worktree: reference, terminalService: terminalService)
+        }
     }
 
     func updateWorktree(_ reference: WorktreeReference) {
@@ -84,26 +68,44 @@ final class TerminalSessionsStore: ObservableObject {
         viewModels.values.forEach { $0.disconnect(closeRemote: false) }
     }
 
-    func openNewSession(tool: TerminalSessionTool) async {
+    func openNewSession(
+        tool: TerminalSessionTool,
+        command: String? = nil,
+        prompt: String? = nil,
+        launchLabel: String? = nil,
+        actionIdentifier: String? = nil
+    ) async {
         guard !isOpeningSession else { return }
+        openingTool = tool
+        openingLaunchLabel = launchLabel ?? tool.displayName
+        openingActionIdentifier = actionIdentifier ?? tool.rawValue
         isOpeningSession = true
-        defer { isOpeningSession = false }
+        defer {
+            isOpeningSession = false
+            openingTool = nil
+            openingLaunchLabel = nil
+            openingActionIdentifier = nil
+        }
         do {
             let response = try await service.openTerminal(
                 org: worktree.org,
                 repo: worktree.repo,
                 branch: worktree.branch,
-                command: nil,
-                prompt: nil,
+                command: command,
+                prompt: prompt,
                 sessionId: nil,
                 newSession: true,
                 sessionTool: tool.rawValue
             )
             let sessionId = response.sessionId
-            let viewModel = viewModels[sessionId] ?? TerminalViewModel(worktree: worktree, terminalService: service)
+            let viewModel = viewModels[sessionId] ?? viewModelFactory(worktree, service)
             viewModels[sessionId] = viewModel
             await viewModel.attachSession(sessionId: sessionId, initialLog: response.log)
-            let placeholder = placeholderSnapshot(id: sessionId, tool: tool)
+            let placeholder = placeholderSnapshot(
+                id: sessionId,
+                tool: tool,
+                label: launchLabel
+            )
             sessions.removeAll { $0.id == sessionId }
             sessions.append(placeholder)
             activeSessionId = sessionId
@@ -164,7 +166,7 @@ final class TerminalSessionsStore: ObservableObject {
 
         // Create view models for new sessions.
         for snapshot in snapshots where viewModels[snapshot.id] == nil {
-            viewModels[snapshot.id] = TerminalViewModel(worktree: worktree, terminalService: service)
+            viewModels[snapshot.id] = viewModelFactory(worktree, service)
         }
 
         if let activeId = activeSessionId, !ids.contains(activeId) {
@@ -218,10 +220,10 @@ final class TerminalSessionsStore: ObservableObject {
         }
     }
 
-    private func placeholderSnapshot(id: String, tool: TerminalSessionTool) -> WorktreeSessionSnapshot {
+    private func placeholderSnapshot(id: String, tool: TerminalSessionTool, label: String?) -> WorktreeSessionSnapshot {
         WorktreeSessionSnapshot(
             id: id,
-            label: "\(tool.displayName) Session",
+            label: "\(label ?? tool.displayName) Session",
             kind: tool.kindValue,
             tool: tool.rawValue,
             idle: false,

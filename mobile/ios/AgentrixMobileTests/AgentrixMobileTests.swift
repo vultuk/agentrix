@@ -159,6 +159,162 @@ final class AgentrixMobileTests: XCTestCase {
         XCTAssertEqual(diff.mode, "unstaged")
     }
 
+    func testSelectedTabPersistsPerWorktree() async throws {
+        let services = try makeMockServices()
+        let suiteName = "WorktreeDetailTabTests"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            XCTFail("Expected UserDefaults suite for tests")
+            return
+        }
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let repository = RepositoryListing(org: "acme", name: "web", dto: RepositoryDTO(branches: ["feature/a", "feature/b"], initCommand: ""))
+        let worktreeA = WorktreeSummary(org: repository.org, repo: repository.name, branch: "feature/a")
+        let worktreeB = WorktreeSummary(org: repository.org, repo: repository.name, branch: "feature/b")
+
+        let viewModelA = WorktreeDetailViewModel(
+            repository: repository,
+            selectedWorktree: worktreeA,
+            services: services,
+            sessions: [],
+            tasks: [],
+            onWorktreeCreated: { _ in },
+            onWorktreeDeleted: { _ in },
+            autoRefreshOnInit: false,
+            autoConnectTerminal: false,
+            userDefaults: defaults
+        )
+
+        XCTAssertEqual(viewModelA.selectedTab, .terminal)
+        viewModelA.selectedTab = .plans
+
+        let viewModelAReopened = WorktreeDetailViewModel(
+            repository: repository,
+            selectedWorktree: worktreeA,
+            services: services,
+            sessions: [],
+            tasks: [],
+            onWorktreeCreated: { _ in },
+            onWorktreeDeleted: { _ in },
+            autoRefreshOnInit: false,
+            autoConnectTerminal: false,
+            userDefaults: defaults
+        )
+        XCTAssertEqual(viewModelAReopened.selectedTab, .plans, "Tab selection should persist for the same worktree")
+
+        let viewModelB = WorktreeDetailViewModel(
+            repository: repository,
+            selectedWorktree: worktreeB,
+            services: services,
+            sessions: [],
+            tasks: [],
+            onWorktreeCreated: { _ in },
+            onWorktreeDeleted: { _ in },
+            autoRefreshOnInit: false,
+            autoConnectTerminal: false,
+            userDefaults: defaults
+        )
+        XCTAssertEqual(viewModelB.selectedTab, .terminal, "Different worktrees should not share the same tab selection")
+    }
+
+    @MainActor
+    func testOpenNewSessionUsesSelectedTool() async throws {
+        let services = try makeMockServices()
+        let reference = WorktreeReference(org: "acme", repo: "web", branch: "main")
+        let store = TerminalSessionsStore(
+            worktree: reference,
+            service: services.terminal,
+            setError: { _ in },
+            clearError: {},
+            viewModelFactory: { TestTerminalViewModel(worktree: $0, terminalService: $1) }
+        )
+
+        var recordedPayloads: [[String: Any]] = []
+        var sessionCounter = 0
+
+        MockURLProtocol.requestHandler = { request in
+            if request.url?.path == "/api/terminal/open" {
+                let body = request.httpBody ?? Data()
+                let json = try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+                if let json {
+                    recordedPayloads.append(json)
+                }
+                sessionCounter += 1
+                let payload: [String: Any] = [
+                    "sessionId": "test-session-\(sessionCounter)",
+                    "log": "",
+                    "created": true
+                ]
+                let data = try JSONSerialization.data(withJSONObject: payload, options: [])
+                let response = HTTPURLResponse(
+                    url: request.url!,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                return (response, data)
+            }
+            return try MockURLProtocol.defaultResponse(for: request)
+        }
+        defer { MockURLProtocol.requestHandler = MockURLProtocol.defaultResponse(for:) }
+
+        await store.openNewSession(tool: .terminal)
+        await store.openNewSession(tool: .agent, command: "codex --plan", launchLabel: "Codex", actionIdentifier: "codex")
+
+        XCTAssertEqual(recordedPayloads.count, 2)
+        XCTAssertEqual(recordedPayloads[0]["sessionTool"] as? String, "terminal")
+        XCTAssertNil(recordedPayloads[0]["command"])
+        XCTAssertEqual(recordedPayloads[1]["sessionTool"] as? String, "agent")
+        XCTAssertEqual(recordedPayloads[1]["command"] as? String, "codex --plan")
+        XCTAssertEqual(store.sessions.count, 2, "Expected a placeholder snapshot per opened session")
+        XCTAssertEqual(store.sessions.last?.label, "Codex Session")
+        XCTAssertEqual(store.activeSessionId, "test-session-2")
+    }
+
+    @MainActor
+    func testOpeningToolTracksPendingLaunch() async throws {
+        let services = try makeMockServices()
+        let reference = WorktreeReference(org: "acme", repo: "web", branch: "main")
+        let store = TerminalSessionsStore(
+            worktree: reference,
+            service: services.terminal,
+            setError: { _ in },
+            clearError: {},
+            viewModelFactory: { TestTerminalViewModel(worktree: $0, terminalService: $1) }
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            if request.url?.path == "/api/terminal/open" {
+                Thread.sleep(forTimeInterval: 0.1)
+                let payload: [String: Any] = [
+                    "sessionId": "delayed-session",
+                    "log": "",
+                    "created": true
+                ]
+                let data = try JSONSerialization.data(withJSONObject: payload, options: [])
+                let response = HTTPURLResponse(
+                    url: request.url!,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                return (response, data)
+            }
+            return try MockURLProtocol.defaultResponse(for: request)
+        }
+        defer { MockURLProtocol.requestHandler = MockURLProtocol.defaultResponse(for:) }
+
+        let task = Task { await store.openNewSession(tool: .agent) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(store.openingTool, .agent, "Opening tool should reflect the pending selection")
+        XCTAssertEqual(store.openingLaunchLabel, "Agent")
+        XCTAssertEqual(store.openingActionIdentifier, "agent")
+        await task.value
+        XCTAssertNil(store.openingTool, "Opening tool should clear after launch completes")
+        XCTAssertNil(store.openingLaunchLabel)
+        XCTAssertNil(store.openingActionIdentifier)
+    }
+
     // MARK: - Helpers
 
     private func makeMockServices() throws -> ServiceRegistry {
@@ -201,9 +357,15 @@ final class AgentrixMobileTests: XCTestCase {
     }
 
     @MainActor
-    private func makeDetailViewModel(services: ServiceRegistry) -> WorktreeDetailViewModel {
+    private func makeDetailViewModel(
+        services: ServiceRegistry,
+        branch: String = "main",
+        autoRefresh: Bool = false,
+        autoConnectTerminal: Bool = false,
+        userDefaults: UserDefaults = .standard
+    ) -> WorktreeDetailViewModel {
         let repository = RepositoryListing(org: "acme", name: "web", dto: RepositoryDTO(branches: ["main"], initCommand: ""))
-        let worktree = WorktreeSummary(org: "acme", repo: "web", branch: "main")
+        let worktree = WorktreeSummary(org: "acme", repo: "web", branch: branch)
         return WorktreeDetailViewModel(
             repository: repository,
             selectedWorktree: worktree,
@@ -211,8 +373,21 @@ final class AgentrixMobileTests: XCTestCase {
             sessions: [],
             tasks: [],
             onWorktreeCreated: { _ in },
-            onWorktreeDeleted: { _ in }
+            onWorktreeDeleted: { _ in },
+            autoRefreshOnInit: autoRefresh,
+            autoConnectTerminal: autoConnectTerminal,
+            userDefaults: userDefaults
         )
+    }
+}
+
+private final class TestTerminalViewModel: TerminalViewModel {
+    override func attachSession(sessionId: String, initialLog: String) async {
+        // Skip socket work in tests; we only need the lifecycle hooks.
+    }
+
+    override func disconnect(closeRemote: Bool = true) {
+        // Prevent network calls during test teardown.
     }
 }
 

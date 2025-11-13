@@ -3,7 +3,10 @@ import Foundation
 
 struct TerminalConsoleView: View {
     @ObservedObject var store: TerminalSessionsStore
+    var commandConfig: CommandConfig = .defaults
+    var isLoadingCommandConfig = false
     @Namespace private var tabNamespace
+    @State private var showingLaunchOptions = false
 
     private var activeSessionSnapshot: WorktreeSessionSnapshot? {
         store.sessions.first { $0.id == store.activeSessionId }
@@ -53,6 +56,28 @@ struct TerminalConsoleView: View {
         .onDisappear {
             store.suspendConnections()
         }
+        .sheet(isPresented: $showingLaunchOptions) {
+            TerminalLaunchOptionsView(
+                store: store,
+                commandConfig: commandConfig,
+                isLoadingCommandConfig: isLoadingCommandConfig,
+                layout: .sheet,
+                onDismiss: { showingLaunchOptions = false }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.06, green: 0.07, blue: 0.10),
+                        Color(red: 0.02, green: 0.02, blue: 0.04)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            )
+        }
     }
 
     private var tabStrip: some View {
@@ -80,41 +105,28 @@ struct TerminalConsoleView: View {
                     .scaleEffect(0.75)
                     .tint(Color.agentrixAccent)
             }
+
+            Button {
+                showingLaunchOptions = true
+            } label: {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(Color.agentrixAccent)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Start a new session")
+            .disabled(store.isOpeningSession)
         }
     }
 
     private var emptyState: some View {
-        VStack(spacing: 18) {
-            Image(systemName: "rectangle.and.pencil.and.ellipsis")
-                .font(.system(size: 44))
-                .foregroundStyle(Color.white.opacity(0.5))
-            Text("No terminal sessions yet")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Color.white)
-            Text("Start a shell session to begin working inside this worktree.")
-                .font(.subheadline)
-                .foregroundStyle(Color.white.opacity(0.6))
-                .multilineTextAlignment(.center)
-            Button {
-                Task { await store.openNewSession(tool: .terminal) }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "terminal")
-                    Text("Open Terminal")
-                        .font(.body.weight(.semibold))
-                }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 10)
-                .background(
-                    Capsule()
-                        .fill(Color.agentrixAccent)
-                )
-                .foregroundStyle(Color.black)
-            }
-            .buttonStyle(.plain)
-            .disabled(store.isOpeningSession)
-            .opacity(store.isOpeningSession ? 0.6 : 1)
-        }
+        TerminalLaunchOptionsView(
+            store: store,
+            commandConfig: commandConfig,
+            isLoadingCommandConfig: isLoadingCommandConfig,
+            layout: .inline,
+            onDismiss: nil
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -209,6 +221,332 @@ private struct TerminalSessionTab: View {
             )
             .foregroundStyle(style.badgeForeground)
             .accessibilityHidden(true)
+    }
+}
+
+struct TerminalLaunchOptionsView: View {
+    enum Layout {
+        case inline
+        case sheet
+    }
+
+    @ObservedObject var store: TerminalSessionsStore
+    let commandConfig: CommandConfig
+    let isLoadingCommandConfig: Bool
+    let layout: Layout
+    let onDismiss: (() -> Void)?
+    @AppStorage("terminal.lastLaunchAction") private var lastLaunchActionRawValue = ""
+
+    private enum LaunchAction: String {
+        case terminal
+        case vscode
+        case cursor
+        case codex
+        case codexDangerous = "codex-dangerous"
+        case claude
+        case claudeDangerous = "claude-dangerous"
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                if layout == .inline {
+                    heroHeader
+                } else {
+                    Text("Start a new session")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(headerColor)
+                    Text("Choose a terminal or agent mode to launch another session in this worktree.")
+                        .font(.subheadline)
+                        .foregroundStyle(headerColor.opacity(0.65))
+                }
+
+                if isLoadingCommandConfig {
+                    loadingRow
+                }
+
+                VStack(spacing: 12) {
+                    launchButton(action: .terminal, title: "Open Terminal", systemImage: "terminal")
+                    launchButton(action: .vscode, title: "Open in VS Code", systemImage: "laptopcomputer")
+                    advancedLaunchRow(
+                        primaryAction: .codex,
+                        menuAction: .codexDangerous,
+                        title: "Open Codex",
+                        systemImage: "sparkles"
+                    )
+                    launchButton(action: .cursor, title: "Launch Cursor", systemImage: "cursorarrow.rays")
+                    advancedLaunchRow(
+                        primaryAction: .claude,
+                        menuAction: .claudeDangerous,
+                        title: "Open Claude",
+                        systemImage: "lightbulb"
+                    )
+                }
+
+                footerStatus
+            }
+            .padding(.vertical, layout == .inline ? 32 : 24)
+            .padding(.horizontal, 20)
+        }
+        .scrollIndicators(.never)
+        .background(backgroundGradient)
+    }
+
+    private var heroHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: "rectangle.and.pencil.and.ellipsis")
+                .font(.system(size: 44))
+                .foregroundStyle(Color.white.opacity(0.5))
+            Text("No terminal sessions yet")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Color.white)
+            Text("Choose how you want to start working in this worktree.")
+                .font(.subheadline)
+                .foregroundStyle(Color.white.opacity(0.6))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func launchButton(action: LaunchAction, title: String, systemImage: String) -> some View {
+        Button {
+            performLaunch(action)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Color.agentrixAccent)
+                Text(title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(contentColor)
+                Spacer()
+                trailingIndicator(for: action)
+            }
+            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(buttonBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(buttonBorder, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(store.isOpeningSession)
+    }
+
+    @ViewBuilder
+    private func advancedLaunchRow(
+        primaryAction: LaunchAction,
+        menuAction: LaunchAction,
+        title: String,
+        systemImage: String
+    ) -> some View {
+        HStack(spacing: 10) {
+            launchButton(action: primaryAction, title: title, systemImage: systemImage)
+            dangerousMenuButton(primaryAction: primaryAction, menuAction: menuAction)
+        }
+    }
+
+    @ViewBuilder
+    private func dangerousMenuButton(primaryAction: LaunchAction, menuAction: LaunchAction) -> some View {
+        Menu {
+            Button("Dangerous Mode") {
+                performLaunch(menuAction)
+            }
+            .disabled(store.isOpeningSession)
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(buttonBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(buttonBorder, lineWidth: 1)
+                    )
+                    .frame(width: 46, height: 46)
+                if isActionLoading(menuAction) {
+                    ProgressView()
+                        .scaleEffect(0.65)
+                        .tint(Color.agentrixAccent)
+                } else {
+                    Image(systemName: "chevron.down")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(Color.white)
+                }
+            }
+            .accessibilityLabel("Dangerous options for \(launchLabel(for: primaryAction))")
+        }
+        .menuStyle(.automatic)
+    }
+
+    @ViewBuilder
+    private func trailingIndicator(for action: LaunchAction) -> some View {
+        if isActionLoading(action) {
+            ProgressView()
+                .scaleEffect(0.65)
+                .tint(Color.agentrixAccent)
+        } else {
+            Image(systemName: action == .codexDangerous || action == .claudeDangerous ? "exclamationmark.triangle" : "arrow.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(
+                    action == .codexDangerous || action == .claudeDangerous
+                        ? Color.agentrixError
+                        : contentColor.opacity(0.45)
+                )
+        }
+    }
+
+    private func performLaunch(_ action: LaunchAction) {
+        let configuration = launchConfiguration(for: action)
+        lastLaunchActionRawValue = action.rawValue
+        onDismiss?()
+
+        Task {
+            await store.openNewSession(
+                tool: configuration.tool,
+                command: configuration.command,
+                launchLabel: configuration.label,
+                actionIdentifier: configuration.identifier
+            )
+        }
+    }
+
+    private func launchConfiguration(for action: LaunchAction) -> (tool: TerminalSessionTool, command: String?, label: String, identifier: String) {
+        (
+            tool: sessionTool(for: action),
+            command: command(for: action),
+            label: launchLabel(for: action),
+            identifier: action.rawValue
+        )
+    }
+
+    private func sessionTool(for action: LaunchAction) -> TerminalSessionTool {
+        switch action {
+        case .terminal, .vscode:
+            return .terminal
+        case .cursor, .codex, .codexDangerous, .claude, .claudeDangerous:
+            return .agent
+        }
+    }
+
+    private func command(for action: LaunchAction) -> String? {
+        switch action {
+        case .terminal:
+            return nil
+        case .vscode:
+            return commandConfig.vscode
+        case .cursor:
+            return commandConfig.cursor
+        case .codex:
+            return commandConfig.codex
+        case .codexDangerous:
+            return commandConfig.codexDangerous
+        case .claude:
+            return commandConfig.claude
+        case .claudeDangerous:
+            return commandConfig.claudeDangerous
+        }
+    }
+
+    private func launchLabel(for action: LaunchAction) -> String {
+        switch action {
+        case .terminal:
+            return "Terminal"
+        case .vscode:
+            return "VS Code"
+        case .cursor:
+            return "Cursor"
+        case .codex:
+            return "Codex"
+        case .codexDangerous:
+            return "Codex (Dangerous)"
+        case .claude:
+            return "Claude"
+        case .claudeDangerous:
+            return "Claude (Dangerous)"
+        }
+    }
+
+    private var lastLaunchActionLabel: String? {
+        guard let action = LaunchAction(rawValue: lastLaunchActionRawValue) else {
+            return nil
+        }
+        return launchLabel(for: action)
+    }
+
+    private var headerColor: Color {
+        layout == .inline ? Color.white : Color.white
+    }
+
+    private var contentColor: Color {
+        layout == .inline ? Color.white : Color.white.opacity(0.95)
+    }
+
+    private var buttonBackground: Color {
+        Color.white.opacity(layout == .inline ? 0.06 : 0.08)
+    }
+
+    private var buttonBorder: Color {
+        Color.white.opacity(layout == .inline ? 0.12 : 0.15)
+    }
+
+    private var backgroundGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 0.06, green: 0.07, blue: 0.10),
+                Color(red: 0.02, green: 0.02, blue: 0.04)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    @ViewBuilder
+    private var loadingRow: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .progressViewStyle(.circular)
+                .tint(Color.agentrixAccent)
+            Text("Refreshing launch options…")
+                .font(.footnote)
+                .foregroundStyle(contentColor.opacity(0.7))
+        }
+    }
+
+    @ViewBuilder
+    private var footerStatus: some View {
+        if let lastUsed = lastLaunchActionLabel {
+            Text("Last used: \(lastUsed)")
+                .font(.footnote)
+                .foregroundStyle(contentColor.opacity(0.6))
+        }
+
+        if let pendingLabel = store.openingLaunchLabel {
+            Text("Starting \(pendingLabel.lowercased()) session…")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(contentColor.opacity(0.7))
+        } else {
+            Text("Commands run immediately in the selected session type.")
+                .font(.footnote)
+                .foregroundStyle(contentColor.opacity(0.5))
+        }
+    }
+
+    private func isActionLoading(_ action: LaunchAction) -> Bool {
+        guard store.isOpeningSession else { return false }
+        if let identifier = store.openingActionIdentifier {
+            switch action {
+            case .codex:
+                return identifier.hasPrefix("codex")
+            case .claude:
+                return identifier.hasPrefix("claude")
+            default:
+                return identifier == action.rawValue
+            }
+        }
+        return store.openingLaunchLabel == launchLabel(for: action)
     }
 }
 

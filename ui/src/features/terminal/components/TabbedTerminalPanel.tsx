@@ -1,9 +1,11 @@
 import React from 'react';
 import { Bot, Plus, Terminal as TerminalIcon, X } from 'lucide-react';
 import { renderSpinner } from '../../../components/Spinner.js';
+import { PREFERRED_SESSION_TOOL_STORAGE_KEY } from '../../../utils/constants.js';
 import type { WorktreeSessionTab } from '../../../types/domain.js';
 
-const { createElement: h } = React;
+const { createElement: h, useEffect, useMemo, useState } = React;
+type SessionTool = 'terminal' | 'agent';
 
 interface TerminalTabsProps {
   sessions: WorktreeSessionTab[];
@@ -119,6 +121,8 @@ interface TabbedTerminalPanelProps {
   onCloseSession: (sessionId: string) => void;
   onAddSession: () => void;
   terminalContainerRef: React.RefObject<HTMLDivElement | null>;
+  onQuickLaunchSession?: (tool: SessionTool) => void;
+  isQuickLaunchPending?: boolean;
 }
 
 export default function TabbedTerminalPanel({
@@ -130,25 +134,137 @@ export default function TabbedTerminalPanel({
   onCloseSession,
   onAddSession,
   terminalContainerRef,
+  onQuickLaunchSession,
+  isQuickLaunchPending = false,
 }: TabbedTerminalPanelProps) {
   const hasSessions = sessions.length > 0;
+  const sessionOptions = useMemo(
+    () => [
+      {
+        value: 'terminal' as SessionTool,
+        label: 'Terminal',
+        description: 'Interactive shell',
+        icon: TerminalIcon,
+      },
+      {
+        value: 'agent' as SessionTool,
+        label: 'Agent',
+        description: 'Automation run',
+        icon: Bot,
+      },
+    ],
+    [],
+  );
+
+  const [preferredTool, setPreferredTool] = useState<SessionTool>(() => {
+    if (typeof window === 'undefined') {
+      return 'terminal';
+    }
+    const stored = window.localStorage.getItem(PREFERRED_SESSION_TOOL_STORAGE_KEY);
+    return stored === 'agent' ? 'agent' : 'terminal';
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    try {
+      window.localStorage.setItem(PREFERRED_SESSION_TOOL_STORAGE_KEY, preferredTool);
+    } catch (error: any) {
+      console.warn('Failed to persist preferred session tool', error);
+    }
+  }, [preferredTool]);
+
+  const isQuickLaunchDisabled =
+    !onQuickLaunchSession || isQuickLaunchPending || isAddDisabled;
+  const primaryActionLabel =
+    preferredTool === 'agent' ? 'Start Agent Session' : 'Start Terminal Session';
+  const PreferredIcon = preferredTool === 'agent' ? Bot : TerminalIcon;
 
   const emptyState = h(
     'div',
-    { className: 'flex flex-col items-center justify-center gap-2 text-sm text-neutral-500 h-full' },
-    h('p', null, 'No terminal sessions yet.'),
-    h(
-      'button',
-      {
-        type: 'button',
-        onClick: onAddSession,
-        disabled: isAddDisabled,
-        className:
-          'inline-flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-925 px-3 py-1.5 text-xs text-neutral-200 hover:text-emerald-300 hover:border-emerald-400 transition disabled:opacity-50 disabled:cursor-not-allowed',
-      },
-      isAddDisabled ? renderSpinner('text-emerald-300') : h(Plus, { size: 14 }),
-      'New session',
-    ),
+    { className: 'flex flex-col items-center justify-center gap-4 text-sm text-neutral-500 h-full px-4' },
+    h('p', { className: 'text-center text-neutral-400' }, 'No terminal sessions yet.'),
+    onQuickLaunchSession
+      ? h(
+          'div',
+          { className: 'w-full max-w-md space-y-3 text-neutral-200' },
+          h(
+            'div',
+            { className: 'flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900/70 p-1' },
+            sessionOptions.map((option) => {
+              const Icon = option.icon;
+              const isActive = preferredTool === option.value;
+              return h(
+                'button',
+                {
+                  key: option.value,
+                  type: 'button',
+                  onClick: () => setPreferredTool(option.value),
+                  'aria-pressed': isActive,
+                  className: [
+                    'flex-1 rounded-lg px-3 py-2 text-left transition focus:outline-none',
+                    isActive
+                      ? 'bg-neutral-850 text-neutral-50 border border-emerald-500/60'
+                      : 'text-neutral-400 hover:text-neutral-100 border border-transparent hover:border-neutral-700',
+                  ].join(' '),
+                },
+                h(
+                  'div',
+                  { className: 'flex items-center gap-2' },
+                  h(Icon, { size: 16, className: option.value === 'agent' ? 'text-amber-300' : 'text-emerald-300' }),
+                  h('span', { className: 'font-semibold text-sm' }, option.label),
+                ),
+                h(
+                  'p',
+                  { className: 'text-xs text-neutral-500 mt-1' },
+                  option.description,
+                ),
+              );
+            }),
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              onClick: () => {
+                if (isQuickLaunchDisabled || !onQuickLaunchSession) {
+                  return;
+                }
+                onQuickLaunchSession(preferredTool);
+              },
+              disabled: isQuickLaunchDisabled,
+              className:
+                'w-full inline-flex items-center justify-center gap-2 rounded-md bg-emerald-400/90 px-4 py-2 text-sm font-semibold text-neutral-950 transition hover:bg-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed',
+            },
+            isQuickLaunchPending ? renderSpinner('text-neutral-900') : h(PreferredIcon, { size: 16 }),
+            primaryActionLabel,
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              onClick: onAddSession,
+              disabled: isAddDisabled,
+              className:
+                'w-full rounded-md border border-neutral-800/70 bg-transparent px-4 py-2 text-xs font-medium text-neutral-400 hover:text-neutral-100 hover:border-neutral-600 transition disabled:opacity-50 disabled:cursor-not-allowed',
+            },
+            isAddDisabled ? renderSpinner('text-emerald-300') : h(Plus, { size: 12 }),
+            'More options',
+          ),
+        )
+      : h(
+          'button',
+          {
+            type: 'button',
+            onClick: onAddSession,
+            disabled: isAddDisabled,
+            className:
+              'inline-flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-925 px-3 py-1.5 text-xs text-neutral-200 hover:text-emerald-300 hover:border-emerald-400 transition disabled:opacity-50 disabled:cursor-not-allowed',
+          },
+          isAddDisabled ? renderSpinner('text-emerald-300') : h(Plus, { size: 14 }),
+          'New session',
+        ),
   );
 
   return h(

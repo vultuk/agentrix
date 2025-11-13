@@ -8,6 +8,7 @@
 - `bin/agentrix.js` boots the CLI, loading compiled files from `dist/`.
 - Backend: `src/api/*` HTTP handlers, `src/core/*` domain logic (auth, git, terminal, worktrees, tasks, plans, github), `src/server/*` bootstrap + WebSocket wiring, and `src/utils/*` shared helpers.
 - Frontend: `ui/src/app` (entry), shared `components/`, cross-cutting `hooks/`, feature bundles under `ui/src/features/*/{components,hooks,modals}`, services in `ui/src/services/api`, shared `types/`, `utils/`, and `config/`. Imports always end with `.js` even when the file is `.ts/.tsx`.
+- Native shells live in `mobile/` (iOS + macOS). Treat them as first-class clients that must stay in lockstep with the web UI feature set—and vice versa.
 - Build artifacts live in `dist/` and `ui/dist/`; never edit them manually.
 
 ## Development Loop (Always TDD)
@@ -27,3 +28,4 @@
 - Keep TypeScript strict: avoid `any`, prefer explicit interfaces in `src/types` and `ui/src/types` (or feature-local types when truly scoped).
 - Enforce SOLID: domain logic stays under `src/core`, UI feature logic stays inside its feature folder, and shared utilities remain framework-agnostic.
 - Stay DRY: extract duplicate flows into helpers or hooks, and centralize modal rendering via the existing modal containers rather than scattered dialogs.
+- Maintain platform parity across clients: any UX/functionality change merged under `ui/` or `mobile/` must include the corresponding implementation in the other platform(s), or a documented parity plan (same PR) plus matching tests/checklists, so web, iOS, and macOS always ship the same feature set at release time.

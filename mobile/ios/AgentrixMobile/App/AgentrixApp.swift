@@ -17,6 +17,19 @@ struct RootContainerView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
 
     var body: some View {
+        #if DEBUG
+        if let scenario = UITestScenario.current {
+            scenario.view
+        } else {
+            appContent
+        }
+        #else
+        appContent
+        #endif
+    }
+
+    @ViewBuilder
+    private var appContent: some View {
         switch coordinator.route {
         case .checking:
             VStack(spacing: 12) {

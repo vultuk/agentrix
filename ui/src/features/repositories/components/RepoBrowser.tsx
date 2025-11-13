@@ -78,6 +78,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     onSessionRemoved: sessions.removeTrackedSession
   });
   const [pendingCloseSessionId, setPendingCloseSessionId] = useState<string | null>(null);
+  const [isQuickSessionPending, setIsQuickSessionPending] = useState(false);
   
   // Use dashboard hook first (needed by repo data hook)
   const dashboard = useDashboard({ onAuthExpired });
@@ -497,6 +498,30 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     setPendingSessionContext('new-tab');
     setPendingWorktreeAction(activeWorktree);
   }, [activeWorktree, menus, setPendingActionLoading, setPendingWorktreeAction]);
+
+  const handleQuickSessionLaunch = useCallback(
+    async (tool: 'terminal' | 'agent') => {
+      if (!activeWorktree || isQuickSessionPending) {
+        return;
+      }
+      setIsQuickSessionPending(true);
+      try {
+        await openTerminalForWorktree(activeWorktree, {
+          newSession: true,
+          sessionTool: tool,
+        });
+      } catch (error: any) {
+        if (error && error.message === 'AUTH_REQUIRED') {
+          return;
+        }
+        console.error('Failed to launch session', error);
+        window.alert('Failed to launch the selected session. Check server logs for details.');
+      } finally {
+        setIsQuickSessionPending(false);
+      }
+    },
+    [activeWorktree, isQuickSessionPending, openTerminalForWorktree],
+  );
 
   const handleCloseSessionTab = useCallback(
     async (sessionId: string | null) => {
@@ -984,8 +1009,10 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   activeSessionId: terminal.sessionId,
     onSessionSelect: handleSelectSessionTab,
     onSessionClose: handleCloseSessionTab,
-    onSessionCreate: handleCreateSessionTab,
+  onSessionCreate: handleCreateSessionTab,
+  onQuickLaunchSession: handleQuickSessionLaunch,
     isSessionCreationPending: !activeWorktree,
+    isQuickSessionPending,
     pendingCloseSessionId,
     isGitSidebarOpen,
     githubControls,

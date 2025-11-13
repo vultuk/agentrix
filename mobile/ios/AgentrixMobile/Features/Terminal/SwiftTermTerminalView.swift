@@ -53,7 +53,7 @@ struct SwiftTermTerminalView: UIViewRepresentable {
     private static let caretColor = UIColor(Color.agentrixAccent)
 
     func makeUIView(context: Context) -> CustomTerminalView {
-        let terminalView = CustomTerminalView()
+        let terminalView = CustomTerminalView(frame: .zero)
         configure(terminalView: terminalView, coordinator: context.coordinator)
         return terminalView
     }
@@ -63,7 +63,9 @@ struct SwiftTermTerminalView: UIViewRepresentable {
         terminalView.backgroundColor = .clear
         terminalView.alwaysBounceVertical = true
         terminalView.alwaysBounceHorizontal = false
+        #if !os(visionOS)
         terminalView.keyboardDismissMode = .interactive
+        #endif
         terminalView.optionAsMetaKey = true
         terminalView.contentInsetAdjustmentBehavior = .never
         terminalView.nativeBackgroundColor = Self.backgroundColor
@@ -85,6 +87,7 @@ struct SwiftTermTerminalView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: CustomTerminalView, context: Context) {
+        context.coordinator.updateViewModel(viewModel)
         context.coordinator.updateTerminal(uiView)
     }
 
@@ -93,7 +96,7 @@ struct SwiftTermTerminalView: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, TerminalViewDelegate {
-        private let viewModel: TerminalViewModel
+        private var viewModel: TerminalViewModel
         private weak var terminalView: TerminalView?
         private let outputAccumulator = TerminalOutputAccumulator()
         private lazy var outputSink: TerminalViewModel.OutputHandler = { [weak self] data, isFullReplay in
@@ -105,15 +108,28 @@ struct SwiftTermTerminalView: UIViewRepresentable {
             super.init()
         }
 
+        func updateViewModel(_ newViewModel: TerminalViewModel) {
+            guard viewModel !== newViewModel else { return }
+            Task { @MainActor in
+                self.viewModel.setOutputHandler(nil)
+            }
+            self.viewModel = newViewModel
+            bindOutputHandler()
+        }
+
+        private func bindOutputHandler() {
+            Task { @MainActor in
+                self.viewModel.setOutputHandler(self.outputSink)
+            }
+        }
+
         func bind(to terminalView: TerminalView) {
             if self.terminalView !== terminalView {
                 self.terminalView?.terminalDelegate = nil
                 self.terminalView = terminalView
             }
             terminalView.terminalDelegate = self
-            Task { @MainActor in
-                self.viewModel.setOutputHandler(self.outputSink)
-            }
+            bindOutputHandler()
         }
 
         func updateTerminal(_ view: TerminalView) {
@@ -185,7 +201,7 @@ struct SwiftTermTerminalView: UIViewRepresentable {
 
         func bell(source: TerminalView) {
             Task { @MainActor in
-                #if canImport(UIKit)
+                #if canImport(UIKit) && !os(visionOS)
                 UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
                 #elseif canImport(AppKit)
                 NSSound.beep()
@@ -258,6 +274,7 @@ struct SwiftTermTerminalView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: CustomTerminalView, context: Context) {
+        context.coordinator.updateViewModel(viewModel)
         context.coordinator.updateTerminal(nsView)
     }
 
@@ -266,7 +283,7 @@ struct SwiftTermTerminalView: NSViewRepresentable {
     }
 
     final class Coordinator: NSObject, TerminalViewDelegate {
-        private let viewModel: TerminalViewModel
+        private var viewModel: TerminalViewModel
         private weak var terminalView: TerminalView?
         private let outputAccumulator = TerminalOutputAccumulator()
         private lazy var outputSink: TerminalViewModel.OutputHandler = { [weak self] data, isFullReplay in
@@ -278,15 +295,28 @@ struct SwiftTermTerminalView: NSViewRepresentable {
             super.init()
         }
 
+        func updateViewModel(_ newViewModel: TerminalViewModel) {
+            guard viewModel !== newViewModel else { return }
+            Task { @MainActor in
+                self.viewModel.setOutputHandler(nil)
+            }
+            self.viewModel = newViewModel
+            bindOutputHandler()
+        }
+
+        private func bindOutputHandler() {
+            Task { @MainActor in
+                self.viewModel.setOutputHandler(self.outputSink)
+            }
+        }
+
         func bind(to terminalView: TerminalView) {
             if self.terminalView !== terminalView {
                 self.terminalView?.terminalDelegate = nil
                 self.terminalView = terminalView
             }
             terminalView.terminalDelegate = self
-            Task { @MainActor in
-                self.viewModel.setOutputHandler(self.outputSink)
-            }
+            bindOutputHandler()
         }
 
         func updateTerminal(_ view: TerminalView) {

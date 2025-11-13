@@ -18,8 +18,10 @@ struct WorktreeDetailView: View {
     @State private var showingToolbarActions = false
     @State private var showingWorktreeActions = false
     @State private var showingDeleteWorktreeConfirmation = false
+    @State private var showingPlanComposer = false
     @State private var copyFeedback: String?
     @State private var copyFeedbackTask: Task<Void, Never>? = nil
+    @State private var activeDiffSelection: DiffPresentationState?
 
     init(
         repository: RepositoryListing,
@@ -42,8 +44,7 @@ struct WorktreeDetailView: View {
     var body: some View {
         let isMainWorktree = worktree.branch.lowercased() == "main"
         ZStack {
-            TerminalConsoleView(store: viewModel.terminalStore)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            tabViewContent
 
             if viewModel.isDeletingWorktree {
                 Color.black.opacity(0.2)
@@ -63,7 +64,10 @@ struct WorktreeDetailView: View {
             viewModel.updateRepository(repository)
             viewModel.updateSessions(sessions)
             viewModel.updateTasks(tasks)
-            viewModel.terminalStore.resumeActiveSession()
+            if viewModel.shouldAutoConnectTerminal {
+                viewModel.terminalStore.resumeActiveSession()
+            }
+            Task { await preloadDataIfNeeded(for: viewModel.selectedTab) }
         }
         .onChange(of: sessionChangeTokens) { _ in
             viewModel.updateSessions(sessions)
@@ -75,9 +79,14 @@ struct WorktreeDetailView: View {
             viewModel.updateRepository(repository)
         }
         .onDisappear {
-            viewModel.terminalStore.suspendConnections()
+            if viewModel.shouldAutoConnectTerminal {
+                viewModel.terminalStore.suspendConnections()
+            }
             copyFeedbackTask?.cancel()
             copyFeedbackTask = nil
+        }
+        .onChange(of: viewModel.selectedTab) { tab in
+            Task { await preloadDataIfNeeded(for: tab) }
         }
         .sheet(isPresented: $showingCreateBranchWorktree) {
             newWorktreeBranchSheet
@@ -87,6 +96,17 @@ struct WorktreeDetailView: View {
         }
         .sheet(isPresented: $showingWorktreeActions) {
             launchOptionsSheet(isMainWorktree: isMainWorktree)
+        }
+        .sheet(item: $activeDiffSelection) { selection in
+            GitDiffSheet(
+                viewModel: viewModel,
+                repository: repository,
+                worktree: worktree,
+                selection: selection
+            )
+        }
+        .sheet(isPresented: $showingPlanComposer) {
+            planComposerSheet
         }
         .alert("Delete Worktree?", isPresented: $showingDeleteWorktreeConfirmation) {
             Button("Delete", role: .destructive) {
@@ -120,7 +140,113 @@ struct WorktreeDetailView: View {
                     .background(Color.agentrixError.opacity(0.15))
                     .foregroundStyle(Color.agentrixError)
                     .transition(.move(edge: .bottom))
+                    .padding(.bottom, 72)
             }
+        }
+    }
+
+    private var tabViewContent: some View {
+        TabView(selection: Binding(
+            get: { viewModel.selectedTab },
+            set: { viewModel.selectedTab = $0 }
+        )) {
+            terminalTab
+                .tag(WorktreeDetailTab.terminal)
+                .tabItem {
+                    Label("Terminal", systemImage: "terminal")
+                }
+
+            diffsTab
+                .tag(WorktreeDetailTab.diffs)
+                .tabItem {
+                    Label("Diffs", systemImage: "doc.plaintext")
+                }
+
+            portsTab
+                .tag(WorktreeDetailTab.ports)
+                .tabItem {
+                    Label("Ports", systemImage: "bolt.horizontal")
+                }
+
+            plansTab
+                .tag(WorktreeDetailTab.plans)
+                .tabItem {
+                    Label("Plans", systemImage: "doc.text")
+                }
+        }
+        .tabViewStyle(.automatic)
+        .applyLiquidGlassTabBehavior()
+    }
+
+    private var terminalTab: some View {
+        TerminalConsoleView(
+            store: viewModel.terminalStore,
+            commandConfig: viewModel.commandConfig,
+            isLoadingCommandConfig: viewModel.isLoadingCommandConfig
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task {
+            await viewModel.loadCommandConfig()
+        }
+    }
+
+    private var diffsTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                if viewModel.isLoadingGitStatus && viewModel.gitStatus == nil {
+                    ProgressView("Loading git status…")
+                }
+                GitStatusView(status: viewModel.gitStatus) { file, mode in
+                    activeDiffSelection = DiffPresentationState(
+                        path: file.path,
+                        previousPath: file.previousPath,
+                        mode: mode,
+                        status: file.status
+                    )
+                }
+                if !viewModel.isLoadingGitStatus {
+                    Button {
+                        Task { await viewModel.loadGitStatus() }
+                    } label: {
+                        Label("Reload Status", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var portsTab: some View {
+        ScrollView {
+            PortsView(
+                ports: viewModel.ports,
+                tunnels: viewModel.tunnels,
+                refreshAction: {
+                    Task { await viewModel.loadPorts() }
+                },
+                openTunnel: { port in
+                    Task { await viewModel.openTunnel(for: port) }
+                }
+            )
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var plansTab: some View {
+        ScrollView {
+            PlansView(
+                plans: viewModel.plans,
+                selectedPlan: viewModel.selectedPlan,
+                openPlan: { plan in
+                    Task { await viewModel.loadPlanContent(plan: plan) }
+                },
+                onCreatePlan: { showingPlanComposer = true }
+            )
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -204,142 +330,16 @@ private extension WorktreeDetailView {
     }
 
     func launchOptionsSheet(isMainWorktree: Bool) -> some View {
-        NavigationStack {
-            List {
-                if !isMainWorktree {
-                    Section("Agentrix") {
-                        Button {
-                            showingWorktreeActions = false
-                            Task { await viewModel.terminalStore.openNewSession(tool: .terminal) }
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "terminal")
-                                    .foregroundStyle(Color.agentrixAccent)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("New Terminal Session")
-                                        .font(.headline)
-                                    Text("Start an interactive shell for this worktree.")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "arrow.triangle.branch")
-                                    .foregroundStyle(Color.agentrixAccent)
-                            }
-                            .padding(.vertical, 4)
-                        }
-                        .disabled(viewModel.terminalStore.isOpeningSession)
-                        Button {
-                            showingWorktreeActions = false
-                            Task { await viewModel.terminalStore.openNewSession(tool: .agent) }
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "sparkles")
-                                    .foregroundStyle(Color.agentrixAccent)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("New Agent Session")
-                                        .font(.headline)
-                                    Text("Launch an agent session to run automated tasks.")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "arrow.forward.circle")
-                                    .foregroundStyle(Color.agentrixAccent)
-                            }
-                            .padding(.vertical, 4)
-                        }
-                        .disabled(viewModel.terminalStore.isOpeningSession)
-                    }
-                }
-
-                Section {
-                    ForEach(commandActions) { action in
-                        Button {
-                            copyCommand(action)
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: action.systemImage)
-                                    .foregroundStyle(action.isDangerous ? Color.agentrixError : Color.primary)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(action.title)
-                                        .font(.headline)
-                                    Text(action.command)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .multilineTextAlignment(.leading)
-                                        .lineLimit(2)
-                                }
-                                Spacer()
-                                Image(systemName: "doc.on.doc")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.vertical, 4)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                } header: {
-                    Text("Commands")
-                } footer: {
-                    Text("Tap a command to copy it to your clipboard.")
-                        .font(.caption2)
-                    ForEach(commandActions) { action in
-                        Button {
-                            copyCommand(action)
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: action.systemImage)
-                                    .foregroundStyle(action.isDangerous ? Color.agentrixError : Color.primary)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(action.title)
-                                        .font(.headline)
-                                    Text(action.command)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .multilineTextAlignment(.leading)
-                                        .lineLimit(2)
-                                }
-                                Spacer()
-                                Image(systemName: "doc.on.doc")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.vertical, 4)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                if viewModel.isLoadingCommandConfig {
-                    Section {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                            Text("Loading commands…")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-            }
-            .navigationTitle("Launch Options")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
-                        showingWorktreeActions = false
-                    }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Reload") {
-                        Task { await viewModel.loadCommandConfig(force: true) }
-                    }
-                    .disabled(viewModel.isLoadingCommandConfig)
-                }
-            }
-            .task {
-                await viewModel.loadCommandConfig()
-            }
+        TerminalLaunchOptionsView(
+            store: viewModel.terminalStore,
+            commandConfig: viewModel.commandConfig,
+            isLoadingCommandConfig: viewModel.isLoadingCommandConfig,
+            layout: .sheet,
+            onDismiss: { showingWorktreeActions = false }
+        )
+        .task {
+            await viewModel.loadCommandConfig()
         }
-        .presentationDetents([.medium, .large])
     }
 
     func copyCommand(_ action: WorktreeCommandAction) {
@@ -382,6 +382,40 @@ private extension WorktreeDetailView {
 
     var repositoryChangeToken: String {
         repository.id
+    }
+
+    func preloadDataIfNeeded(for tab: WorktreeDetailTab) async {
+        switch tab {
+        case .terminal:
+            return
+        case .diffs:
+            if viewModel.gitStatus == nil && !viewModel.isLoadingGitStatus {
+                await viewModel.loadGitStatus()
+            }
+        case .ports:
+            if viewModel.ports.isEmpty {
+                await viewModel.loadPorts()
+            }
+        case .plans:
+            if viewModel.plans.isEmpty {
+                await viewModel.loadPlans()
+            }
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func applyLiquidGlassTabBehavior() -> some View {
+#if os(iOS) || os(tvOS)
+        if #available(iOS 18.0, iPadOS 18.0, tvOS 18.0, *) {
+            self.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            self
+        }
+#else
+        self
+#endif
     }
 }
 
@@ -487,5 +521,29 @@ private extension WorktreeDetailView {
                 }
             }
         }
+    }
+}
+
+private extension WorktreeDetailView {
+    var planComposerSheet: some View {
+        NavigationStack {
+            ScrollView {
+                PlanComposerView(
+                    viewModel: viewModel,
+                    initialPrompt: "",
+                    title: "Generate Plan"
+                )
+                .padding()
+            }
+            .navigationTitle("New Plan")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        showingPlanComposer = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }

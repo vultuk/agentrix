@@ -12,21 +12,15 @@ final class CustomTerminalView: TerminalView {
         overrideSelector(#selector(deleteBackward), with: #selector(agentrix_deleteBackwardShim))
     }()
     #if os(iOS) && !targetEnvironment(macCatalyst)
-    private lazy var keyboardAccessoryToolbar: UIToolbar = {
-        let toolbar = UIToolbar()
-        let doneButton = UIBarButtonItem(
+    private lazy var keyboardDismissButton: UIBarButtonItem = {
+        let button = UIBarButtonItem(
             title: "Done",
             style: .done,
             target: self,
             action: #selector(handleAccessoryDismissButton)
         )
-        doneButton.accessibilityIdentifier = "terminal.keyboard.dismiss"
-        toolbar.items = [
-            UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
-            doneButton
-        ]
-        toolbar.sizeToFit()
-        return toolbar
+        button.accessibilityIdentifier = "terminal.keyboard.dismiss"
+        return button
     }()
     private lazy var refocusTapRecognizer: UITapGestureRecognizer = {
         let recognizer = UITapGestureRecognizer(target: self, action: #selector(handleRefocusTap(_:)))
@@ -42,6 +36,7 @@ final class CustomTerminalView: TerminalView {
         delaysContentTouches = false
         #if os(iOS) && !targetEnvironment(macCatalyst)
         addGestureRecognizer(refocusTapRecognizer)
+        configureInputAssistant()
         #endif
     }
 
@@ -105,10 +100,6 @@ final class CustomTerminalView: TerminalView {
     }
 
     #if os(iOS) && !targetEnvironment(macCatalyst)
-    override var inputAccessoryView: UIView? {
-        keyboardAccessoryToolbar
-    }
-
     override func insertText(_ text: String) {
         // Skip UIKit text system to avoid duplicate echoes.
         forwardInput(Array(text.utf8))
@@ -122,6 +113,12 @@ final class CustomTerminalView: TerminalView {
         guard recognizer.state == .ended else { return }
         guard keyboardDismissedByUser else { return }
         requestKeyboardFocus()
+    }
+
+    private func configureInputAssistant() {
+        let group = UIBarButtonItemGroup(barButtonItems: [keyboardDismissButton], representativeItem: nil)
+        inputAssistantItem.trailingBarButtonGroups = [group]
+        inputAssistantItem.leadingBarButtonGroups = []
     }
     #endif
 

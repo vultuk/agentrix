@@ -1,6 +1,6 @@
 import Foundation
 
-enum TerminalSessionTool: String, Decodable {
+enum TerminalSessionTool: String, Decodable, CaseIterable {
     case terminal
     case agent
 
