@@ -2,6 +2,8 @@
  * Git URL parsing utilities
  */
 
+import { validateRepositorySegment } from './repository-identifiers.js';
+
 export interface GitUrlParts {
   org: string;
   repo: string;
@@ -71,7 +73,10 @@ export function parseRepositoryUrl(input: string): GitUrlParts {
     throw new Error('Unable to determine repository organisation and name from URL');
   }
 
-  return { org, repo, url: trimmed };
+  const validatedOrg = validateRepositorySegment(org, 'organization');
+  const validatedRepo = validateRepositorySegment(repo, 'repository');
+
+  return { org: validatedOrg, repo: validatedRepo, url: trimmed };
 }
 
 /**

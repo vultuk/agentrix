@@ -5,11 +5,7 @@ import { listWorktrees } from './worktree-repository.js';
 import { parseRepositoryUrl } from '../domain/index.js';
 import { getRepositoryInitCommand } from '../core/repository-config.js';
 import { normaliseInitCommand, setRepositoryInitCommand } from '../core/repository-config.js';
-
-export interface RepositoryPaths {
-  repoRoot: string;
-  repositoryPath: string;
-}
+import { resolveRepositoryPaths, type RepositoryPaths } from './repository-paths.js';
 
 export interface CloneResult {
   org: string;
@@ -73,12 +69,7 @@ export function __setRepositoryRepositoryTestOverrides(
  * @throws {Error} If repository doesn't exist or is invalid
  */
 export async function ensureRepository(workdir: string, org: string, repo: string): Promise<RepositoryPaths> {
-  if (!org || !repo) {
-    throw new Error('Repository identifier is incomplete');
-  }
-
-  const repoRoot = path.join(workdir, org, repo);
-  const repositoryPath = path.join(repoRoot, 'repository');
+  const { repoRoot, repositoryPath } = resolveRepositoryPaths(workdir, org, repo);
 
   let stats;
   try {
@@ -112,8 +103,7 @@ export async function cloneRepository(
   options: CloneOptions = {}
 ): Promise<CloneResult> {
   const { org, repo, url } = parseRepositoryUrl(repositoryUrl);
-  const repoRoot = path.join(workdir, org, repo);
-  const repositoryPath = path.join(repoRoot, 'repository');
+  const { repoRoot, repositoryPath } = resolveRepositoryPaths(workdir, org, repo);
 
   await fs.mkdir(repoRoot, { recursive: true });
 
@@ -239,3 +229,5 @@ export async function discoverRepositories(workdir: string): Promise<Repositorie
 
   return result;
 }
+
+export type { RepositoryPaths } from './repository-paths.js';

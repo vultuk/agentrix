@@ -9,6 +9,7 @@ import {
   discoverRepositories,
   __setRepositoryRepositoryTestOverrides,
 } from './repository-repository.js';
+import { RepositoryIdentifierError } from '../domain/index.js';
 
 function createDirent(name: string, isDirectory: boolean): Dirent {
   return {
@@ -62,6 +63,17 @@ describe('repository-repository', () => {
       );
 
       statMock.mock.restore();
+    });
+
+    it('rejects identifiers containing traversal segments', async () => {
+      await assert.rejects(
+        ensureRepository('/work', '..', 'demo'),
+        (error: unknown) => {
+          assert.ok(error instanceof RepositoryIdentifierError);
+          assert.match(error.message, /organization cannot be a traversal segment/i);
+          return true;
+        }
+      );
     });
   });
 
@@ -138,6 +150,24 @@ describe('repository-repository', () => {
         }
       );
     });
+
+    it('rejects repository URLs that attempt traversal before creating directories', async () => {
+      const mkdirMock = mock.method(fs, 'mkdir', async () => {
+        throw new Error('should not attempt mkdir');
+      });
+
+      await assert.rejects(
+        cloneRepository('/work', 'git@github.com:../etc/passwd.git'),
+        (error: unknown) => {
+          assert.ok(error instanceof RepositoryIdentifierError);
+          assert.match(error.message, /organization cannot be a traversal segment/i);
+          return true;
+        }
+      );
+
+      assert.equal(mkdirMock.mock.callCount(), 0);
+      mkdirMock.mock.restore();
+    });
   });
 
   describe('discoverRepositories', () => {
@@ -211,4 +241,3 @@ describe('repository-repository', () => {
     });
   });
 });
-
