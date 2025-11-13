@@ -33,6 +33,22 @@ describe('parseRepositoryUrl', () => {
     assert.equal(result.repo, 'agentrix');
   });
 
+  it('rejects traversal tokens and separators in repository identifiers', () => {
+    assert.throws(
+      () => parseRepositoryUrl('git@github.com:../etc/passwd.git'),
+      /organization cannot be a traversal segment/i
+    );
+    assert.throws(
+      () => parseRepositoryUrl('git@github.com:vultuk/repo/../../evil.git'),
+      /repository cannot contain path separators/i
+    );
+  });
+
+  it('allows dotted repository names', () => {
+    const result = parseRepositoryUrl('https://github.com/vultuk/agentrix.v1.git');
+    assert.equal(result.repo, 'agentrix.v1');
+  });
+
   it('throws for invalid inputs', () => {
     assert.throws(() => parseRepositoryUrl(''), /Repository URL is required/);
     assert.throws(() => parseRepositoryUrl('example'), /Unable to determine repository/);
@@ -49,4 +65,3 @@ describe('GitUrl', () => {
     assert.equal(url.toIdentifier(), 'vultuk/agentrix');
   });
 });
-

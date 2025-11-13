@@ -12,6 +12,7 @@ import {
   removeWorktree,
 } from './worktree-repository.js';
 import { __setGitRepositoryTestOverrides } from './git-repository.js';
+import { RepositoryIdentifierError } from '../domain/index.js';
 
 describe('worktree-repository', () => {
   afterEach(() => {
@@ -128,6 +129,17 @@ describe('worktree-repository', () => {
         }
       );
     });
+
+    it('rejects traversal segments in repository identifiers', async () => {
+      await assert.rejects(
+        getWorktreePath('/work', '..', 'demo', 'main'),
+        (error: unknown) => {
+          assert.ok(error instanceof RepositoryIdentifierError);
+          assert.match(error.message, /organization cannot be a traversal segment/i);
+          return true;
+        }
+      );
+    });
   });
 
   describe('removeWorktree', () => {
@@ -171,6 +183,17 @@ describe('worktree-repository', () => {
 
       await removeWorktree('/work', 'acme', 'demo', 'feature-branch');
       assert.ok(execMock.mock.callCount() >= 2);
+    });
+
+    it('rejects traversal segments in identifiers', async () => {
+      await assert.rejects(
+        removeWorktree('/work', '..', 'demo', 'feature'),
+        (error: unknown) => {
+          assert.ok(error instanceof RepositoryIdentifierError);
+          assert.match(error.message, /organization cannot be a traversal segment/i);
+          return true;
+        }
+      );
     });
   });
 
@@ -254,6 +277,16 @@ describe('worktree-repository', () => {
         }
       );
     });
+
+    it('rejects invalid derived folder names', async () => {
+      await assert.rejects(
+        createWorktree('/work', 'acme', 'demo', '.'),
+        (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.match(error.message, /Invalid worktree folder name derived from branch/);
+          return true;
+        }
+      );
+    });
   });
 });
-

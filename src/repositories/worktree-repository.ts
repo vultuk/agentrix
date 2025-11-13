@@ -10,6 +10,7 @@ import { resolveDefaultBranch } from '../core/default-branch.js';
 import {
   getRepositoryInitCommand,
 } from '../core/repository-config.js';
+import { resolveRepositoryPaths } from './repository-paths.js';
 
 /**
  * Custom error for worktree operations
@@ -219,12 +220,12 @@ export async function createWorktree(
     throw new Error('Branch name cannot be empty');
   }
 
-  // We need to import ensureRepository from repository-repository
-  // For now, construct paths directly
-  const repoRoot = path.join(workdir, org, repo);
-  const repositoryPath = path.join(repoRoot, 'repository');
+  const { repoRoot, repositoryPath } = resolveRepositoryPaths(workdir, org, repo);
   
   const folderName = deriveWorktreeFolderName(branchName);
+  if (folderName === '.' || folderName === '..') {
+    throw new Error('Invalid worktree folder name derived from branch');
+  }
   const targetPath = path.join(repoRoot, folderName);
 
   try {
@@ -386,7 +387,7 @@ export async function getWorktreePath(
   repo: string,
   branch: string
 ): Promise<WorktreePathResult> {
-  const repositoryPath = path.join(workdir, org, repo, 'repository');
+  const { repositoryPath } = resolveRepositoryPaths(workdir, org, repo);
   const worktrees = await listWorktrees(repositoryPath);
   const match = worktrees.find((item) => item.branch === branch);
   
@@ -420,7 +421,7 @@ export async function removeWorktree(
     throw new Error('Cannot remove the main worktree');
   }
 
-  const repositoryPath = path.join(workdir, org, repo, 'repository');
+  const { repositoryPath } = resolveRepositoryPaths(workdir, org, repo);
   const worktrees = await listWorktrees(repositoryPath);
   const entry = worktrees.find((item) => item.branch === branchName);
 
@@ -440,4 +441,3 @@ export async function removeWorktree(
     throw new Error(`Failed to remove worktree: ${message}`);
   }
 }
-

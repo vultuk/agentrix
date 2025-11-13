@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
-import { describe, it, mock } from 'node:test';
+import fs from 'node:fs/promises';
+import { afterEach, describe, it, mock } from 'node:test';
 
 import { createRepoHandlers } from './repos.js';
 import { __setBaseHandlerTestOverrides } from './base-handler.js';
 import type { RequestContext } from '../types/http.js';
 import type { RepositoryService } from '../services/index.js';
+import { createRepositoryService, __setRepositoryServiceTestOverrides } from '../services/repository-service.js';
 
 function createContext(overrides: Partial<RequestContext> = {}): RequestContext {
   const url = new URL('http://localhost/api/repos');
@@ -33,6 +35,12 @@ function createContext(overrides: Partial<RequestContext> = {}): RequestContext 
 }
 
 describe('createRepoHandlers', () => {
+  afterEach(() => {
+    mock.restoreAll();
+    __setBaseHandlerTestOverrides();
+    __setRepositoryServiceTestOverrides();
+  });
+
   it('list handler returns repository data', async () => {
     const repositoryService = {
       listRepositories: mock.fn(async () => ({
@@ -113,7 +121,6 @@ describe('createRepoHandlers', () => {
     });
 
     await handlers.create(context);
-    __setBaseHandlerTestOverrides();
 
     assert.equal(repositoryService.addRepository.mock.calls.length, 1);
     assert.deepEqual(repositoryService.addRepository.mock.calls[0]?.arguments, [
@@ -147,7 +154,6 @@ describe('createRepoHandlers', () => {
     });
 
     await handlers.delete(context);
-    __setBaseHandlerTestOverrides();
 
     assert.equal(repositoryService.deleteRepository.mock.calls.length, 1);
     assert.deepEqual(repositoryService.deleteRepository.mock.calls[0]?.arguments, ['vultuk', 'agentrix']);
@@ -189,7 +195,6 @@ describe('createRepoHandlers', () => {
     });
 
     await handlers.updateInitCommand(context);
-    __setBaseHandlerTestOverrides();
 
     assert.equal(repositoryService.updateInitCommand.mock.calls.length, 1);
     assert.deepEqual(repositoryService.updateInitCommand.mock.calls[0]?.arguments, [
@@ -226,5 +231,68 @@ describe('createRepoHandlers', () => {
 
     assert.equal(handlers.destroy, handlers.delete);
   });
-});
 
+  it('create handler returns 400 for traversal repository URLs before touching the filesystem', async () => {
+    const mkdirMock = mock.method(fs, 'mkdir', async () => {
+      throw new Error('mkdir should not run for invalid URLs');
+    });
+
+    __setRepositoryServiceTestOverrides({
+      refreshRepositoryCache: async () => ({}),
+    });
+
+    const repositoryService = createRepositoryService('/tmp/workdir');
+    const handlers = createRepoHandlers('/tmp/workdir', { repositoryService });
+    const context = createContext({
+      method: 'POST',
+      readJsonBody: async () => ({
+        url: 'git@github.com:../etc/passwd.git',
+        initCommand: '',
+      }),
+    });
+
+    await handlers.create(context);
+
+    assert.equal(context.res.statusCode, 400);
+    const payloadCall = (context.res.end as ReturnType<typeof mock.fn>).mock.calls[0];
+    assert.ok(payloadCall);
+    const payload = JSON.parse(payloadCall.arguments[0] as string);
+    assert.match(
+      payload.error as string,
+      /organization cannot (?:be a traversal segment|contain path separators)/i
+    );
+    assert.equal(mkdirMock.mock.callCount(), 0);
+  });
+
+  it('delete handler rejects traversal identifiers before repository lookup', async () => {
+    const statMock = mock.method(fs, 'stat', async () => {
+      throw new Error('stat should not run for invalid identifiers');
+    });
+
+    __setRepositoryServiceTestOverrides({
+      refreshRepositoryCache: async () => ({}),
+    });
+
+    const repositoryService = createRepositoryService('/tmp/workdir');
+    const handlers = createRepoHandlers('/tmp/workdir', { repositoryService });
+    const context = createContext({
+      method: 'POST',
+      readJsonBody: async () => ({
+        org: '../etc',
+        repo: 'demo',
+      }),
+    });
+
+    await handlers.delete(context);
+
+    assert.equal(context.res.statusCode, 400);
+    const payloadCall = (context.res.end as ReturnType<typeof mock.fn>).mock.calls[0];
+    assert.ok(payloadCall);
+    const payload = JSON.parse(payloadCall.arguments[0] as string);
+    assert.match(
+      payload.error as string,
+      /organization cannot (?:be a traversal segment|contain path separators)/i
+    );
+    assert.equal(statMock.mock.callCount(), 0);
+  });
+});

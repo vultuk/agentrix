@@ -1,5 +1,9 @@
 export { parseRepositoryUrl, GitUrl } from './git-url-parser.js';
 export type { GitUrlParts } from './git-url-parser.js';
+export {
+  validateRepositorySegment,
+  RepositoryIdentifierError,
+} from './repository-identifiers.js';
 
 export {
   normalizeBranchName,
