@@ -1,6 +1,6 @@
 {
   "name": "agentrix",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "CLI utility for serving the agentrix UI",
   "license": "MIT",
   "author": "Simon Skinner (vultuk) <talkto@simonskinner.me>",
