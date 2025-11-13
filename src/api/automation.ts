@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   cloneRepository,
   createWorktree,
@@ -8,17 +8,26 @@ import {
 } from '../core/git.js';
 import { launchAgentProcess } from '../core/agents.js';
 import { runTask } from '../core/tasks.js';
-import { sendJson } from '../utils/http.js';
+import { getClientIp, sendJson } from '../utils/http.js';
 import {
   validateAutomationRequest,
   AutomationRequestError,
+  extractApiKey,
 } from '../core/automation/request-validation.js';
 import { resolveBranchName } from '../core/automation/branch.js';
 import { generatePlanText } from '../core/automation/plan.js';
 import { createGitOrchestrator } from '../core/automation/git-orchestration.js';
 import { runAutomationTask } from '../core/automation/task-runner.js';
 import { createLogger } from '../infrastructure/logging/index.js';
+import { createRateLimiter } from '../core/security/rate-limiter.js';
+import {
+  AUTOMATION_RATE_LIMIT_MAX_ATTEMPTS,
+  AUTOMATION_RATE_LIMIT_WINDOW_MS,
+  ERROR_MESSAGES,
+  HTTP_STATUS,
+} from '../config/constants.js';
 import type { Logger } from '../infrastructure/logging/index.js';
+import type { RateLimiter } from '../core/security/rate-limiter.js';
 
 interface AutomationModuleDependencies {
   cloneRepository: typeof cloneRepository;
@@ -33,6 +42,7 @@ interface AutomationModuleDependencies {
   createGitOrchestrator: typeof createGitOrchestrator;
   runAutomationTask: typeof runAutomationTask;
   createLogger: typeof createLogger;
+  createRateLimiter: typeof createRateLimiter;
 }
 
 const defaultAutomationDependencies: AutomationModuleDependencies = {
@@ -48,6 +58,7 @@ const defaultAutomationDependencies: AutomationModuleDependencies = {
   createGitOrchestrator,
   runAutomationTask,
   createLogger,
+  createRateLimiter,
 };
 
 let activeAutomationDependencies: AutomationModuleDependencies = { ...defaultAutomationDependencies };
@@ -161,6 +172,7 @@ export interface AutomationHandlersDependencies {
   runTaskImpl?: typeof runTask;
   now?: () => number;
   createRequestId?: () => string;
+  rateLimiter?: RateLimiter;
 }
 
 export function createAutomationHandlers(
@@ -180,6 +192,7 @@ export function createAutomationHandlers(
     runTaskImpl = activeAutomationDependencies.runTask,
     now = () => Date.now(),
     createRequestId = () => randomUUID(),
+    rateLimiter: injectedRateLimiter,
   }: AutomationHandlersDependencies = {}
 ) {
   const gitOrchestrator = activeAutomationDependencies.createGitOrchestrator({
@@ -188,9 +201,37 @@ export function createAutomationHandlers(
   });
 
   const log = activeAutomationDependencies.createLogger(logger);
+  const automationRateLimiter =
+    injectedRateLimiter ||
+    activeAutomationDependencies.createRateLimiter({
+      windowMs: AUTOMATION_RATE_LIMIT_WINDOW_MS,
+      maxAttempts: AUTOMATION_RATE_LIMIT_MAX_ATTEMPTS,
+    });
 
   async function launch(context: { req: unknown; res: unknown; readJsonBody: () => Promise<unknown> }): Promise<void> {
-    const ctx = context as { req: { headers?: Record<string, string | string[] | undefined> }; res: { statusCode?: number; setHeader?: (name: string, value: string) => void; end?: (data?: unknown) => void }; readJsonBody: () => Promise<unknown> };
+    const req = context.req as IncomingMessage;
+    const ctx = context as {
+      req: { headers?: Record<string, string | string[] | undefined> };
+      res: { statusCode?: number; setHeader?: (name: string, value: string) => void; end?: (data?: unknown) => void };
+      readJsonBody: () => Promise<unknown>;
+    };
+    const providedApiKey = extractApiKey(req);
+    const clientIp = getClientIp(req);
+    const limiterKey = `${clientIp || 'unknown'}:${providedApiKey || 'missing-key'}`;
+
+    const limiterStatus = automationRateLimiter.check(limiterKey);
+    if (limiterStatus.limited) {
+      log.warn('[agentrix] Automation request throttled', {
+        clientIp,
+        apiKeyProvided: Boolean(providedApiKey),
+        attempts: limiterStatus.attempts,
+        retryAfterMs: limiterStatus.retryAfterMs,
+      });
+      sendJson(ctx.res as unknown as ServerResponse, HTTP_STATUS.TOO_MANY_REQUESTS, {
+        error: ERROR_MESSAGES.TOO_MANY_AUTOMATION_ATTEMPTS,
+      });
+      return;
+    }
     let validation;
     try {
       validation = await activeAutomationDependencies.validateAutomationRequest({
@@ -201,6 +242,21 @@ export function createAutomationHandlers(
       });
     } catch (error: unknown) {
       if (error instanceof AutomationRequestError) {
+        if (error.status === 401) {
+          const failure = automationRateLimiter.recordFailure(limiterKey);
+          if (failure.limited) {
+            log.warn('[agentrix] Automation rate limit triggered', {
+              clientIp,
+              apiKeyProvided: Boolean(providedApiKey),
+              attempts: failure.attempts,
+              retryAfterMs: failure.retryAfterMs,
+            });
+            sendJson(ctx.res as unknown as ServerResponse, HTTP_STATUS.TOO_MANY_REQUESTS, {
+              error: ERROR_MESSAGES.TOO_MANY_AUTOMATION_ATTEMPTS,
+            });
+            return;
+          }
+        }
         sendJson(ctx.res as unknown as ServerResponse, error.status, { error: error.message });
         return;
       }
@@ -208,6 +264,8 @@ export function createAutomationHandlers(
       sendJson(ctx.res as unknown as ServerResponse, 500, { error: 'Unexpected error while validating automation request' });
       return;
     }
+
+    automationRateLimiter.reset(limiterKey);
 
     const { planEnabled, prompt, org, repo, worktreeInput, agent, routeLabel } = validation;
 

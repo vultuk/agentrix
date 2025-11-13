@@ -69,3 +69,25 @@ export async function readJsonBody(req: IncomingMessage): Promise<JsonPayload> {
  * This function re-exports for backward compatibility
  */
 export { determineSecureCookie } from '../infrastructure/cookies/index.js';
+
+export function getClientIp(req: IncomingMessage): string {
+  const headerValue = req.headers?.['x-forwarded-for'];
+  if (typeof headerValue === 'string' && headerValue.trim()) {
+    const candidate = headerValue.split(',').map((part) => part.trim()).find(Boolean);
+    if (candidate) {
+      return candidate;
+    }
+  } else if (Array.isArray(headerValue) && headerValue.length) {
+    const candidate = headerValue.map((part) => (part ? part.trim() : '')).find(Boolean);
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  const remote = req.socket?.remoteAddress;
+  if (typeof remote === 'string' && remote.trim()) {
+    return remote;
+  }
+
+  return 'unknown';
+}

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
 
+import { HTTP_STATUS, ERROR_MESSAGES } from '../config/constants.js';
+import type { RateLimiter } from '../core/security/rate-limiter.js';
+import type { Logger } from '../infrastructure/logging/index.js';
 import type { RequestContext } from '../types/http.js';
 import { __setBaseHandlerTestOverrides } from './base-handler.js';
 import { __setAuthTestOverrides, createAuthHandlers } from './auth.js';
@@ -161,5 +164,77 @@ describe('createAuthHandlers', () => {
     assert.equal(statusCall.arguments[1], 200);
     assert.deepEqual(statusCall.arguments[2], { active: true });
   });
-});
 
+  it('throttles login attempts when limiter blocks request immediately', async () => {
+    const { sendJson, service } = setupOverrides();
+    const rateLimiter: RateLimiter = {
+      check: mock.fn(() => ({ limited: true, retryAfterMs: 1000, attempts: 5 })),
+      recordFailure: mock.fn(() => ({ limited: true, retryAfterMs: 1000, attempts: 5 })),
+      reset: mock.fn(() => {}),
+    };
+    const logger: Logger = { info: mock.fn(), error: mock.fn(), warn: mock.fn(), debug: mock.fn() };
+
+    const handlers = createAuthHandlers({} as never, { rateLimiter, logger });
+    const context = createContext({ readJsonBody: async () => ({ password: 'secret' }) });
+
+    await handlers.login(context);
+    __setAuthTestOverrides();
+
+    assert.equal(service.login.mock.calls.length, 0);
+    assert.equal(rateLimiter.check.mock.calls.length, 1);
+    assert.equal(logger.warn.mock.calls.length, 1);
+    const call = sendJson.mock.calls.at(-1);
+    assert.ok(call);
+    assert.equal(call.arguments[1], HTTP_STATUS.TOO_MANY_REQUESTS);
+    assert.deepEqual(call.arguments[2], { error: ERROR_MESSAGES.TOO_MANY_LOGIN_ATTEMPTS });
+  });
+
+  it('returns 429 when invalid password triggers rate limit', async () => {
+    const loginError = new Error('Invalid password');
+    const { sendJson } = setupOverrides({
+      login: mock.fn(async () => {
+        throw loginError;
+      }),
+    });
+    const rateLimiter: RateLimiter = {
+      check: mock.fn(() => ({ limited: false, retryAfterMs: 0, attempts: 0 })),
+      recordFailure: mock.fn(() => ({ limited: true, retryAfterMs: 5000, attempts: 5 })),
+      reset: mock.fn(() => {}),
+    };
+    const logger: Logger = { info: mock.fn(), error: mock.fn(), warn: mock.fn(), debug: mock.fn() };
+
+    const handlers = createAuthHandlers({} as never, { rateLimiter, logger });
+    const context = createContext({ readJsonBody: async () => ({ password: 'bad' }) });
+
+    await handlers.login(context);
+    __setAuthTestOverrides();
+
+    assert.equal(rateLimiter.recordFailure.mock.calls.length, 1);
+    const call = sendJson.mock.calls.at(-1);
+    assert.ok(call);
+    assert.equal(call.arguments[1], HTTP_STATUS.TOO_MANY_REQUESTS);
+    assert.deepEqual(call.arguments[2], { error: ERROR_MESSAGES.TOO_MANY_LOGIN_ATTEMPTS });
+    assert.equal(logger.warn.mock.calls.length, 1);
+  });
+
+  it('resets limiter after successful login', async () => {
+    const { sendJson, service } = setupOverrides();
+    const rateLimiter: RateLimiter = {
+      check: mock.fn(() => ({ limited: false, retryAfterMs: 0, attempts: 0 })),
+      recordFailure: mock.fn(() => ({ limited: false, retryAfterMs: 0, attempts: 0 })),
+      reset: mock.fn(() => {}),
+    };
+
+    const handlers = createAuthHandlers({} as never, { rateLimiter });
+    const context = createContext({ readJsonBody: async () => ({ password: 'secret' }) });
+
+    await handlers.login(context);
+    __setAuthTestOverrides();
+
+    assert.equal(service.login.mock.calls.length, 1);
+    assert.equal(rateLimiter.reset.mock.calls.length, 1);
+    const call = sendJson.mock.calls.at(-1);
+    assert.ok(call);
+    assert.equal(call.arguments[1], 200);
+  });
+});
