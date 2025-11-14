@@ -16,8 +16,8 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "30"
             endingLineNumber = "30"
-            landmarkName = "body"
-            landmarkType = "24">
+            landmarkName = "init(repository:worktree:viewModel:selectionHandler:logoutAction:sessions:tasks:)"
+            landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

@@ -39,6 +39,21 @@ final class WorktreeDetailViewModel: ObservableObject {
         )
     }()
 
+    lazy var codexStore: CodexSdkChatStore = {
+        let reference = WorktreeReference(org: repository.org, repo: repository.name, branch: worktree.branch)
+        let store = CodexSdkChatStore(
+            service: services.codexSdk,
+            setError: { [weak self] error in self?.setError(error) },
+            clearError: { [weak self] in
+                if self?.errorMessage != AgentrixError.unreachable.errorDescription {
+                    self?.errorMessage = nil
+                }
+            }
+        )
+        store.updateWorktree(reference)
+        return store
+    }()
+
     private let services: ServiceRegistry
     private let worktreeCreatedHandler: (WorktreeSummary) async -> Void
     private let worktreeDeletedHandler: (WorktreeSummary) async -> Void
@@ -72,6 +87,7 @@ final class WorktreeDetailViewModel: ObservableObject {
         self.shouldAutoConnectTerminal = autoConnectTerminal
         self.selectedTab = WorktreeDetailViewModel.restoreSelectedTab(for: selectedWorktree, defaults: userDefaults)
         updateSessions(sessions)
+        codexStore.updateWorktree(WorktreeReference(org: repository.org, repo: repository.name, branch: worktree.branch))
         if autoRefreshOnInit {
             Task { await refreshAll() }
         }
@@ -346,6 +362,17 @@ final class WorktreeDetailViewModel: ObservableObject {
         self.repository = repository
         let reference = WorktreeReference(org: repository.org, repo: repository.name, branch: worktree.branch)
         terminalStore.updateWorktree(reference)
+        codexStore.updateWorktree(reference)
+    }
+
+    func ensureCodexSessionsLoaded() async {
+        await codexStore.ensureSessionsLoaded()
+    }
+
+    @discardableResult
+    func startCodexSdkSession() async -> Bool {
+        let summary = await codexStore.createSession()
+        return summary != nil
     }
 }
 
