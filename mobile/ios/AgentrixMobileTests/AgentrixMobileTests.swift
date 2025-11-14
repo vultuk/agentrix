@@ -29,6 +29,36 @@ final class AgentrixMobileTests: XCTestCase {
         XCTAssertTrue(terminalView.isFirstResponder, "Terminal should regain focus after a tap/refocus request")
     }
 
+    @MainActor
+    func testTerminalReturnKeySendsCarriageReturn() {
+        let viewModel = RecordingTerminalViewModel()
+        let coordinator = SwiftTermTerminalView(viewModel: viewModel).makeCoordinator()
+        let terminalView = CustomTerminalView(frame: .zero)
+        let expectation = expectation(description: "Return key normalized")
+        viewModel.onSend = { data in
+            XCTAssertEqual(data, Data([0x0d]))
+            expectation.fulfill()
+        }
+        coordinator.send(source: terminalView, data: [UInt8(0x0a)][...])
+        waitForExpectations(timeout: 1)
+        XCTAssertEqual(viewModel.recordedPayloads, [Data([0x0d])])
+    }
+
+    @MainActor
+    func testTerminalReturnKeyDoesNotDuplicateExistingCarriageReturns() {
+        let viewModel = RecordingTerminalViewModel()
+        let coordinator = SwiftTermTerminalView(viewModel: viewModel).makeCoordinator()
+        let terminalView = CustomTerminalView(frame: .zero)
+        let expectation = expectation(description: "Existing CR forwarded once")
+        viewModel.onSend = { data in
+            XCTAssertEqual(data, Data([0x0d]))
+            expectation.fulfill()
+        }
+        coordinator.send(source: terminalView, data: [UInt8(0x0d)][...])
+        waitForExpectations(timeout: 1)
+        XCTAssertEqual(viewModel.recordedPayloads, [Data([0x0d])])
+    }
+
     func testRepositoryListingIdentifier() {
         let dto = RepositoryDTO(branches: ["main"], initCommand: "")
         let listing = RepositoryListing(org: "acme", name: "web", dto: dto)
@@ -378,6 +408,25 @@ final class AgentrixMobileTests: XCTestCase {
             autoConnectTerminal: autoConnectTerminal,
             userDefaults: userDefaults
         )
+    }
+}
+
+@MainActor
+private final class RecordingTerminalViewModel: TerminalViewModel {
+    var onSend: ((Data) -> Void)?
+    private(set) var recordedPayloads: [Data] = []
+
+    init() {
+        let config = EnvironmentConfig(baseURL: URL(string: "http://127.0.0.1:3414")!)
+        let api = AgentrixAPIClient(config: config)
+        let service = TerminalService(api: api)
+        let reference = WorktreeReference(org: "acme", repo: "web", branch: "main")
+        super.init(worktree: reference, terminalService: service)
+    }
+
+    override func send(bytes data: Data) async {
+        recordedPayloads.append(data)
+        onSend?(data)
     }
 }
 

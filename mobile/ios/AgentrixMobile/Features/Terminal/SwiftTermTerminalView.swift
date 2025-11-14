@@ -45,6 +45,30 @@ final class TerminalOutputAccumulator {
     }
 }
 
+/// Normalizes Return key input so remote shells always receive a carriage return (0x0D).
+enum TerminalReturnKeyMapper {
+    private static let lineFeedByte: UInt8 = 0x0a
+    private static let carriageReturnByte: UInt8 = 0x0d
+    static let carriageReturnPayload = Data([carriageReturnByte])
+    static let lineFeedString = "\n"
+    static let carriageReturnString = "\r"
+
+    static func shouldMapToCarriageReturn(_ payload: Data) -> Bool {
+        payload.count == 1 && payload.first == lineFeedByte
+    }
+
+    static func normalizedPayload(for payload: Data) -> Data {
+        shouldMapToCarriageReturn(payload) ? carriageReturnPayload : payload
+    }
+}
+
+@MainActor
+private extension TerminalViewModel {
+    func sendNormalizedTerminalPayload(_ payload: Data) async {
+        await send(bytes: TerminalReturnKeyMapper.normalizedPayload(for: payload))
+    }
+}
+
 #if canImport(UIKit)
 struct SwiftTermTerminalView: UIViewRepresentable {
     @ObservedObject var viewModel: TerminalViewModel
@@ -181,7 +205,7 @@ struct SwiftTermTerminalView: UIViewRepresentable {
         func send(source: TerminalView, data: ArraySlice<UInt8>) {
             let payload = Data(data)
             guard !payload.isEmpty else { return }
-            Task { await viewModel.send(bytes: payload) }
+            Task { await viewModel.sendNormalizedTerminalPayload(payload) }
         }
 
         func scrolled(source: TerminalView, position: Double) {
@@ -383,7 +407,7 @@ struct SwiftTermTerminalView: NSViewRepresentable {
         func send(source: TerminalView, data: ArraySlice<UInt8>) {
             let payload = Data(data)
             guard !payload.isEmpty else { return }
-            Task { await viewModel.send(bytes: payload) }
+            Task { await viewModel.sendNormalizedTerminalPayload(payload) }
         }
 
         func scrolled(source: TerminalView, position: Double) {

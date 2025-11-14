@@ -102,6 +102,10 @@ final class CustomTerminalView: TerminalView {
     #if os(iOS) && !targetEnvironment(macCatalyst)
     override func insertText(_ text: String) {
         // Skip UIKit text system to avoid duplicate echoes.
+        if text == TerminalReturnKeyMapper.lineFeedString || text == TerminalReturnKeyMapper.carriageReturnString {
+            forwardReturnKey()
+            return
+        }
         forwardInput(Array(text.utf8))
     }
 
@@ -125,6 +129,11 @@ final class CustomTerminalView: TerminalView {
     private func forwardInput(_ bytes: [UInt8]) {
         guard !bytes.isEmpty else { return }
         terminalDelegate?.send(source: self, data: bytes[...])
+    }
+
+    /// Remote shells expect Return to emit a carriage return (0x0D) regardless of keyboard type.
+    private func forwardReturnKey() {
+        forwardInput([UInt8(0x0d)])
     }
 
     private static func installKeyboardOverrides() {
