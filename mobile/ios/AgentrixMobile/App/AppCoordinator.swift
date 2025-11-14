@@ -71,6 +71,7 @@ struct ServiceRegistry: Identifiable {
     let ports: PortsService
     let git: GitService
     let terminal: TerminalService
+    let codexSdk: CodexSdkService
     let events: EventStreamService
 
     static func make(baseURL: URL) -> ServiceRegistry {
@@ -85,6 +86,7 @@ struct ServiceRegistry: Identifiable {
         let ports = PortsService(api: api)
         let git = GitService(api: api)
         let terminal = TerminalService(api: api)
+        let codexSdk = CodexSdkService(api: api)
         let events = EventStreamService(api: api)
         return ServiceRegistry(
             config: config,
@@ -98,6 +100,7 @@ struct ServiceRegistry: Identifiable {
             ports: ports,
             git: git,
             terminal: terminal,
+            codexSdk: codexSdk,
             events: events
         )
     }

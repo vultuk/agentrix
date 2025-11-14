@@ -54,4 +54,12 @@ struct EnvironmentConfig {
         components.queryItems = [URLQueryItem(name: "sessionId", value: sessionId)]
         return components.url ?? baseURL
     }
+
+    func codexSdkWebSocketURL(sessionId: String) -> URL {
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) ?? URLComponents()
+        components.scheme = components.scheme == "https" ? "wss" : "ws"
+        components.path = "/api/codex-sdk/socket"
+        components.queryItems = [URLQueryItem(name: "sessionId", value: sessionId)]
+        return components.url ?? baseURL
+    }
 }

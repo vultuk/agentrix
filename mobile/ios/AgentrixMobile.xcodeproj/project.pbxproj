@@ -16,6 +16,10 @@
 		3347E42891204E69A0994A0E /* RepositoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8482A2ADBBC24D16BE5D1930 /* RepositoriesView.swift */; };
 		3428B9FEF55C4958B46BA1D6 /* PlanModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54AF6EF891104087A698DD28 /* PlanModels.swift */; };
 		35B3C433A83E467A9A8898B1 /* ErrorTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62AFCB583B01490991396582 /* ErrorTypes.swift */; };
+		C0123D6BAFB64A2486F2D117 /* CodexSdkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0123D6AAFB64A2486F2D117 /* CodexSdkService.swift */; };
+		C05F5E0E5C534D2AAF857B35 /* CodexSdkChatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C05F5E0D5C534D2AAF857B35 /* CodexSdkChatStore.swift */; };
+		C0B8F2E58C6E40AF97C6A57A /* CodexSdkChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0B8F2E48C6E40AF97C6A57A /* CodexSdkChatView.swift */; };
+		C0D2EEAB1FBB4AF4A1B4B0A1 /* CodexSdkModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D2EEAA1FBB4AF4A1B4B0A1 /* CodexSdkModels.swift */; };
 		4752F2A592944CEE943E4F1A /* RepositoriesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86441AFE05414D43802EF5C4 /* RepositoriesViewModel.swift */; };
 		48901A2C1C3A4F07A4C07AC5 /* RepositoryDashboardDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0DA0D842A254CC3AE705B93 /* RepositoryDashboardDetailView.swift */; };
 		4953E6AEE0DC45F6B21D40D7 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD2739DD2E6462598DF58F6 /* AuthView.swift */; };
@@ -135,6 +139,10 @@
 		B7489BEB5E754AF2837402A5 /* WorktreeDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeDetailView.swift; sourceTree = "<group>"; };
 		B7C06CAD3D5946E185FB744D /* TasksService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksService.swift; sourceTree = "<group>"; };
 		B7F771DD0C3049E99A574176 /* GitStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitStatusView.swift; sourceTree = "<group>"; };
+		C0123D6AAFB64A2486F2D117 /* CodexSdkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSdkService.swift; sourceTree = "<group>"; };
+		C05F5E0D5C534D2AAF857B35 /* CodexSdkChatStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSdkChatStore.swift; sourceTree = "<group>"; };
+		C0B8F2E48C6E40AF97C6A57A /* CodexSdkChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSdkChatView.swift; sourceTree = "<group>"; };
+		C0D2EEAA1FBB4AF4A1B4B0A1 /* CodexSdkModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSdkModels.swift; sourceTree = "<group>"; };
 		C14681E5CA964955948713BB /* AgentrixMobileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentrixMobileTests.swift; sourceTree = "<group>"; };
 		CAAA7B82B82D4BD28E030D17 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		CF33F33D6313415CA45ED046 /* AgentrixMobileUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentrixMobileUITests.swift; sourceTree = "<group>"; };
@@ -214,6 +222,7 @@
 				73403F03071342DE8B7F727E /* PortsService.swift */,
 				1B6587445EE44CCE86A398F6 /* RepositoriesService.swift */,
 				B7C06CAD3D5946E185FB744D /* TasksService.swift */,
+				C0123D6AAFB64A2486F2D117 /* CodexSdkService.swift */,
 				530A3844A91F4181B886D66A /* TerminalService.swift */,
 				1318745A7CE040E3A18886DE /* WorktreesService.swift */,
 			);
@@ -326,12 +335,22 @@
 			path = GitStatus;
 			sourceTree = "<group>";
 		};
+		C0AA5D0F399040B6B8AF65E2 /* Codex */ = {
+			isa = PBXGroup;
+			children = (
+				C05F5E0D5C534D2AAF857B35 /* CodexSdkChatStore.swift */,
+				C0B8F2E48C6E40AF97C6A57A /* CodexSdkChatView.swift */,
+			);
+			path = Codex;
+			sourceTree = "<group>";
+		};
 		DC326B4DB1CC44A790FB3AFF /* Models */ = {
 			isa = PBXGroup;
 			children = (
 				6BBB6BD3E14F435199D86620 /* DashboardModels.swift */,
 				0E032D7B113E43278924DCC0 /* GitModels.swift */,
 				93E3847F5172415C9B6E61A0 /* CommandModels.swift */,
+				C0D2EEAA1FBB4AF4A1B4B0A1 /* CodexSdkModels.swift */,
 				54AF6EF891104087A698DD28 /* PlanModels.swift */,
 				3DC689D0DB834509B6368559 /* PortsModels.swift */,
 				98C1F02B883D4A20BBEC9B56 /* IssueModels.swift */,
@@ -365,6 +384,7 @@
 				19C8596844414C4BB5DCE6C8 /* Auth */,
 				431C13CBF9CC4FFA9E2B19F6 /* Dashboard */,
 				597C09C207924DEBA19C9D50 /* Terminal */,
+				C0AA5D0F399040B6B8AF65E2 /* Codex */,
 				63387E63AC2F4225BBB2D48A /* Ports */,
 				7425577F1C3E488EADE3C9CD /* Worktrees */,
 				926FEE25880349DFB119E08C /* Plans */,
@@ -571,6 +591,8 @@
 				4752F2A592944CEE943E4F1A /* RepositoriesViewModel.swift in Sources */,
 				86C9A0169A1F47D7A9D9D81B /* TasksView.swift in Sources */,
 				74F4C51C546B47D68DBBBEC0 /* TerminalView.swift in Sources */,
+				C05F5E0E5C534D2AAF857B35 /* CodexSdkChatStore.swift in Sources */,
+				C0B8F2E58C6E40AF97C6A57A /* CodexSdkChatView.swift in Sources */,
 				E4B7F5D2234A4DA5B2A5F5AA /* SwiftTermTerminalView.swift in Sources */,
 				FEA0F1CB1593BD8BA12BF8A3 /* CustomTerminalView.swift in Sources */,
 				0543D60F6CD845828BD989A3 /* TerminalViewModel.swift in Sources */,
@@ -582,6 +604,7 @@
 				580610920E8F4A599C171A2F /* DashboardModels.swift in Sources */,
 				0D6B0F61368D4446ABA7A474 /* GitModels.swift in Sources */,
 				D8AE06D0D4C64568A0C60F2A /* CommandModels.swift in Sources */,
+				C0D2EEAB1FBB4AF4A1B4B0A1 /* CodexSdkModels.swift in Sources */,
 				92D87E3FA77E4BABA860552F /* IssueModels.swift in Sources */,
 				3428B9FEF55C4958B46BA1D6 /* PlanModels.swift in Sources */,
 				6EE93078E6DB47439B80DB01 /* PortsModels.swift in Sources */,
@@ -599,6 +622,7 @@
 				BB39580AF26A4E64B844EEE2 /* PortsService.swift in Sources */,
 				68A4F4A0D6334164A7BADE0B /* RepositoriesService.swift in Sources */,
 				8CD2E29D47DE442C9EDE6CB5 /* TasksService.swift in Sources */,
+				C0123D6BAFB64A2486F2D117 /* CodexSdkService.swift in Sources */,
 				AE6340CFE3014AA0A5BE8156 /* TerminalService.swift in Sources */,
 				C9A2688B25794FF2904EACB7 /* WorktreesService.swift in Sources */,
 				EF4D70F1E88E413AABABB092 /* EnvironmentConfig.swift in Sources */,

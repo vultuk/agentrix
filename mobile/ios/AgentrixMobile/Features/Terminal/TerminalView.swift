@@ -5,6 +5,8 @@ struct TerminalConsoleView: View {
     @ObservedObject var store: TerminalSessionsStore
     var commandConfig: CommandConfig = .defaults
     var isLoadingCommandConfig = false
+    var onStartCodexSdk: (() -> Void)?
+    var isCodexSdkLaunching = false
     @Namespace private var tabNamespace
     @State private var showingLaunchOptions = false
 
@@ -61,6 +63,8 @@ struct TerminalConsoleView: View {
                 store: store,
                 commandConfig: commandConfig,
                 isLoadingCommandConfig: isLoadingCommandConfig,
+                onStartCodexSdk: onStartCodexSdk,
+                isCodexSdkLaunching: isCodexSdkLaunching,
                 layout: .sheet,
                 onDismiss: { showingLaunchOptions = false }
             )
@@ -124,6 +128,8 @@ struct TerminalConsoleView: View {
             store: store,
             commandConfig: commandConfig,
             isLoadingCommandConfig: isLoadingCommandConfig,
+            onStartCodexSdk: onStartCodexSdk,
+            isCodexSdkLaunching: isCodexSdkLaunching,
             layout: .inline,
             onDismiss: nil
         )
@@ -233,6 +239,8 @@ struct TerminalLaunchOptionsView: View {
     @ObservedObject var store: TerminalSessionsStore
     let commandConfig: CommandConfig
     let isLoadingCommandConfig: Bool
+    let onStartCodexSdk: (() -> Void)?
+    let isCodexSdkLaunching: Bool
     let layout: Layout
     let onDismiss: (() -> Void)?
     @AppStorage("terminal.lastLaunchAction") private var lastLaunchActionRawValue = ""
@@ -274,6 +282,7 @@ struct TerminalLaunchOptionsView: View {
                         title: "Open Codex",
                         systemImage: "sparkles"
                     )
+                    codexSdkButton
                     launchButton(action: .cursor, title: "Launch Cursor", systemImage: "cursorarrow.rays")
                     advancedLaunchRow(
                         primaryAction: .claude,
@@ -511,7 +520,46 @@ struct TerminalLaunchOptionsView: View {
                 .tint(Color.agentrixAccent)
             Text("Refreshing launch options…")
                 .font(.footnote)
-                .foregroundStyle(contentColor.opacity(0.7))
+            .foregroundStyle(contentColor.opacity(0.7))
+        }
+    }
+
+    @ViewBuilder
+    private var codexSdkButton: some View {
+        if let onStartCodexSdk {
+            Button {
+                onDismiss?()
+                onStartCodexSdk()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "sparkles")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Color.agentrixAccent)
+                    Text("Open Codex SDK")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(contentColor)
+                    Spacer()
+                    if isCodexSdkLaunching {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(Color.agentrixAccent)
+                    } else {
+                        trailingIndicator(for: .codex)
+                            .hidden()
+                    }
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(buttonBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(buttonBorder, lineWidth: 1)
+                        )
+                )
+            }
+            .disabled(isCodexSdkLaunching || store.isOpeningSession)
         }
     }
 

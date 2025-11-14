@@ -156,6 +156,12 @@ struct WorktreeDetailView: View {
                     Label("Terminal", systemImage: "terminal")
                 }
 
+            codexTab
+                .tag(WorktreeDetailTab.codex)
+                .tabItem {
+                    Label("Codex", systemImage: "sparkles")
+                }
+
             diffsTab
                 .tag(WorktreeDetailTab.diffs)
                 .tabItem {
@@ -182,12 +188,21 @@ struct WorktreeDetailView: View {
         TerminalConsoleView(
             store: viewModel.terminalStore,
             commandConfig: viewModel.commandConfig,
-            isLoadingCommandConfig: viewModel.isLoadingCommandConfig
+            isLoadingCommandConfig: viewModel.isLoadingCommandConfig,
+            onStartCodexSdk: startCodexSdkSession,
+            isCodexSdkLaunching: viewModel.codexStore.isCreatingSession
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task {
             await viewModel.loadCommandConfig()
         }
+    }
+
+    private var codexTab: some View {
+        CodexSdkChatView(
+            store: viewModel.codexStore,
+            worktree: worktree
+        )
     }
 
     private var diffsTab: some View {
@@ -334,6 +349,8 @@ private extension WorktreeDetailView {
             store: viewModel.terminalStore,
             commandConfig: viewModel.commandConfig,
             isLoadingCommandConfig: viewModel.isLoadingCommandConfig,
+            onStartCodexSdk: startCodexSdkSession,
+            isCodexSdkLaunching: viewModel.codexStore.isCreatingSession,
             layout: .sheet,
             onDismiss: { showingWorktreeActions = false }
         )
@@ -388,6 +405,8 @@ private extension WorktreeDetailView {
         switch tab {
         case .terminal:
             return
+        case .codex:
+            await viewModel.ensureCodexSessionsLoaded()
         case .diffs:
             if viewModel.gitStatus == nil && !viewModel.isLoadingGitStatus {
                 await viewModel.loadGitStatus()
@@ -399,6 +418,17 @@ private extension WorktreeDetailView {
         case .plans:
             if viewModel.plans.isEmpty {
                 await viewModel.loadPlans()
+            }
+        }
+    }
+
+    func startCodexSdkSession() {
+        Task {
+            let started = await viewModel.startCodexSdkSession()
+            if started {
+                await MainActor.run {
+                    viewModel.selectedTab = .codex
+                }
             }
         }
     }
