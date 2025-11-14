@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { describe, it } from 'node:test';
 
 import { MAX_REQUEST_BODY_SIZE } from '../config/constants.js';
-import { handleHeadRequest, readJsonBody, sendJson } from './http.js';
+import { getClientIp, handleHeadRequest, readJsonBody, sendJson } from './http.js';
 
 type HeaderValue = string | number | string[];
 
@@ -45,9 +45,12 @@ class MockServerResponse extends EventEmitter {
 class MockIncomingMessage extends EventEmitter {
   public destroyed = false;
   public headers: IncomingMessage['headers'];
-  public socket: { encrypted?: boolean } | undefined;
+  public socket: { encrypted?: boolean; remoteAddress?: string } | undefined;
 
-  constructor(headers: IncomingMessage['headers'] = {}, socket: { encrypted?: boolean } | undefined = undefined) {
+  constructor(
+    headers: IncomingMessage['headers'] = {},
+    socket: { encrypted?: boolean; remoteAddress?: string } | undefined = undefined,
+  ) {
     super();
     this.headers = headers;
     this.socket = socket;
@@ -77,6 +80,26 @@ describe('sendJson', () => {
     assert.equal(res.getHeader('content-type'), 'application/json; charset=utf-8');
     assert.equal(res.getHeader('cache-control'), 'no-store');
     assert.equal(res.body, JSON.stringify({ ok: true }));
+  });
+});
+
+describe('getClientIp', () => {
+  it('uses the first x-forwarded-for header value', () => {
+    const req = new MockIncomingMessage({ 'x-forwarded-for': '203.0.113.1, 198.51.100.2' });
+    const ip = getClientIp(req as unknown as IncomingMessage);
+    assert.equal(ip, '203.0.113.1');
+  });
+
+  it('falls back to remote address when header is missing', () => {
+    const req = new MockIncomingMessage({}, { remoteAddress: '192.0.2.55' });
+    const ip = getClientIp(req as unknown as IncomingMessage);
+    assert.equal(ip, '192.0.2.55');
+  });
+
+  it('returns unknown when no information is available', () => {
+    const req = new MockIncomingMessage();
+    const ip = getClientIp(req as unknown as IncomingMessage);
+    assert.equal(ip, 'unknown');
   });
 });
 
@@ -135,4 +158,3 @@ describe('readJsonBody', () => {
     assert.equal(req.destroyed, true);
   });
 });
-

@@ -10,6 +10,9 @@ import {
   __setAutomationTestOverrides,
 } from './automation.js';
 import { AutomationRequestError } from '../core/automation/request-validation.js';
+import { ERROR_MESSAGES, HTTP_STATUS } from '../config/constants.js';
+import type { RateLimiter } from '../core/security/rate-limiter.js';
+import type { Logger } from '../infrastructure/logging/index.js';
 
 function createResponse() {
   let body = '';
@@ -228,6 +231,108 @@ describe('createAutomationHandlers', () => {
     __setAutomationTestOverrides();
   });
 
+  it('returns 429 when rate limiter blocks before validation', async () => {
+    const validate = mock.fn(async () => ({}));
+    __setAutomationTestOverrides({ validateAutomationRequest: validate });
+    const rateLimiter: RateLimiter = {
+      check: mock.fn(() => ({ limited: true, retryAfterMs: 2000, attempts: 5 })),
+      recordFailure: mock.fn(() => ({ limited: true, retryAfterMs: 0, attempts: 0 })),
+      reset: mock.fn(() => {}),
+    };
+    const logger: Logger = { info: mock.fn(), error: mock.fn(), warn: mock.fn(), debug: mock.fn() };
+
+    const handlers = createAutomationHandlers(
+      {
+        workdir: '/workdir',
+        agentCommands: {},
+        branchNameGenerator: {},
+        planService: { isConfigured: true },
+        defaultBranches: {},
+        logger,
+      },
+      { rateLimiter },
+    );
+
+    const { res, getJson } = createResponse();
+    await handlers.launch({ req: { headers: { 'x-forwarded-for': '10.0.0.1' } }, res, readJsonBody: async () => ({}) });
+
+    assert.equal(res.statusCode, HTTP_STATUS.TOO_MANY_REQUESTS);
+    assert.deepEqual(getJson(), { error: ERROR_MESSAGES.TOO_MANY_AUTOMATION_ATTEMPTS });
+    assert.equal(validate.mock.calls.length, 0);
+    assert.equal(logger.warn.mock.calls.length, 1);
+    __setAutomationTestOverrides();
+  });
+
+  it('escalates invalid API key failures to 429 when limiter trips', async () => {
+    const validate = mock.fn(async () => {
+      throw new AutomationRequestError(401, 'Invalid API key');
+    });
+    __setAutomationTestOverrides({ validateAutomationRequest: validate });
+    const rateLimiter: RateLimiter = {
+      check: mock.fn(() => ({ limited: false, retryAfterMs: 0, attempts: 0 })),
+      recordFailure: mock.fn(() => ({ limited: true, retryAfterMs: 4000, attempts: 5 })),
+      reset: mock.fn(() => {}),
+    };
+    const logger: Logger = { info: mock.fn(), error: mock.fn(), warn: mock.fn(), debug: mock.fn() };
+
+    const handlers = createAutomationHandlers(
+      {
+        workdir: '/workdir',
+        agentCommands: {},
+        branchNameGenerator: {},
+        planService: { isConfigured: true },
+        defaultBranches: {},
+        logger,
+      },
+      { rateLimiter },
+    );
+
+    const { res, getJson } = createResponse();
+    await handlers.launch({ req: { headers: {} }, res, readJsonBody: async () => ({}) });
+
+    assert.equal(rateLimiter.recordFailure.mock.calls.length, 1);
+    assert.equal(res.statusCode, HTTP_STATUS.TOO_MANY_REQUESTS);
+    assert.deepEqual(getJson(), { error: ERROR_MESSAGES.TOO_MANY_AUTOMATION_ATTEMPTS });
+    assert.equal(logger.warn.mock.calls.length, 1);
+    __setAutomationTestOverrides();
+  });
+
+  it('resets the rate limiter after successful validation', async () => {
+    const validate = mock.fn(async () => ({
+      planEnabled: false,
+      prompt: '',
+      org: 'org',
+      repo: 'repo',
+      worktreeInput: 'feature/test',
+      agent: { key: 'codex', command: 'codex' },
+      routeLabel: 'route',
+    }));
+    const runAutomationTask = mock.fn(async () => ({ taskId: 'task-1', queuedData: {} }));
+    __setAutomationTestOverrides({ validateAutomationRequest: validate, runAutomationTask });
+    const rateLimiter: RateLimiter = {
+      check: mock.fn(() => ({ limited: false, retryAfterMs: 0, attempts: 0 })),
+      recordFailure: mock.fn(() => ({ limited: false, retryAfterMs: 0, attempts: 0 })),
+      reset: mock.fn(() => {}),
+    };
+
+    const handlers = createAutomationHandlers(
+      {
+        workdir: '/workdir',
+        agentCommands: {},
+        branchNameGenerator: {},
+        planService: { isConfigured: true },
+        defaultBranches: {},
+      },
+      { rateLimiter },
+    );
+
+    const { res } = createResponse();
+    await handlers.launch({ req: { headers: {} }, res, readJsonBody: async () => ({}) });
+
+    assert.equal(rateLimiter.reset.mock.calls.length, 1);
+    __setAutomationTestOverrides();
+  });
+
   it('rejects plan-enabled requests without prompt text', async () => {
     const validate = mock.fn(async () => ({
       planEnabled: true,
@@ -399,4 +504,3 @@ describe('createAutomationHandlers', () => {
     __setAutomationTestOverrides();
   });
 });
-
