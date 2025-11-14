@@ -97,14 +97,6 @@ function timestamp(): string {
   return getDependency('now')().toISOString();
 }
 
-function createReadyEvent(session: CodexSession): CodexSdkEvent {
-  return {
-    type: 'ready',
-    message: `Codex SDK is ready in ${session.org}/${session.repo}:${session.branch}`,
-    timestamp: timestamp(),
-  };
-}
-
 function createErrorEvent(error: unknown): CodexSdkEvent {
   const message =
     (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
@@ -457,9 +449,8 @@ export async function createCodexSdkSession({
     commandOutputByItemId: new Map(),
   };
   sessionsById.set(sessionId, session);
+  schedulePersist(session);
 
-  const readyEvent = createReadyEvent(session);
-  emitEvent(session, readyEvent);
 
   // Start thread immediately so first message is quick.
   session.thread = getCodexInstance().startThread({

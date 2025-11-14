@@ -435,9 +435,7 @@ inside each worktree so they survive restarts.
     "createdAt": "2024-03-01T12:34:56.000Z",
     "lastActivityAt": "2024-03-01T12:34:56.000Z"
   },
-  "events": [
-    { "type": "ready", "message": "Codex SDK is ready", "timestamp": "2024-03-01T12:34:56.000Z" }
-  ]
+  "events": []
 }
 ```
 

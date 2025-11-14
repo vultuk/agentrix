@@ -46,7 +46,7 @@ describe('codex-sdk-sessions', () => {
     __setCodexSdkSessionOverrides();
   });
 
-  it('creates a new Codex session and emits ready event', async () => {
+  it('creates a new Codex session without seed events', async () => {
     const { thread } = createThread([]);
     const startThreadMock = mock.fn(() => thread);
     const writeMock = mock.fn(async () => {});
@@ -71,8 +71,7 @@ describe('codex-sdk-sessions', () => {
 
     assert.equal(result.summary.id, 'session-1');
     assert.equal(result.summary.label, 'Codex Session');
-    assert.equal(result.events.length, 1);
-    assert.equal(result.events[0]?.type, 'ready');
+    assert.equal(result.events.length, 0);
     assert.equal(startThreadMock.mock.callCount(), 1);
     assert.deepEqual(startThreadMock.mock.calls[0]?.arguments[0], {
       workingDirectory: '/tmp/worktrees/acme-demo',
@@ -174,11 +173,11 @@ describe('codex-sdk-sessions', () => {
 
     const history = getCodexSdkSessionEvents(session.summary.id);
     const types = history.map((entry) => entry.type);
-    assert.deepEqual(types, ['ready', 'user_message', 'thinking', 'thinking', 'agent_response', 'usage']);
-    assert.equal(history[1]?.type, 'user_message');
-    assert.equal(history[1]?.text, 'Fix the failing tests');
-    assert.equal(history[4]?.type, 'agent_response');
-    assert.equal(history[4]?.text, 'Proposed change');
+    assert.deepEqual(types, ['user_message', 'thinking', 'thinking', 'agent_response', 'usage']);
+    assert.equal(history[0]?.type, 'user_message');
+    assert.equal(history[0]?.text, 'Fix the failing tests');
+    assert.equal(history[3]?.type, 'agent_response');
+    assert.equal(history[3]?.text, 'Proposed change');
   });
 
   it('emits verbose command logs when enabled', async () => {
@@ -269,4 +268,3 @@ describe('codex-sdk-sessions', () => {
     assert.equal(deleteMock.mock.calls[0]?.arguments[1], result.summary.id);
   });
 });
-
