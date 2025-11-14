@@ -442,7 +442,7 @@ inside each worktree so they survive restarts.
 ### `GET /api/codex-sdk/sessions/:id`
 
 Returns the saved transcript for a specific session ID (same shape as the `POST` response). Returns
-`400 {"error": "Codex session not found"}` when the ID is unknown.
+`404 {"error": "Codex session not found"}` when the ID is unknown.
 
 ### `DELETE /api/codex-sdk/sessions/:id`
 

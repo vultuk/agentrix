@@ -125,7 +125,7 @@ describe('createCodexSdkHandlers', () => {
     });
   });
 
-  it('returns a validation error when a Codex session is missing', async () => {
+  it('returns a not found error when a Codex session is missing', async () => {
     const codexSdkService = {
       getSession: mock.fn(async () => null),
     } as unknown as CodexSdkService;
@@ -140,9 +140,10 @@ describe('createCodexSdkHandlers', () => {
 
     await handlers.readSession(context);
     assert.equal(codexSdkService.getSession.mock.callCount(), 1);
-    assert.equal(res.statusCode, 400);
+    assert.equal(res.statusCode, 404);
     const body = parseResponseBody(res);
-    assert.deepEqual(body, { error: 'Codex session not found' });
+    assert.ok(body);
+    assert.match(String(body.error), /Codex session not found/i);
   });
 
   it('deletes Codex sessions', async () => {

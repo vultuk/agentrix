@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { renderSpinner } from '../../../components/Spinner.js';
 import type { CodexSdkEvent, CodexSdkSessionMetadata } from '../../../types/codex-sdk.js';
 import { renderMarkdown } from '../../../utils/markdown.js';
 
@@ -38,7 +39,7 @@ function renderEvent(event: CodexSdkEvent, index: number) {
     case 'thinking':
       return h(
         'div',
-        { key, className: 'text-sm italic text-neutral-400' },
+        { key, className: 'text-xs italic tracking-wide text-neutral-500/80' },
         h(
           'span',
           null,
@@ -70,32 +71,6 @@ function renderEvent(event: CodexSdkEvent, index: number) {
     default:
       return null;
   }
-}
-
-function connectionLabel(state: ConnectionState): string {
-  switch (state) {
-    case 'connecting':
-      return 'Connecting…';
-    case 'connected':
-      return 'Live';
-    case 'disconnected':
-      return 'Disconnected';
-    default:
-      return 'Idle';
-  }
-}
-
-function connectionBadge(state: ConnectionState) {
-  const color =
-    state === 'connected'
-      ? 'bg-emerald-400'
-      : state === 'connecting'
-      ? 'bg-amber-400'
-      : 'bg-neutral-600';
-  return h('span', {
-    className: `inline-block h-2 w-2 rounded-full ${color}`,
-    'aria-hidden': true,
-  });
 }
 
 export default function CodexSdkChatPanel({
@@ -217,7 +192,7 @@ export default function CodexSdkChatPanel({
             containerRef.current = node;
           },
           className:
-            'absolute inset-0 overflow-y-auto px-4 py-4 pb-20 text-sm text-neutral-200 space-y-3',
+            'absolute inset-0 overflow-y-auto px-4 py-4 pb-4 text-sm text-neutral-200 space-y-3',
         },
         renderedEvents.length > 0
           ? renderedEvents
@@ -264,9 +239,9 @@ export default function CodexSdkChatPanel({
           type: 'submit',
           disabled: !canSubmit,
           className:
-            'rounded-md bg-emerald-500/90 px-4 py-2 text-sm font-medium text-neutral-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500',
+            'rounded-md bg-emerald-500/90 px-4 py-2 text-sm font-medium text-neutral-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500 flex items-center justify-center min-w-[72px]',
         },
-        isSending ? 'Sending…' : 'Send',
+        isSending ? renderSpinner('text-neutral-200') : 'Send',
       ),
     ),
   );

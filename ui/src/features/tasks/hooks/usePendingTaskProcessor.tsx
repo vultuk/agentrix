@@ -141,7 +141,10 @@ export function usePendingTaskProcessor({
             if (typeof startCodexSdkSession === 'function') {
               await startCodexSdkSession(worktree);
             } else {
-              window.alert('Codex SDK chat is not available in this client.');
+              console.error('Codex SDK chat is not available in this client.');
+              setPendingWorktreeAction(worktree);
+              setActiveWorktree(previousActive || null);
+              return;
             }
           } else if (resolvedCommand) {
             await openTerminal(worktree, {

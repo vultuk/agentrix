@@ -1,3 +1,5 @@
+import type { Usage } from '@openai/codex-sdk';
+
 export type CodexSdkEvent =
   | {
       type: 'ready';
@@ -31,11 +33,7 @@ export type CodexSdkEvent =
     }
   | {
       type: 'usage';
-      usage: {
-        input_tokens: number;
-        cached_input_tokens: number;
-        output_tokens: number;
-      };
+      usage: Usage;
       timestamp: string;
     }
   | {

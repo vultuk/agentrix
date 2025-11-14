@@ -365,12 +365,12 @@ function createSessionFromStored(record: CodexSdkStoredSession, worktreePath: st
     lastActivityAt: record.lastActivityAt,
     threadId: record.threadId,
     thread: null,
-  history: [...record.events],
-  emitter: getDependency('createEventEmitter')(),
-  pendingTurn: null,
-  persistPromise: null,
-  commandOutputByItemId: new Map(),
-};
+    history: [...record.events],
+    emitter: getDependency('createEventEmitter')(),
+    pendingTurn: null,
+    persistPromise: null,
+    commandOutputByItemId: new Map(),
+  };
   sessionsById.set(session.id, session);
   return session;
 }
@@ -450,8 +450,6 @@ export async function createCodexSdkSession({
   };
   sessionsById.set(sessionId, session);
   schedulePersist(session);
-
-
   // Start thread immediately so first message is quick.
   session.thread = getCodexInstance().startThread({
     workingDirectory: worktreePath,
@@ -461,7 +459,7 @@ export async function createCodexSdkSession({
   });
   session.threadId = session.thread.id;
 
-  return { summary: toSummary(session), events: session.history }; 
+  return { summary: toSummary(session), events: session.history };
 }
 
 export function getCodexSdkSessionDetails(sessionId: string): { summary: CodexSdkSessionSummary; events: CodexSdkEvent[] } | null {
@@ -476,6 +474,10 @@ export async function deleteCodexSdkSession(sessionId: string): Promise<void> {
   const session = sessionsById.get(sessionId);
   if (!session) {
     return;
+  }
+  const pendingPersist = session.persistPromise;
+  if (pendingPersist) {
+    await pendingPersist.catch(() => {});
   }
   sessionsById.delete(sessionId);
   await getDependency('deleteStoredSession')(session.worktreePath, sessionId);

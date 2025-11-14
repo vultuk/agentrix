@@ -54,7 +54,9 @@ export function attachCodexSdkWebSockets(server: HttpServer, authManager: AuthMa
     const url = new URL(request.url || '', 'http://localhost');
     const sessionId = url.searchParams.get('sessionId');
     if (!sessionId) {
-      socket.send(JSON.stringify({ type: 'error', message: 'sessionId query parameter is required' }));
+      socket.send(
+        JSON.stringify({ type: 'error', message: 'sessionId query parameter is required (e.g., ?sessionId=<id>)' }),
+      );
       socket.close();
       return;
     }

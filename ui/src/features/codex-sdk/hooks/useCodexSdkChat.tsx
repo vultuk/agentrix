@@ -31,7 +31,22 @@ export function useCodexSdkChat({ activeWorktree, onAuthExpired }: UseCodexSdkCh
   const [lastErrorBySession, setLastErrorBySession] = useState<Record<string, string | null>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [sendingSessions, setSendingSessions] = useState<Set<string>>(new Set());
-  const socketsRef = useRef<Map<string, WebSocket>>(new Map());
+const socketsRef = useRef<Map<string, WebSocket>>(new Map());
+
+function isTurnPending(events: CodexSdkEvent[] | undefined): boolean {
+  if (!events || events.length === 0) {
+    return false;
+  }
+  let pending = false;
+  for (const event of events) {
+    if (event.type === 'user_message') {
+      pending = true;
+    } else if (event.type === 'agent_response' || event.type === 'error' || event.type === 'usage') {
+      pending = false;
+    }
+  }
+  return pending;
+}
   const worktreeKeyRef = useRef<string | null>(null);
 
   const closeAllSockets = useCallback(() => {
@@ -70,10 +85,10 @@ export function useCodexSdkChat({ activeWorktree, onAuthExpired }: UseCodexSdkCh
     });
   }, []);
 
-  const markReplyPending = useCallback((sessionId: string, pending: boolean) => {
+  const syncPendingFromEvents = useCallback((sessionId: string, events: CodexSdkEvent[] | undefined) => {
     setSendingSessions((prev) => {
       const next = new Set(prev);
-      if (pending) {
+      if (isTurnPending(events)) {
         next.add(sessionId);
       } else {
         next.delete(sessionId);
@@ -81,6 +96,21 @@ export function useCodexSdkChat({ activeWorktree, onAuthExpired }: UseCodexSdkCh
       return next;
     });
   }, []);
+
+  const markReplyPending = useCallback(
+    (sessionId: string, pending: boolean) => {
+      setSendingSessions((prev) => {
+        const next = new Set(prev);
+        if (pending) {
+          next.add(sessionId);
+        } else {
+          next.delete(sessionId);
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const updateSessionActivity = useCallback((sessionId: string, timestamp: string | undefined) => {
     if (!timestamp) {
@@ -95,28 +125,29 @@ export function useCodexSdkChat({ activeWorktree, onAuthExpired }: UseCodexSdkCh
     (sessionId: string, rawEvent: MessageEvent<string>) => {
       try {
         const payload = JSON.parse(rawEvent.data);
-        if (payload.type === 'history' && Array.isArray(payload.events)) {
-          setEventsBySession((prev) => ({ ...prev, [sessionId]: payload.events as CodexSdkEvent[] }));
-          const lastEvent = payload.events[payload.events.length - 1];
-          updateSessionActivity(sessionId, lastEvent?.timestamp);
-          setLastErrorBySession((prev) => ({ ...prev, [sessionId]: null }));
-          return;
-        }
+            if (payload.type === 'history' && Array.isArray(payload.events)) {
+              const historyEvents = payload.events as CodexSdkEvent[];
+              setEventsBySession((prev) => ({ ...prev, [sessionId]: historyEvents }));
+              syncPendingFromEvents(sessionId, historyEvents);
+              const lastEvent = payload.events[payload.events.length - 1];
+              updateSessionActivity(sessionId, lastEvent?.timestamp);
+              setLastErrorBySession((prev) => ({ ...prev, [sessionId]: null }));
+              return;
+            }
         if (payload.type === 'event' && payload.event) {
           const codexEvent = payload.event as CodexSdkEvent;
-          setEventsBySession((prev) => {
-            const previous = prev[sessionId] || [];
-            return { ...prev, [sessionId]: [...previous, codexEvent] };
-          });
-          if (codexEvent.type === 'agent_response' || codexEvent.type === 'error') {
-            markReplyPending(sessionId, false);
-          }
-          if (codexEvent.type === 'error') {
-            setLastErrorBySession((prev) => ({ ...prev, [sessionId]: codexEvent.message }));
-          } else if (codexEvent.type === 'agent_response' || codexEvent.type === 'ready') {
-            setLastErrorBySession((prev) => ({ ...prev, [sessionId]: null }));
-          }
-          updateSessionActivity(sessionId, codexEvent.timestamp);
+              setEventsBySession((prev) => {
+                const previous = prev[sessionId] || [];
+                const updated = [...previous, codexEvent];
+                syncPendingFromEvents(sessionId, updated);
+                return { ...prev, [sessionId]: updated };
+              });
+              if (codexEvent.type === 'error') {
+                setLastErrorBySession((prev) => ({ ...prev, [sessionId]: codexEvent.message }));
+              } else if (codexEvent.type === 'agent_response' || codexEvent.type === 'ready') {
+                setLastErrorBySession((prev) => ({ ...prev, [sessionId]: null }));
+              }
+              updateSessionActivity(sessionId, codexEvent.timestamp);
           return;
         }
         if (payload.type === 'error' && typeof payload.message === 'string') {
@@ -176,6 +207,7 @@ export function useCodexSdkChat({ activeWorktree, onAuthExpired }: UseCodexSdkCh
             if (prev[session.id]) {
               next[session.id] = prev[session.id];
             }
+            syncPendingFromEvents(session.id, next[session.id]);
           });
           return next;
         });
@@ -251,8 +283,10 @@ export function useCodexSdkChat({ activeWorktree, onAuthExpired }: UseCodexSdkCh
       }
       try {
         const detail = await createCodexSession(worktree.org, worktree.repo, worktree.branch, options.label);
+        const initialEvents = detail.events ?? [];
         setSessions((prev) => [...prev, detail.session]);
-        setEventsBySession((prev) => ({ ...prev, [detail.session.id]: detail.events ?? [] }));
+        setEventsBySession((prev) => ({ ...prev, [detail.session.id]: initialEvents }));
+        syncPendingFromEvents(detail.session.id, initialEvents);
         setConnectionStateBySession((prev) => ({ ...prev, [detail.session.id]: 'idle' }));
         setLastErrorBySession((prev) => ({ ...prev, [detail.session.id]: null }));
         setActiveSessionId(detail.session.id);
@@ -293,7 +327,19 @@ export function useCodexSdkChat({ activeWorktree, onAuthExpired }: UseCodexSdkCh
             if (current && current !== sessionId) {
               return current;
             }
-            return next[next.length - 1]?.id ?? null;
+            if (next.length === 0) {
+              return null;
+            }
+            const previousIndex = prev.findIndex((entry) => entry.id === sessionId);
+            if (previousIndex !== -1) {
+              if (previousIndex < next.length) {
+                return next[previousIndex].id;
+              }
+              if (previousIndex - 1 >= 0) {
+                return next[previousIndex - 1].id;
+              }
+            }
+            return next[0].id;
           });
           return next;
         });
@@ -303,6 +349,14 @@ export function useCodexSdkChat({ activeWorktree, onAuthExpired }: UseCodexSdkCh
           }
           const next = { ...prev };
           delete next[sessionId];
+          return next;
+        });
+        setSendingSessions((prev) => {
+          if (!prev.has(sessionId)) {
+            return prev;
+          }
+          const next = new Set(prev);
+          next.delete(sessionId);
           return next;
         });
         setConnectionStateBySession((prev) => {

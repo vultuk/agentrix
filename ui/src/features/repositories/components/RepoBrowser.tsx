@@ -654,7 +654,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
       const sessionIndex = tabs.findIndex((entry: any) => entry && entry.id === tabId);
       const isActiveSession = terminal.sessionId === tabId;
       let fallbackId: string | null = null;
-      if (tabs.length > 1) {
+      if (isActiveSession && tabs.length > 1) {
         if (sessionIndex >= 0) {
           const candidateIndex = sessionIndex > 0 ? sessionIndex - 1 : sessionIndex + 1;
           fallbackId = tabs[candidateIndex]?.id ?? null;

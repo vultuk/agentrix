@@ -1,6 +1,6 @@
 import { createCodexSdkService, type CodexSdkService } from '../services/index.js';
 import { createHandler } from './base-handler.js';
-import { asyncHandler } from '../infrastructure/errors/index.js';
+import { asyncHandler, NotFoundError } from '../infrastructure/errors/index.js';
 import { sendJson } from '../utils/http.js';
 import {
   validateCodexSessionList,
@@ -32,7 +32,7 @@ export function createCodexSdkHandlers(workdir: string, overrides: CodexSdkHandl
     const { sessionId } = validateCodexSessionId({ sessionId: context.params?.['id'] });
     const detail = await codexSdkService.getSession(sessionId);
     if (!detail) {
-      throw new ValidationError('Codex session not found');
+      throw new NotFoundError('Codex session not found');
     }
     sendJson(context.res, 200, detail);
   });

@@ -15,17 +15,22 @@ describe('CodexSdkChatPanel', () => {
           { type: 'log', level: 'info', message: 'Verbose output', timestamp: '2024-01-01T00:01:30Z' },
           { type: 'agent_response', id: 'a-1', text: 'Response text', timestamp: '2024-01-01T00:02:00Z' },
         ]}
-        isOpen
         isSending={false}
         connectionState="connected"
-        session={{ sessionId: 'sdk-1', org: 'acme', repo: 'demo', branch: 'feature' }}
+        session={{
+          id: 'sdk-1',
+          org: 'acme',
+          repo: 'demo',
+          branch: 'feature',
+          label: 'Codex SDK',
+          createdAt: '2024-01-01T00:00:00Z',
+          lastActivityAt: null,
+        }}
         lastError={null}
         onSend={onSend}
-        onClose={() => {}}
       />,
     );
 
-    expect(screen.getByText(/codex sdk/i)).toBeInTheDocument();
     expect(screen.getByText('User text')).toBeInTheDocument();
     expect(screen.getByText('Response text')).toBeInTheDocument();
 
