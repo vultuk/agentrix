@@ -123,9 +123,6 @@ export async function apiPost<T = unknown>(
   });
 }
 
-/**
- * Makes a DELETE request
- */
 export async function apiDelete<T = unknown>(
   url: string,
   body?: unknown,
@@ -181,4 +178,3 @@ export function isAuthenticationError(error: unknown): error is AuthenticationEr
 export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError;
 }
-

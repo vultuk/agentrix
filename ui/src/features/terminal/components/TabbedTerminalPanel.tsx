@@ -15,6 +15,7 @@ interface TerminalTabsProps {
   onSelectSession: (sessionId: string) => void;
   onCloseSession: (sessionId: string) => void;
   onAddSession: () => void;
+  nonClosableSessionIds?: Set<string>;
 }
 
 function TerminalTabs({
@@ -25,6 +26,7 @@ function TerminalTabs({
   onSelectSession,
   onCloseSession,
   onAddSession,
+  nonClosableSessionIds,
 }: TerminalTabsProps) {
   return h(
     'div',
@@ -42,6 +44,7 @@ function TerminalTabs({
             const isActive = session.id === activeSessionId;
             const isClosing = pendingCloseSessionId === session.id;
             const Icon = session.tool === 'agent' ? Bot : TerminalIcon;
+            const isClosable = !nonClosableSessionIds?.has(session.id);
             return h(
               'button',
               {
@@ -67,32 +70,46 @@ function TerminalTabs({
                   { className: 'truncate' },
                   session.label || (session.tool === 'agent' ? 'Agent' : 'Terminal'),
                 ),
-                session.idle
-                  ? h('span', {
-                      className: 'ml-1 h-2 w-2 rounded-full bg-amber-300 flex-shrink-0',
-                      title: 'Session idle',
-                    })
-                  : null,
-              ),
-              h(
-                'button',
-                {
-                  type: 'button',
-                  onClick: (event: React.MouseEvent) => {
-                    event.stopPropagation();
-                    onCloseSession(session.id);
+                h(
+                  'span',
+                  {
+                    className: [
+                      'ml-2 inline-flex items-center justify-center',
+                      session.idle ? 'opacity-70' : '',
+                    ].join(' '),
+                    title: session.idle ? 'Session idle' : 'Session live',
                   },
-                  disabled: isClosing,
-                  className: [
-                    'ml-2 inline-flex h-5 w-5 items-center justify-center rounded transition-colors',
-                    isActive ? 'text-neutral-200 hover:bg-neutral-800' : 'text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800/70',
-                    isClosing ? 'opacity-50 cursor-not-allowed' : '',
-                  ].join(' '),
-                  title: 'Close session',
-                  'aria-label': 'Close session',
-                },
-                isClosing ? h('span', { className: 'text-[10px]' }, '…') : h(X, { size: 12 }),
+                  h('span', {
+                    className: [
+                      'h-2 w-2 rounded-full',
+                      session.idle ? 'bg-neutral-600/70' : 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]',
+                    ].join(' '),
+                    'aria-hidden': true,
+                  }),
+                  h('span', { className: 'sr-only' }, session.idle ? 'Session idle' : 'Session live'),
+                ),
               ),
+              isClosable
+                ? h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: (event: React.MouseEvent) => {
+                        event.stopPropagation();
+                        onCloseSession(session.id);
+                      },
+                      disabled: isClosing,
+                      className: [
+                        'ml-2 inline-flex h-5 w-5 items-center justify-center rounded transition-colors',
+                        isActive ? 'text-neutral-200 hover:bg-neutral-800' : 'text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800/70',
+                        isClosing ? 'opacity-50 cursor-not-allowed' : '',
+                      ].join(' '),
+                      title: 'Close session',
+                      'aria-label': 'Close session',
+                    },
+                    isClosing ? h('span', { className: 'text-[10px]' }, '…') : h(X, { size: 12 }),
+                  )
+                : null,
             );
           }),
       h(
@@ -123,6 +140,8 @@ interface TabbedTerminalPanelProps {
   terminalContainerRef: React.RefObject<HTMLDivElement | null>;
   onQuickLaunchSession?: (tool: SessionTool) => void;
   isQuickLaunchPending?: boolean;
+  nonClosableSessionIds?: Set<string>;
+  renderSessionContent?: (sessionId: string | null) => React.ReactNode;
 }
 
 export default function TabbedTerminalPanel({
@@ -136,6 +155,8 @@ export default function TabbedTerminalPanel({
   terminalContainerRef,
   onQuickLaunchSession,
   isQuickLaunchPending = false,
+  nonClosableSessionIds,
+  renderSessionContent,
 }: TabbedTerminalPanelProps) {
   const hasSessions = sessions.length > 0;
   const sessionOptions = useMemo(
@@ -266,6 +287,8 @@ export default function TabbedTerminalPanel({
           'New session',
         ),
   );
+  const customContent =
+    typeof renderSessionContent === 'function' ? renderSessionContent(activeSessionId) : null;
 
   return h(
     'div',
@@ -278,6 +301,7 @@ export default function TabbedTerminalPanel({
       onSelectSession,
       onCloseSession,
       onAddSession,
+      nonClosableSessionIds,
     }),
     h(
       'div',
@@ -286,8 +310,16 @@ export default function TabbedTerminalPanel({
         ? h('div', {
             ref: terminalContainerRef,
             className: 'absolute inset-0 overflow-hidden',
+            style: customContent ? { display: 'none' } : undefined,
           })
         : emptyState,
+      customContent
+        ? h(
+            'div',
+            { className: 'absolute inset-0 overflow-hidden bg-neutral-950' },
+            customContent,
+          )
+        : null,
     ),
   );
 }

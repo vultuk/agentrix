@@ -23,6 +23,7 @@ interface UsePendingTaskProcessorOptions {
   closePromptModal: () => void;
   closeWorktreeModal: () => void;
   pendingLaunchesRef?: MutableRefObject<Map<string, any>>;
+  startCodexSdkSession?: (worktree: Worktree) => Promise<void>;
 }
 
 export function usePendingTaskProcessor({
@@ -42,6 +43,7 @@ export function usePendingTaskProcessor({
   closePromptModal,
   closeWorktreeModal,
   pendingLaunchesRef,
+  startCodexSdkSession,
 }: UsePendingTaskProcessorOptions) {
   const processPendingTask = useCallback(
     (task: any, pendingMetadata?: any) => {
@@ -118,6 +120,7 @@ export function usePendingTaskProcessor({
           : hasKnownSession
           ? null
           : getCommandForLaunch(pending.launchOption, pending.dangerousMode);
+      const isCodexSdkLaunch = pending.launchOption === 'codex_sdk';
       const isAgentLaunch =
         pending.kind === 'prompt' ||
         ['codex', 'claude', 'cursor'].includes(
@@ -134,6 +137,12 @@ export function usePendingTaskProcessor({
               prompt: pending.promptValue,
               sessionTool,
             });
+          } else if (isCodexSdkLaunch) {
+            if (typeof startCodexSdkSession === 'function') {
+              await startCodexSdkSession(worktree);
+            } else {
+              window.alert('Codex SDK chat is not available in this client.');
+            }
           } else if (resolvedCommand) {
             await openTerminal(worktree, {
               command: resolvedCommand,
@@ -186,6 +195,7 @@ export function usePendingTaskProcessor({
       setIsMobileMenuOpen,
       closePromptModal,
       closeWorktreeModal,
+      startCodexSdkSession,
     ]);
 
   return {

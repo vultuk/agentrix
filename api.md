@@ -382,6 +382,85 @@ Terminal output is delivered over WebSockets (see `attachTerminalWebSockets` in 
 separate from this REST API. Sessions idle out after ~90 s; activity updates trigger
 `sessions:update` events on the SSE endpoint.
 
+### `GET /api/codex-sdk/sessions`
+
+Lists Codex SDK chat sessions for a worktree.
+
+**Query parameters**
+- `org` – Required.
+- `repo` – Required.
+- `branch` – Required.
+
+**Response**
+```json
+{
+  "sessions": [
+    {
+      "id": "sdk-123",
+      "org": "org",
+      "repo": "repo",
+      "branch": "feature/my-branch",
+      "label": "Codex Session",
+      "createdAt": "2024-03-01T12:34:56.000Z",
+      "lastActivityAt": "2024-03-01T12:36:00.000Z"
+    }
+  ]
+}
+```
+
+### `POST /api/codex-sdk/sessions`
+
+Creates a new Codex SDK chat session. Sessions are persisted under `.codex-sdk/sessions/<id>.json`
+inside each worktree so they survive restarts.
+
+**Body**
+```json
+{
+  "org": "org",
+  "repo": "repo",
+  "branch": "feature/my-branch",
+  "label": "Optional tab label"
+}
+```
+
+**Response**
+```json
+{
+  "session": {
+    "id": "sdk-123",
+    "org": "org",
+    "repo": "repo",
+    "branch": "feature/my-branch",
+    "label": "Optional tab label",
+    "createdAt": "2024-03-01T12:34:56.000Z",
+    "lastActivityAt": "2024-03-01T12:34:56.000Z"
+  },
+  "events": [
+    { "type": "ready", "message": "Codex SDK is ready", "timestamp": "2024-03-01T12:34:56.000Z" }
+  ]
+}
+```
+
+### `GET /api/codex-sdk/sessions/:id`
+
+Returns the saved transcript for a specific session ID (same shape as the `POST` response). Returns
+`400 {"error": "Codex session not found"}` when the ID is unknown.
+
+### `DELETE /api/codex-sdk/sessions/:id`
+
+Deletes the stored transcript and closes any matching WebSocket listeners. Responds with `{ "ok": true }`.
+
+### Codex WebSocket Attachment
+
+Once a session ID has been issued, stream updates over a WebSocket connection to
+`/api/codex-sdk/socket?sessionId=<id>`. The socket emits:
+- `{"type":"history","events":[...]}` immediately after connection.
+- `{"type":"event","event":{...}}` for incremental updates (`user_message`, `thinking`, `agent_response`,
+  `log`, `usage`, `error`, etc.).
+- `{"type":"error","message":"…"}` on failures.
+
+Client messages must be JSON with `{"type":"message","text":"Describe the next step"}` to start a new turn.
+
 ---
 
 ## Session Discovery
