@@ -7,7 +7,6 @@ import {
   validateCodexSessionCreate,
   validateCodexSessionId,
 } from '../validation/index.js';
-import { ValidationError } from '../infrastructure/errors/index.js';
 
 export interface CodexSdkHandlerOverrides {
   codexSdkService?: CodexSdkService;
