@@ -21,4 +21,15 @@ export type { WorktreeCreateInput, WorktreeDeleteInput } from './schemas/worktre
 export { validateTerminalOpen, validateTerminalSend, validateTerminalClose } from './schemas/terminal-schema.js';
 export type { TerminalOpenInput, TerminalSendInput, TerminalCloseInput } from './schemas/terminal-schema.js';
 
+export {
+  validateCodexSessionList,
+  validateCodexSessionCreate,
+  validateCodexSessionId,
+} from './schemas/codex-sdk-schema.js';
+export type {
+  CodexSessionWorktreeInput,
+  CodexSessionCreateInput,
+  CodexSessionIdInput,
+} from './schemas/codex-sdk-schema.js';
+
 export { ValidationError } from '../infrastructure/errors/index.js';

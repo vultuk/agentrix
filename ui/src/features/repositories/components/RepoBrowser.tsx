@@ -31,8 +31,22 @@ import ModalContainer from '../../terminal/components/ModalContainer.js';
 import { PortsMenu } from '../../ports/components/PortsMenu.js';
 import { closeTerminal } from '../../../services/api/terminalService.js';
 import type { Worktree } from '../../../types/domain.js';
+import { useCodexSdkChat } from '../../codex-sdk/hooks/useCodexSdkChat.js';
+import CodexSdkChatPanel from '../../codex-sdk/components/CodexSdkChatPanel.js';
 
 const { createElement: h } = React;
+const CODEX_SDK_TAB_PREFIX = 'codex-sdk:';
+
+function getCodexTabId(sessionId: string): string {
+  return `${CODEX_SDK_TAB_PREFIX}${sessionId}`;
+}
+
+function extractCodexSessionId(tabId: string | null): string | null {
+  if (!tabId || typeof tabId !== 'string' || !tabId.startsWith(CODEX_SDK_TAB_PREFIX)) {
+    return null;
+  }
+  return tabId.slice(CODEX_SDK_TAB_PREFIX.length);
+}
 
 interface RepoBrowserProps {
   onAuthExpired?: () => void;
@@ -59,6 +73,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   
   const pendingTaskProcessorRef = useRef<((task: any, pending: any) => void) | null>(null);
   const [pendingSessionContext, setPendingSessionContext] = useState<'default' | 'new-tab'>('default');
+  const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
   
   // Mobile menu ref
   const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -92,6 +107,9 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     isRealtimeConnected,
     setActiveRepoDashboard: dashboard.setActiveRepoDashboard,
   });
+  const data = repoData.data;
+  const activeWorktree = repoData.activeWorktree;
+  const setActiveWorktree = repoData.setActiveWorktree;
   
   const handleTaskComplete = useCallback((task: any, pending: any) => {
     // handleTaskComplete relies on pendingTaskProcessorRef being assigned later in the render cycle.
@@ -105,6 +123,37 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   // Use Git sidebar hook
   const gitSidebar = useGitSidebar(repoData.activeWorktree, getWorktreeKey);
 
+  const codexChat = useCodexSdkChat({ activeWorktree, onAuthExpired });
+  const {
+    sessions: codexSessions,
+    activeSessionId: activeCodexSessionId,
+    activeSession: codexActiveSession,
+    events: codexEvents,
+    connectionState: codexConnectionState,
+    lastError: codexLastError,
+    isSending: isCodexSending,
+    connectionStateBySession: codexConnectionStates,
+    createSessionForWorktree: createCodexSessionForWorktree,
+    deleteSession: removeCodexSession,
+    sendMessage: sendCodexMessage,
+    setActiveSessionId: setActiveCodexSessionId,
+  } = codexChat;
+  const launchCodexSessionForWorktree = useCallback(
+    async (worktree: Worktree | null) => {
+      if (!worktree) {
+        return null;
+      }
+      const summary = await createCodexSessionForWorktree(worktree);
+      if (summary) {
+        setActiveWorktree(worktree);
+        const tabId = getCodexTabId(summary.id);
+        setSelectedTabId(tabId);
+        setActiveCodexSessionId(summary.id);
+      }
+      return summary;
+    },
+    [createCodexSessionForWorktree, setActiveCodexSessionId, setActiveWorktree, setSelectedTabId],
+  );
   
   // Use command config hook
   const commandCfg = useCommandConfig({ onAuthExpired });
@@ -141,10 +190,21 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   const disposeSocket = terminal.disposeSocket;
   const disposeTerminal = terminal.disposeTerminal;
   const sendResize = terminal.sendResize;
+  useEffect(() => {
+    if (!selectedTabId && sessionId) {
+      setSelectedTabId(sessionId);
+    }
+  }, [selectedTabId, sessionId]);
+  useEffect(() => {
+    if (!selectedTabId && codexSessions.length > 0) {
+      const nextId = codexSessions[0]?.id;
+      if (nextId) {
+        setSelectedTabId(getCodexTabId(nextId));
+        setActiveCodexSessionId(nextId);
+      }
+    }
+  }, [codexSessions, selectedTabId, setActiveCodexSessionId]);
   
-  const data = repoData.data;
-  const activeWorktree = repoData.activeWorktree;
-  const setActiveWorktree = repoData.setActiveWorktree;
   const activeRepoDashboard = dashboard.activeRepoDashboard;
   const setActiveRepoDashboard = dashboard.setActiveRepoDashboard;
   const dashboardData = dashboard.dashboardData;
@@ -162,10 +222,35 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   const activeWorktreeKey = activeWorktree
     ? getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch)
     : null;
+  const previousWorktreeKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (previousWorktreeKeyRef.current === activeWorktreeKey) {
+      return;
+    }
+    previousWorktreeKeyRef.current = activeWorktreeKey;
+    setSelectedTabId(null);
+    setActiveCodexSessionId(null);
+  }, [activeWorktreeKey, setActiveCodexSessionId]);
   const activeTerminalSessions =
     activeWorktreeKey && sessionMetadataSnapshot.has(activeWorktreeKey)
       ? sessionMetadataSnapshot.get(activeWorktreeKey)?.sessions ?? []
       : [];
+  const codexSessionTabs =
+    activeWorktree && codexSessions.length > 0
+      ? codexSessions.map((entry) => ({
+          id: getCodexTabId(entry.id),
+          label: entry.label || 'Codex SDK',
+          kind: 'automation' as const,
+          tool: 'agent' as const,
+          idle: (codexConnectionStates?.[entry.id] ?? 'idle') !== 'connected',
+          usingTmux: false,
+          lastActivityAt: entry.lastActivityAt,
+          createdAt: entry.createdAt,
+          tmuxSessionName: null,
+        }))
+      : [];
+  const combinedTerminalSessions = [...activeTerminalSessions, ...codexSessionTabs];
+  const activeSessionIdForTabs = selectedTabId || terminal.sessionId;
   
   const hasRunningTasks = useMemo(
     () => tasks.some((task) => task && (task.status === 'pending' || task.status === 'running')),
@@ -357,6 +442,9 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     closePromptModal: modals.closePromptModal,
     closeWorktreeModal: modals.closeWorktreeModal,
     pendingLaunchesRef,
+    startCodexSdkSession: async (worktree: Worktree) => {
+      await launchCodexSessionForWorktree(worktree);
+    },
   });
   useEffect(() => {
     pendingTaskProcessorRef.current = (task: any, pending: any) => {
@@ -466,12 +554,27 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   });
 
   const handleSelectSessionTab = useCallback(
-    async (sessionId: string | null) => {
-      if (!activeWorktree || !sessionId || terminal.sessionId === sessionId) {
+    async (tabId: string | null) => {
+      if (!tabId) {
+        return;
+      }
+      const codexSessionId = extractCodexSessionId(tabId);
+      if (codexSessionId) {
+        setSelectedTabId(tabId);
+        setActiveCodexSessionId(codexSessionId);
+        return;
+      }
+      if (!activeWorktree) {
+        return;
+      }
+      if (terminal.sessionId === tabId) {
+        setSelectedTabId(tabId);
         return;
       }
       try {
-        await openTerminalForWorktree(activeWorktree, { sessionId });
+        await openTerminalForWorktree(activeWorktree, { sessionId: tabId });
+        setSelectedTabId(tabId);
+        setActiveCodexSessionId(null);
       } catch (error: any) {
         if (error && error.message === 'AUTH_REQUIRED') {
           return;
@@ -480,7 +583,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
         window.alert('Failed to attach to the selected session.');
       }
     },
-    [activeWorktree, openTerminalForWorktree, terminal.sessionId],
+    [activeWorktree, openTerminalForWorktree, setActiveCodexSessionId, terminal.sessionId],
   );
 
   const handleCreateSessionTab = useCallback(() => {
@@ -518,35 +621,66 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   );
 
   const handleCloseSessionTab = useCallback(
-    async (sessionId: string | null) => {
-      if (!activeWorktree || !sessionId || pendingCloseSessionId === sessionId) {
+    async (tabId: string | null) => {
+      if (!tabId) {
+        return;
+      }
+      const codexSessionId = extractCodexSessionId(tabId);
+      if (codexSessionId) {
+        const index = codexSessions.findIndex((entry) => entry.id === codexSessionId);
+        const fallbackEntry =
+          index >= 0
+            ? codexSessions[index > 0 ? index - 1 : index + 1]
+            : codexSessions[0];
+        const fallbackTabId =
+          fallbackEntry?.id ? getCodexTabId(fallbackEntry.id) : terminal.sessionId ?? null;
+        await removeCodexSession(codexSessionId);
+        setSelectedTabId((current) => {
+          if (current !== tabId) {
+            return current;
+          }
+          const fallbackSessionId = extractCodexSessionId(fallbackTabId);
+          setActiveCodexSessionId(fallbackSessionId);
+          return fallbackTabId;
+        });
+        return;
+      }
+      if (!activeWorktree || pendingCloseSessionId === tabId) {
         return;
       }
       const worktreeKey = getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch);
       const metadata = sessionMetadataRef.current.get(worktreeKey);
       const tabs = Array.isArray(metadata?.sessions) ? metadata.sessions : [];
-      const sessionIndex = tabs.findIndex((entry: any) => entry && entry.id === sessionId);
-      const isActiveSession = terminal.sessionId === sessionId;
+      const sessionIndex = tabs.findIndex((entry: any) => entry && entry.id === tabId);
+      const isActiveSession = terminal.sessionId === tabId;
       let fallbackId: string | null = null;
       if (isActiveSession && tabs.length > 1) {
         if (sessionIndex >= 0) {
           const candidateIndex = sessionIndex > 0 ? sessionIndex - 1 : sessionIndex + 1;
           fallbackId = tabs[candidateIndex]?.id ?? null;
         } else {
-          fallbackId = tabs.find((entry: any) => entry && entry.id !== sessionId)?.id ?? null;
+          fallbackId = tabs.find((entry: any) => entry && entry.id !== tabId)?.id ?? null;
         }
       }
-      setPendingCloseSessionId(sessionId);
+      setPendingCloseSessionId(tabId);
       try {
-        await closeTerminal(sessionId);
+        await closeTerminal(tabId);
         if (isActiveSession) {
           if (fallbackId) {
             await openTerminalForWorktree(activeWorktree, { sessionId: fallbackId });
+            setSelectedTabId(fallbackId);
+            setActiveCodexSessionId(null);
           } else {
             sessionMapRef.current.delete(worktreeKey);
-            sessionKeyByIdRef.current.delete(sessionId);
+            sessionKeyByIdRef.current.delete(tabId);
             await openTerminalForWorktree(null, {});
+            setSelectedTabId(null);
           }
+        } else if (selectedTabId === tabId) {
+          const fallbackTabId =
+            fallbackId ?? (codexSessions[0] ? getCodexTabId(codexSessions[0].id) : terminal.sessionId ?? null);
+          setSelectedTabId(fallbackTabId);
+          setActiveCodexSessionId(extractCodexSessionId(fallbackTabId));
         }
       } catch (error: any) {
         if (!error || error.message !== 'AUTH_REQUIRED') {
@@ -554,17 +688,21 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
           window.alert('Failed to close the session. Check server logs for details.');
         }
       } finally {
-        setPendingCloseSessionId((current) => (current === sessionId ? null : current));
+        setPendingCloseSessionId((current) => (current === tabId ? null : current));
       }
     },
     [
       activeWorktree,
-      pendingCloseSessionId,
+      codexSessions,
       getWorktreeKey,
       openTerminalForWorktree,
+      pendingCloseSessionId,
+      removeCodexSession,
+      selectedTabId,
       sessionMetadataRef,
       sessionKeyByIdRef,
       sessionMapRef,
+      setActiveCodexSessionId,
       terminal.sessionId,
     ],
   );
@@ -827,6 +965,25 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     const worktree = pendingWorktreeAction;
     const isDangerous = action.endsWith('-dangerous');
     const resolvedAction = isDangerous ? action.replace(/-dangerous$/, '') : action;
+    if (resolvedAction === 'codex_sdk') {
+      setPendingActionLoading(action);
+      try {
+        const summary = await launchCodexSessionForWorktree(worktree);
+        if (summary) {
+          const tabId = getCodexTabId(summary.id);
+          setActiveWorktree(worktree);
+          setSelectedTabId(tabId);
+          setActiveCodexSessionId(summary.id);
+        }
+        setPendingWorktreeAction(null);
+      } catch (error) {
+        console.error('Failed to open Codex SDK chat', error);
+        window.alert('Failed to open Codex SDK chat. Check server logs for details.');
+      } finally {
+        setPendingActionLoading(null);
+      }
+      return;
+    }
     const command = getCommandForLaunch(resolvedAction, isDangerous);
     const sessionTool: 'terminal' | 'agent' =
       resolvedAction === 'terminal' || resolvedAction === 'vscode' ? 'terminal' : 'agent';
@@ -884,6 +1041,9 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     setPendingActionLoading,
     setPendingSessionContext,
     setPendingWorktreeAction,
+    setSelectedTabId,
+    setActiveCodexSessionId,
+    launchCodexSessionForWorktree,
   ]);
 
   const handleDashboardRefresh = useCallback(() => {
@@ -968,6 +1128,34 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     worktreeSelection.handleWorktreeSelection(org, repo, 'main').catch(() => {});
   }, [worktreeSelection]);
 
+  const handleSendCodexMessage = useCallback(
+    async (text: string) => {
+      if (!activeCodexSessionId) {
+        return;
+      }
+      await sendCodexMessage(activeCodexSessionId, text);
+    },
+    [activeCodexSessionId, sendCodexMessage],
+  );
+
+  const renderSessionContent = useCallback(
+    (tabId: string | null) => {
+      const sessionId = extractCodexSessionId(tabId);
+      if (!sessionId || !codexActiveSession || codexActiveSession.id !== sessionId) {
+        return null;
+      }
+      return h(CodexSdkChatPanel, {
+        events: codexEvents,
+        isSending: isCodexSending,
+        connectionState: codexConnectionState,
+        session: codexActiveSession,
+        lastError: codexLastError,
+        onSend: handleSendCodexMessage,
+      });
+    },
+    [codexActiveSession, codexConnectionState, codexEvents, codexLastError, handleSendCodexMessage, isCodexSending],
+  );
+
   const sidebar = h(Sidebar, {
     width,
     onWidthChange: setWidth,
@@ -999,12 +1187,12 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     isDashboardLoading,
     dashboardError,
     terminalContainerRef,
-  terminalSessions: activeTerminalSessions,
-  activeSessionId: terminal.sessionId,
+    terminalSessions: combinedTerminalSessions,
+    activeSessionId: activeSessionIdForTabs,
     onSessionSelect: handleSelectSessionTab,
     onSessionClose: handleCloseSessionTab,
-  onSessionCreate: handleCreateSessionTab,
-  onQuickLaunchSession: handleQuickSessionLaunch,
+    onSessionCreate: handleCreateSessionTab,
+    onQuickLaunchSession: handleQuickSessionLaunch,
     isSessionCreationPending: !activeWorktree,
     isQuickSessionPending,
     pendingCloseSessionId,
@@ -1022,6 +1210,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     onGitStatusUpdate: handleGitStatusUpdate,
     onOpenDiff: handleOpenGitDiff,
     onCreateIssuePlan: openIssuePlanModal,
+    renderSessionContent,
   });
 
   return h(

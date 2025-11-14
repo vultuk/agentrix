@@ -10,6 +10,7 @@ import { generateRandomPassword } from '../utils/random.js';
 import { sendJson } from '../utils/http.js';
 import { createRouter } from './router.js';
 import { attachTerminalWebSockets } from './websocket.js';
+import { attachCodexSdkWebSockets } from './codex-sdk-websocket.js';
 import { createUiProvider } from './ui.js';
 import { createCookieManager } from './cookies.js';
 import { createAgentCommands } from '../config/agent-commands.js';
@@ -113,6 +114,7 @@ export async function startServer({
   });
 
   const { close: closeWebSockets } = attachTerminalWebSockets(server, authManager);
+  const { close: closeCodexSockets } = attachCodexSdkWebSockets(server, authManager);
 
   const activeSockets = new Set();
   server.on('connection', (socket) => {
@@ -188,6 +190,7 @@ export async function startServer({
       flushTaskPersistence(),
       disposeAllSessions(),
       closeWebSockets(),
+      closeCodexSockets(),
       serverClose,
       portTunnelManager.closeAll().catch(() => {}),
     ];

@@ -39,6 +39,8 @@ interface MainPaneProps {
   onGitStatusUpdate: (snapshot: any) => void;
   onOpenDiff: (params: { item: any }) => void;
   onCreateIssuePlan: (issue: any, repoInfo: { org: string; repo: string }) => void;
+  nonClosableSessionIds?: Set<string>;
+  renderSessionContent?: (sessionId: string | null) => React.ReactNode;
 }
 
 export default function MainPane({
@@ -71,6 +73,8 @@ export default function MainPane({
   onGitStatusUpdate,
   onOpenDiff,
   onCreateIssuePlan,
+  nonClosableSessionIds,
+  renderSessionContent,
 }: MainPaneProps) {
   let mainPaneContent = null;
 
@@ -130,33 +134,39 @@ export default function MainPane({
           ),
         ),
       ),
-      h(
-        'div',
-        { className: 'flex-1 min-h-0 flex flex-col lg:flex-row lg:min-w-0' },
-        h(TabbedTerminalPanel, {
-          terminalContainerRef,
-          sessions: terminalSessions,
-          activeSessionId,
-          pendingCloseSessionId,
-          isAddDisabled: isSessionCreationPending,
-          onSelectSession: onSessionSelect,
-          onCloseSession: onSessionClose,
-          onAddSession: onSessionCreate,
-          onQuickLaunchSession,
-          isQuickLaunchPending: isQuickSessionPending,
-        }),
-        h(GitStatusSidebar, {
-          isOpen: isGitSidebarOpen,
-          worktree: activeWorktree,
-          onClose: onGitSidebarClose,
-          onAuthExpired: onAuthExpired,
-          onStatusUpdate: onGitStatusUpdate,
-          onOpenDiff: onOpenDiff,
-          entryLimit: 250,
-          commitLimit: 20,
-          pollInterval: REPOSITORY_POLL_INTERVAL_MS,
-        }),
-      ),
+        h(
+          'div',
+          { className: 'flex-1 min-h-0 flex flex-col lg:flex-row lg:min-w-0' },
+          h(
+            'div',
+            { className: 'flex-1 flex flex-col min-w-0' },
+            h(TabbedTerminalPanel, {
+              terminalContainerRef,
+              sessions: terminalSessions,
+              activeSessionId,
+              pendingCloseSessionId,
+              isAddDisabled: isSessionCreationPending,
+              onSelectSession: onSessionSelect,
+              onCloseSession: onSessionClose,
+              onAddSession: onSessionCreate,
+              onQuickLaunchSession,
+              isQuickLaunchPending: isQuickSessionPending,
+              nonClosableSessionIds,
+              renderSessionContent,
+            }),
+          ),
+          h(GitStatusSidebar, {
+            isOpen: isGitSidebarOpen,
+            worktree: activeWorktree,
+            onClose: onGitSidebarClose,
+            onAuthExpired: onAuthExpired,
+            onStatusUpdate: onGitStatusUpdate,
+            onOpenDiff: onOpenDiff,
+            entryLimit: 250,
+            commitLimit: 20,
+            pollInterval: REPOSITORY_POLL_INTERVAL_MS,
+          }),
+        ),
     );
   } else if (activeRepoDashboard) {
     mainPaneContent = h(

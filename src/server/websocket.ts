@@ -140,6 +140,9 @@ export function attachTerminalWebSockets(server: HttpServer, authManager: AuthMa
     try {
       const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
       if (url.pathname !== '/api/terminal/socket') {
+        if (url.pathname === '/api/codex-sdk/socket') {
+          return;
+        }
         socket.destroy();
         return;
       }

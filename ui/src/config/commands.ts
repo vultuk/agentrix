@@ -17,6 +17,7 @@ export const WORKTREE_LAUNCH_OPTIONS = Object.freeze([
   { value: 'terminal', label: 'Terminal' },
   { value: 'vscode', label: 'VS Code' },
   { value: 'codex', label: 'Codex' },
+  { value: 'codex_sdk', label: 'Codex SDK' },
   { value: 'claude', label: 'Claude' },
   { value: 'cursor', label: 'Cursor' }
 ]);
@@ -62,4 +63,3 @@ export const ISSUE_PLAN_PROMPT_TEMPLATE = `Using the gh command, load the specif
    - Wait for confirmation before taking any further automated action.
 
 Ensure the plan is specific, technically sound, and ready for execution.`;
-

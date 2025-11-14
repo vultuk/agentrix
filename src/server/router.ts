@@ -15,6 +15,7 @@ import { createPlanArtifactHandlers } from '../api/plans.js';
 import { createEventStreamHandler } from './events.js';
 import { createTaskHandlers } from '../api/tasks.js';
 import { createPortHandlers } from '../api/ports.js';
+import { createCodexSdkHandlers } from '../api/codex-sdk.js';
 import type { AuthManager, CookieManager } from '../types/auth.js';
 import type { PortTunnelManager } from '../core/ports.js';
 
@@ -42,6 +43,7 @@ interface RouterDependencies {
   createSessionHandlers: typeof createSessionHandlers;
   createWorktreeHandlers: typeof createWorktreeHandlers;
   createTerminalHandlers: typeof createTerminalHandlers;
+  createCodexSdkHandlers: typeof createCodexSdkHandlers;
   createConfigHandlers: typeof createConfigHandlers;
   createPlanHandlers: typeof createPlanHandlers;
   createGitStatusHandlers: typeof createGitStatusHandlers;
@@ -62,6 +64,7 @@ const defaultDependencies: RouterDependencies = {
   createSessionHandlers,
   createWorktreeHandlers,
   createTerminalHandlers,
+  createCodexSdkHandlers,
   createConfigHandlers,
   createPlanHandlers,
   createGitStatusHandlers,
@@ -126,6 +129,7 @@ export function createRouter({
   const terminalHandlers = getDependency('createTerminalHandlers')(workdir, {
     mode: terminalSessionMode,
   });
+  const codexSdkHandlers = getDependency('createCodexSdkHandlers')(workdir);
   const configHandlers = getDependency('createConfigHandlers')(agentCommands as never);
   const planHandlers = getDependency('createPlanHandlers')({ planService: planService as never });
   const gitStatusHandlers = getDependency('createGitStatusHandlers')(workdir);
@@ -258,6 +262,13 @@ export function createRouter({
       },
     ],
     [
+      '/api/codex-sdk/sessions',
+      {
+        requiresAuth: true,
+        handlers: { GET: codexSdkHandlers.listSessions, POST: codexSdkHandlers.createSession },
+      },
+    ],
+    [
       '/api/commands',
       {
         requiresAuth: true,
@@ -343,6 +354,38 @@ export function createRouter({
         readJsonBody: () => readJson(req),
       };
       await taskHandlers.read(context, taskId);
+      return true;
+    }
+
+    if (url.pathname.startsWith('/api/codex-sdk/sessions/')) {
+      if (!authManager.isAuthenticated(req)) {
+        sendJsonResponse(res, 401, { error: 'Authentication required' });
+        return true;
+      }
+      const method = req.method?.toUpperCase() || 'GET';
+      if (!['GET', 'DELETE'].includes(method)) {
+        handleMethodNotAllowed(res, ['GET', 'DELETE']);
+        return true;
+      }
+      const sessionId = url.pathname.slice('/api/codex-sdk/sessions/'.length);
+      if (!sessionId) {
+        sendJsonResponse(res, 404, { error: 'Session not found' });
+        return true;
+      }
+      const context = {
+        req,
+        res,
+        url,
+        method,
+        params: { id: sessionId },
+        workdir,
+        readJsonBody: () => readJson(req),
+      };
+      if (method === 'GET') {
+        await codexSdkHandlers.readSession(context);
+      } else {
+        await codexSdkHandlers.deleteSession(context);
+      }
       return true;
     }
 

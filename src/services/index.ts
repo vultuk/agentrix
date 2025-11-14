@@ -7,6 +7,9 @@ export type { CreateWorktreeResult } from './worktree-service.js';
 export { TerminalService, createTerminalService } from './terminal-service.js';
 export type { TerminalOpenResult, TerminalSendResult, TerminalCloseResult } from './terminal-service.js';
 
+export { CodexSdkService, createCodexSdkService } from './codex-sdk-service.js';
+export type { CodexSdkSessionDetail } from './codex-sdk-service.js';
+
 export { AuthService, createAuthService } from './auth-service.js';
 export type { AuthResult } from './auth-service.js';
 
