@@ -91,14 +91,13 @@ export function useTaskManagement({ onAuthExpired, onTaskComplete }: UseTaskMana
         if (!taskUpdate || typeof taskUpdate !== 'object' || !taskUpdate.id) {
           return;
         }
-        const nextTask = taskUpdate as Task & { removed?: boolean };
-        if (nextTask.removed) {
-          map.delete(nextTask.id);
-          pendingLaunchesRef.current.delete(nextTask.id);
+        if (taskUpdate.removed) {
+          map.delete(taskUpdate.id);
+          pendingLaunchesRef.current.delete(taskUpdate.id);
           return;
         }
-        map.set(nextTask.id, nextTask);
-        processPendingTask(nextTask);
+        map.set(taskUpdate.id, taskUpdate);
+        processPendingTask(taskUpdate);
       });
 
       taskMapRef.current = map;

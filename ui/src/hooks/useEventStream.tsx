@@ -14,7 +14,8 @@ function extractRepositoryData(payload: unknown): RepositoryData | null {
     return null;
   }
   const record = payload as Record<string, unknown>;
-  if ('data' in record && Object.keys(record).length === 1) {
+  const keys = Object.keys(record);
+  if (keys.length === 1 && keys[0] === 'data' && 'data' in record) {
     const data = (record.data as RepositoryData | undefined) ?? null;
     return data && typeof data === 'object' ? data : null;
   }
@@ -76,7 +77,7 @@ export function useEventStream({
 
   useEffect(() => {
     const stop = createEventStream({
-      onRepos: (payload: RepositoryData | { data?: RepositoryData }) => {
+      onRepos: (payload: unknown) => {
         const handler = handlersRef.current.onRepos;
         if (!handler) {
           return;
@@ -86,7 +87,7 @@ export function useEventStream({
           handler(repositories);
         }
       },
-      onSessions: (payload: { sessions?: WorktreeSession[] }) => {
+      onSessions: (payload: unknown) => {
         const handler = handlersRef.current.onSessions;
         if (!handler) {
           return;
@@ -96,7 +97,7 @@ export function useEventStream({
           handler(sessionsPayload);
         }
       },
-      onTasks: (payload: Task[] | { tasks?: Task[]; task?: Task }) => {
+      onTasks: (payload: unknown) => {
         const handler = handlersRef.current.onTasks;
         if (!handler) {
           return;

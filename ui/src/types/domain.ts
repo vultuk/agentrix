@@ -54,6 +54,7 @@ export interface Task {
   updatedAt?: string;
   error?: string;
   result?: unknown;
+  removed?: boolean;
 }
 
 // Plan types
