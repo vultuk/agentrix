@@ -46,13 +46,26 @@ final class TerminalOutputAccumulator {
 }
 
 /// Normalizes Return key input so remote shells always receive a carriage return (0x0D).
-private enum TerminalReturnKeyMapper {
+enum TerminalReturnKeyMapper {
     private static let lineFeedByte: UInt8 = 0x0a
     private static let carriageReturnByte: UInt8 = 0x0d
     static let carriageReturnPayload = Data([carriageReturnByte])
+    static let lineFeedString = "\n"
+    static let carriageReturnString = "\r"
 
     static func shouldMapToCarriageReturn(_ payload: Data) -> Bool {
         payload.count == 1 && payload.first == lineFeedByte
+    }
+
+    static func normalizedPayload(for payload: Data) -> Data {
+        shouldMapToCarriageReturn(payload) ? carriageReturnPayload : payload
+    }
+}
+
+@MainActor
+private extension TerminalViewModel {
+    func sendNormalizedTerminalPayload(_ payload: Data) async {
+        await send(bytes: TerminalReturnKeyMapper.normalizedPayload(for: payload))
     }
 }
 
@@ -192,19 +205,7 @@ struct SwiftTermTerminalView: UIViewRepresentable {
         func send(source: TerminalView, data: ArraySlice<UInt8>) {
             let payload = Data(data)
             guard !payload.isEmpty else { return }
-            Task { await routeInputPayload(payload) }
-        }
-
-        private func routeInputPayload(_ payload: Data) async {
-            if TerminalReturnKeyMapper.shouldMapToCarriageReturn(payload) {
-                await sendReturnKey()
-                return
-            }
-            await viewModel.send(bytes: payload)
-        }
-
-        private func sendReturnKey() async {
-            await viewModel.send(bytes: TerminalReturnKeyMapper.carriageReturnPayload)
+            Task { await viewModel.sendNormalizedTerminalPayload(payload) }
         }
 
         func scrolled(source: TerminalView, position: Double) {
@@ -406,19 +407,7 @@ struct SwiftTermTerminalView: NSViewRepresentable {
         func send(source: TerminalView, data: ArraySlice<UInt8>) {
             let payload = Data(data)
             guard !payload.isEmpty else { return }
-            Task { await routeInputPayload(payload) }
-        }
-
-        private func routeInputPayload(_ payload: Data) async {
-            if TerminalReturnKeyMapper.shouldMapToCarriageReturn(payload) {
-                await sendReturnKey()
-                return
-            }
-            await viewModel.send(bytes: payload)
-        }
-
-        private func sendReturnKey() async {
-            await viewModel.send(bytes: TerminalReturnKeyMapper.carriageReturnPayload)
+            Task { await viewModel.sendNormalizedTerminalPayload(payload) }
         }
 
         func scrolled(source: TerminalView, position: Double) {

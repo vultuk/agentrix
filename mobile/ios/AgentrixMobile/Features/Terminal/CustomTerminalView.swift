@@ -102,7 +102,7 @@ final class CustomTerminalView: TerminalView {
     #if os(iOS) && !targetEnvironment(macCatalyst)
     override func insertText(_ text: String) {
         // Skip UIKit text system to avoid duplicate echoes.
-        if text == "\n" || text == "\r" {
+        if text == TerminalReturnKeyMapper.lineFeedString || text == TerminalReturnKeyMapper.carriageReturnString {
             forwardReturnKey()
             return
         }
