@@ -448,20 +448,14 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
 
   // Set up event stream for real-time updates
   useEventStream({
-    onRepos: (payload: any) => {
-      const reposData = payload && typeof payload === 'object' ? payload.data : null;
-      if (reposData) {
-        repoData.applyDataUpdate(reposData);
-      }
+    onRepos: (repositories) => {
+      repoData.applyDataUpdate(repositories);
     },
-    onSessions: (payload: any) => {
-      const sessions = payload && typeof payload === 'object' ? payload.sessions : null;
-      if (sessions) {
-        syncKnownSessions(sessions);
-      }
+    onSessions: ({ sessions }) => {
+      syncKnownSessions(sessions);
     },
-    onTasks: (payload: any) => {
-      applyTaskUpdate(payload);
+    onTasks: (tasks) => {
+      applyTaskUpdate(tasks);
     },
     onConnect: () => {
       setIsRealtimeConnected(true);
