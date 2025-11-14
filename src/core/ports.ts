@@ -19,9 +19,31 @@ interface PortsDependencies {
   execCommand: ExecCommand;
   loadForward: ForwardLoader;
   now: Clock;
+  platform: NodeJS.Platform;
 }
 
-const PORT_LIST_COMMAND = `ss -ntlpH | awk '{print $5}' | awk -F: '{print $NF}' | sort -n | uniq`;
+interface PortListCommandSpec {
+  command: string;
+  options?: ExecOptions;
+}
+
+const LINUX_PORT_LIST_COMMAND = `ss -ntlpH | awk '{print $5}' | awk -F: '{print $NF}' | sort -n | uniq`;
+const DARWIN_PORT_LIST_COMMAND = `lsof -nP -iTCP -sTCP:LISTEN | awk 'NR>1 {print $9}' | awk -F ':' '{print $NF}' | sort -n | uniq`;
+const WINDOWS_PORT_LIST_COMMAND = `powershell.exe -NoLogo -NoProfile -Command "Get-NetTCPConnection -State Listen | Select-Object -ExpandProperty LocalPort | Sort-Object -Unique"`;
+
+function resolvePortListCommand(platform: NodeJS.Platform): PortListCommandSpec | null {
+  switch (platform) {
+    case 'linux':
+    case 'android':
+      return { command: LINUX_PORT_LIST_COMMAND, options: { shell: '/bin/sh' } };
+    case 'darwin':
+      return { command: DARWIN_PORT_LIST_COMMAND, options: { shell: '/bin/sh' } };
+    case 'win32':
+      return { command: WINDOWS_PORT_LIST_COMMAND };
+    default:
+      return null;
+  }
+}
 
 const defaultDependencies: PortsDependencies = {
   execCommand: async (command, options) => {
@@ -37,6 +59,7 @@ const defaultDependencies: PortsDependencies = {
     return forward;
   },
   now: () => Date.now(),
+  platform: process.platform,
 };
 
 let activeDependencies: PortsDependencies = { ...defaultDependencies };
@@ -60,7 +83,13 @@ export function __setPortsTestOverrides(overrides?: Partial<PortsDependencies>):
  */
 export async function listActivePorts(): Promise<number[]> {
   try {
-    const { stdout } = await activeDependencies.execCommand(PORT_LIST_COMMAND, { shell: '/bin/sh' });
+    const platform = activeDependencies.platform;
+    const commandSpec = resolvePortListCommand(platform);
+    if (!commandSpec) {
+      throw new Error(`Port listing is not supported on platform: ${platform}`);
+    }
+
+    const { stdout } = await activeDependencies.execCommand(commandSpec.command, commandSpec.options);
     const output = typeof stdout === 'string' ? stdout : stdout.toString('utf8');
     if (!output) {
       return [];
