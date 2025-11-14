@@ -7,7 +7,7 @@ import { createEventStream } from '../utils/eventStream.js';
 import type { EventStreamCallbacks } from '../types/api.js';
 import type { RepositoryData, Task, WorktreeSession } from '../types/domain.js';
 
-interface UseEventStreamOptions extends EventStreamCallbacks {}
+type UseEventStreamOptions = EventStreamCallbacks;
 
 function extractRepositoryData(payload: unknown): RepositoryData | null {
   if (!payload || typeof payload !== 'object') {
