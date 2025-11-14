@@ -59,18 +59,13 @@ export function createAuthHandlers(authManager: AuthManager, options: AuthHandle
       maxAttempts: AUTH_RATE_LIMIT_MAX_ATTEMPTS,
     });
 
-  const buildLimiterKey = (ip: string, username: string): string => {
-    const identifier = username ? username.toLowerCase() : 'password-only';
-    return `${ip || 'unknown'}:${identifier}`;
-  };
-
   // Login requires special error handling for status codes
   const login = asyncHandler(async (context: RequestContext) => {
     const payload = await context.readJsonBody();
     const password = typeof payload['password'] === 'string' ? payload['password'].trim() : '';
     const username = typeof payload['username'] === 'string' ? payload['username'].trim() : '';
     const clientIp = getClientIp(context.req);
-    const limiterKey = buildLimiterKey(clientIp, username);
+    const limiterKey = clientIp;
 
     const limiterStatus = loginRateLimiter.check(limiterKey);
     if (limiterStatus.limited) {

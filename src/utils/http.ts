@@ -78,7 +78,7 @@ export function getClientIp(req: IncomingMessage): string {
       return candidate;
     }
   } else if (Array.isArray(headerValue) && headerValue.length) {
-    const candidate = headerValue.map((part) => (part ? part.trim() : '')).find(Boolean);
+    const candidate = headerValue.map((part) => part.trim()).find(Boolean);
     if (candidate) {
       return candidate;
     }

@@ -217,7 +217,7 @@ export function createAutomationHandlers(
     };
     const providedApiKey = extractApiKey(req);
     const clientIp = getClientIp(req);
-    const limiterKey = `${clientIp || 'unknown'}:${providedApiKey || 'missing-key'}`;
+    const limiterKey = clientIp;
 
     const limiterStatus = automationRateLimiter.check(limiterKey);
     if (limiterStatus.limited) {
