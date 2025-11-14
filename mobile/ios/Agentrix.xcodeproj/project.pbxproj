@@ -115,11 +115,12 @@
 		5AD5FCD820F1D3333C32BB28 /* TerminalSessionVisualStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionVisualStyle.swift; sourceTree = "<group>"; };
 		62AFCB583B01490991396582 /* ErrorTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorTypes.swift; sourceTree = "<group>"; };
 		67B80282D9B64D5B970243D1 /* IssuePresentationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssuePresentationState.swift; sourceTree = "<group>"; };
+		67D5FE7B2EC74E7B0077C44E /* Agentrix-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Agentrix-Info.plist"; sourceTree = "<group>"; };
 		6BBB6BD3E14F435199D86620 /* DashboardModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardModels.swift; sourceTree = "<group>"; };
 		6DD2739DD2E6462598DF58F6 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		6E31FD12627142198CC95D6C /* TasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksView.swift; sourceTree = "<group>"; };
 		6E6FD820F5DF49F0B8C2F4F1 /* PlanPromptTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanPromptTemplates.swift; sourceTree = "<group>"; };
-		6EE5C8B2B4E348CE94F95EA0 /* AgentrixMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AgentrixMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6EE5C8B2B4E348CE94F95EA0 /* Agentrix.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Agentrix.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		70BD2CE761B44BD0B594640C /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		73403F03071342DE8B7F727E /* PortsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortsService.swift; sourceTree = "<group>"; };
 		78382F38837E40D591D38A02 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
@@ -129,7 +130,7 @@
 		8FAFC804E96D4EA18BC8C696 /* GitDiffView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitDiffView.swift; sourceTree = "<group>"; };
 		93E3847F5172415C9B6E61A0 /* CommandModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandModels.swift; sourceTree = "<group>"; };
 		96253B8255954FB8B8461D59 /* RepoDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepoDashboardView.swift; sourceTree = "<group>"; };
-		96D5F1752D814B789CC5D9F1 /* AgentrixMobileUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = AgentrixMobileUITests.xctest; path = .xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		96D5F1752D814B789CC5D9F1 /* .xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = .xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		98C1F02B883D4A20BBEC9B56 /* IssueModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssueModels.swift; sourceTree = "<group>"; };
 		9B070A21FF8A62965B3AF2C2 /* CustomTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomTerminalView.swift; sourceTree = "<group>"; };
 		A3C5C81BB50C4A039C2F6D2E /* DiffPresentationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffPresentationState.swift; sourceTree = "<group>"; };
@@ -144,12 +145,11 @@
 		C0B8F2E48C6E40AF97C6A57A /* CodexSdkChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSdkChatView.swift; sourceTree = "<group>"; };
 		C0D2EEAA1FBB4AF4A1B4B0A1 /* CodexSdkModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSdkModels.swift; sourceTree = "<group>"; };
 		C14681E5CA964955948713BB /* AgentrixMobileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentrixMobileTests.swift; sourceTree = "<group>"; };
-		CAAA7B82B82D4BD28E030D17 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		CF33F33D6313415CA45ED046 /* AgentrixMobileUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentrixMobileUITests.swift; sourceTree = "<group>"; };
 		D5F6CDDB4FD941C4A7CEE8E7 /* PortsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortsView.swift; sourceTree = "<group>"; };
 		D77D30A55CF64F94B67E09C4 /* WorktreeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeViewModel.swift; sourceTree = "<group>"; };
 		E4B7F5D1234A4DA5B2A5F5AA /* SwiftTermTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftTermTerminalView.swift; sourceTree = "<group>"; };
-		E8D4DA132607483B82A75F33 /* AgentrixMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; name = AgentrixMobileTests.xctest; path = .xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E8D4DA132607483B82A75F33 /* .xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = .xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		EA32EE7CA8E0A77E67C1D7BF /* WorktreeDetailTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeDetailTab.swift; sourceTree = "<group>"; };
 		ECB7B94B7B3C1EADBA5594B8 /* UITestHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestHarness.swift; sourceTree = "<group>"; };
 		EFBB7D91E1F97356467377C7 /* TerminalSessionStyleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionStyleTests.swift; sourceTree = "<group>"; };
@@ -303,9 +303,9 @@
 		92810E9E09B54A50B51897AD /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				6EE5C8B2B4E348CE94F95EA0 /* AgentrixMobile.app */,
-				E8D4DA132607483B82A75F33 /* AgentrixMobileTests.xctest */,
-				96D5F1752D814B789CC5D9F1 /* AgentrixMobileUITests.xctest */,
+				6EE5C8B2B4E348CE94F95EA0 /* Agentrix.app */,
+				E8D4DA132607483B82A75F33 /* .xctest */,
+				96D5F1752D814B789CC5D9F1 /* .xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -372,7 +372,6 @@
 				C9D62C81DBFB4D3B92167C50 /* Resources */,
 				DC326B4DB1CC44A790FB3AFF /* Models */,
 				DFB7ADD4EEBC459EB9F211BD /* Features */,
-				CAAA7B82B82D4BD28E030D17 /* Info.plist */,
 			);
 			path = AgentrixMobile;
 			sourceTree = "<group>";
@@ -406,6 +405,7 @@
 		F1BD73C2886E40D98F19D726 = {
 			isa = PBXGroup;
 			children = (
+				67D5FE7B2EC74E7B0077C44E /* Agentrix-Info.plist */,
 				DF26FB47D28545C0B0E22468 /* AgentrixMobile */,
 				F0AFF50999264282BCA151F7 /* AgentrixMobileTests */,
 				00BD79D127C84CA4B09A1364 /* AgentrixMobileUITests */,
@@ -416,9 +416,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		4775ACA3F0AA4F17B9E68D05 /* AgentrixMobileTests */ = {
+		4775ACA3F0AA4F17B9E68D05 /* AgentrixTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 1589B23A57FB476395525AC7 /* Build configuration list for PBXNativeTarget "AgentrixMobileTests" */;
+			buildConfigurationList = 1589B23A57FB476395525AC7 /* Build configuration list for PBXNativeTarget "AgentrixTests" */;
 			buildPhases = (
 				8C80E90556F54ABA957E61FC /* Sources */,
 				78BE56E33608480CA8D89951 /* Frameworks */,
@@ -429,14 +429,14 @@
 			dependencies = (
 				ABC1E94D9ACC44748D77D59E /* PBXTargetDependency */,
 			);
-			name = AgentrixMobileTests;
+			name = AgentrixTests;
 			productName = AgentrixMobileTests;
-			productReference = E8D4DA132607483B82A75F33 /* AgentrixMobileTests.xctest */;
+			productReference = E8D4DA132607483B82A75F33 /* .xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		D48BC5F754B14CD8970B786A /* AgentrixMobile */ = {
+		D48BC5F754B14CD8970B786A /* Agentrix */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 30CB5EE153FF429BA899C26B /* Build configuration list for PBXNativeTarget "AgentrixMobile" */;
+			buildConfigurationList = 30CB5EE153FF429BA899C26B /* Build configuration list for PBXNativeTarget "Agentrix" */;
 			buildPhases = (
 				0337015625574BCFAC7A6D35 /* Patch SwiftTerm for visionOS */,
 				721F6C282E424BD5AE317AA9 /* Sources */,
@@ -447,14 +447,14 @@
 			);
 			dependencies = (
 			);
-			name = AgentrixMobile;
+			name = Agentrix;
 			productName = AgentrixMobile;
-			productReference = 6EE5C8B2B4E348CE94F95EA0 /* AgentrixMobile.app */;
+			productReference = 6EE5C8B2B4E348CE94F95EA0 /* Agentrix.app */;
 			productType = "com.apple.product-type.application";
 		};
-		F6EFAAE9C17648D1BE5785E1 /* AgentrixMobileUITests */ = {
+		F6EFAAE9C17648D1BE5785E1 /* AgentrixUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 297056DC6D374E6997C0E44A /* Build configuration list for PBXNativeTarget "AgentrixMobileUITests" */;
+			buildConfigurationList = 297056DC6D374E6997C0E44A /* Build configuration list for PBXNativeTarget "AgentrixUITests" */;
 			buildPhases = (
 				04CA48900A3940A5A04B73AC /* Sources */,
 				B2534A7642604983A2E15F74 /* Frameworks */,
@@ -465,9 +465,9 @@
 			dependencies = (
 				1C7489EEB397424B93A8A7C4 /* PBXTargetDependency */,
 			);
-			name = AgentrixMobileUITests;
+			name = AgentrixUITests;
 			productName = AgentrixMobileUITests;
-			productReference = 96D5F1752D814B789CC5D9F1 /* AgentrixMobileUITests.xctest */;
+			productReference = 96D5F1752D814B789CC5D9F1 /* .xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -490,7 +490,7 @@
 					};
 				};
 			};
-			buildConfigurationList = DAF71A3432A345A489202B4D /* Build configuration list for PBXProject "AgentrixMobile" */;
+			buildConfigurationList = DAF71A3432A345A489202B4D /* Build configuration list for PBXProject "Agentrix" */;
 			compatibilityVersion = "Xcode 15.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -506,9 +506,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				D48BC5F754B14CD8970B786A /* AgentrixMobile */,
-				4775ACA3F0AA4F17B9E68D05 /* AgentrixMobileTests */,
-				F6EFAAE9C17648D1BE5785E1 /* AgentrixMobileUITests */,
+				D48BC5F754B14CD8970B786A /* Agentrix */,
+				4775ACA3F0AA4F17B9E68D05 /* AgentrixTests */,
+				F6EFAAE9C17648D1BE5785E1 /* AgentrixUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -646,12 +646,12 @@
 /* Begin PBXTargetDependency section */
 		1C7489EEB397424B93A8A7C4 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = D48BC5F754B14CD8970B786A /* AgentrixMobile */;
+			target = D48BC5F754B14CD8970B786A /* Agentrix */;
 			targetProxy = 3D10D2EC87634D0188DEBCB4 /* PBXContainerItemProxy */;
 		};
 		ABC1E94D9ACC44748D77D59E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = D48BC5F754B14CD8970B786A /* AgentrixMobile */;
+			target = D48BC5F754B14CD8970B786A /* Agentrix */;
 			targetProxy = 3CA40857781D4221893B22DA /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -713,19 +713,24 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = H9A2UTD42J;
+				DEVELOPMENT_TEAM = J3GGLYH7P8;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
-				INFOPLIST_FILE = AgentrixMobile/Info.plist;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Agentrix-Info.plist";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_UILaunchStoryboardName = "";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.agentrix.mobile;
+				MARKETING_VERSION = 0.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = me.simonskinner.agentrix;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
@@ -745,19 +750,24 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = H9A2UTD42J;
+				DEVELOPMENT_TEAM = J3GGLYH7P8;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
-				INFOPLIST_FILE = AgentrixMobile/Info.plist;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Agentrix-Info.plist";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_UILaunchStoryboardName = "";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.agentrix.mobile;
+				MARKETING_VERSION = 0.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = me.simonskinner.agentrix;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
@@ -808,7 +818,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		1589B23A57FB476395525AC7 /* Build configuration list for PBXNativeTarget "AgentrixMobileTests" */ = {
+		1589B23A57FB476395525AC7 /* Build configuration list for PBXNativeTarget "AgentrixTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				00AA1AA3FF1E40B7A7B650A2 /* Debug */,
@@ -817,7 +827,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		297056DC6D374E6997C0E44A /* Build configuration list for PBXNativeTarget "AgentrixMobileUITests" */ = {
+		297056DC6D374E6997C0E44A /* Build configuration list for PBXNativeTarget "AgentrixUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3F143AA580A84DD3BC73DAF2 /* Debug */,
@@ -826,7 +836,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		30CB5EE153FF429BA899C26B /* Build configuration list for PBXNativeTarget "AgentrixMobile" */ = {
+		30CB5EE153FF429BA899C26B /* Build configuration list for PBXNativeTarget "Agentrix" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				6F186A60524841D88295A49D /* Debug */,
@@ -835,7 +845,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		DAF71A3432A345A489202B4D /* Build configuration list for PBXProject "AgentrixMobile" */ = {
+		DAF71A3432A345A489202B4D /* Build configuration list for PBXProject "Agentrix" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				2C35EB5B1AE440C797EBBDD2 /* Debug */,
