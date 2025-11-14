@@ -68,7 +68,10 @@ struct CodexSdkEvent: Decodable, Identifiable, Hashable {
     let usage: CodexSdkUsage?
 
     var id: String {
-        rawIdentifier ?? "\(type.rawValue)-\(fallbackIdentifier)"
+        if let rawIdentifier, !rawIdentifier.isEmpty {
+            return "\(type.rawValue)-\(rawIdentifier)-\(fallbackIdentifier)"
+        }
+        return "\(type.rawValue)-\(fallbackIdentifier)"
     }
 
     init(
@@ -103,6 +106,14 @@ struct CodexSdkEvent: Decodable, Identifiable, Hashable {
         self.timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp)
         self.usage = try container.decodeIfPresent(CodexSdkUsage.self, forKey: .usage)
         self.fallbackIdentifier = UUID().uuidString
+    }
+
+    static func == (lhs: CodexSdkEvent, rhs: CodexSdkEvent) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 
     private enum CodingKeys: String, CodingKey {

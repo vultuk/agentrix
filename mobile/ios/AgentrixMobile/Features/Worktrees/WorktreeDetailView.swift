@@ -4,6 +4,7 @@ import UIKit
 #endif
 
 struct WorktreeDetailView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @StateObject var viewModel: WorktreeDetailViewModel
     let selectionHandler: (WorktreeSummary) -> Void
     let logoutAction: () -> Void
@@ -156,12 +157,6 @@ struct WorktreeDetailView: View {
                     Label("Terminal", systemImage: "terminal")
                 }
 
-            codexTab
-                .tag(WorktreeDetailTab.codex)
-                .tabItem {
-                    Label("Codex", systemImage: "sparkles")
-                }
-
             diffsTab
                 .tag(WorktreeDetailTab.diffs)
                 .tabItem {
@@ -187,6 +182,8 @@ struct WorktreeDetailView: View {
     private var terminalTab: some View {
         TerminalConsoleView(
             store: viewModel.terminalStore,
+            codexStore: viewModel.codexStore,
+            worktree: worktree,
             commandConfig: viewModel.commandConfig,
             isLoadingCommandConfig: viewModel.isLoadingCommandConfig,
             onStartCodexSdk: startCodexSdkSession,
@@ -196,13 +193,6 @@ struct WorktreeDetailView: View {
         .task {
             await viewModel.loadCommandConfig()
         }
-    }
-
-    private var codexTab: some View {
-        CodexSdkChatView(
-            store: viewModel.codexStore,
-            worktree: worktree
-        )
     }
 
     private var diffsTab: some View {
@@ -352,7 +342,8 @@ private extension WorktreeDetailView {
             onStartCodexSdk: startCodexSdkSession,
             isCodexSdkLaunching: viewModel.codexStore.isCreatingSession,
             layout: .sheet,
-            onDismiss: { showingWorktreeActions = false }
+            onDismiss: { showingWorktreeActions = false },
+            palette: TerminalColorPalette(colorScheme: colorScheme)
         )
         .task {
             await viewModel.loadCommandConfig()
@@ -404,8 +395,6 @@ private extension WorktreeDetailView {
     func preloadDataIfNeeded(for tab: WorktreeDetailTab) async {
         switch tab {
         case .terminal:
-            return
-        case .codex:
             await viewModel.ensureCodexSessionsLoaded()
         case .diffs:
             if viewModel.gitStatus == nil && !viewModel.isLoadingGitStatus {
@@ -427,7 +416,7 @@ private extension WorktreeDetailView {
             let started = await viewModel.startCodexSdkSession()
             if started {
                 await MainActor.run {
-                    viewModel.selectedTab = .codex
+                    viewModel.selectedTab = .terminal
                 }
             }
         }

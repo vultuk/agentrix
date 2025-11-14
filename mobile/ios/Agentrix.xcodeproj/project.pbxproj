@@ -16,10 +16,6 @@
 		3347E42891204E69A0994A0E /* RepositoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8482A2ADBBC24D16BE5D1930 /* RepositoriesView.swift */; };
 		3428B9FEF55C4958B46BA1D6 /* PlanModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54AF6EF891104087A698DD28 /* PlanModels.swift */; };
 		35B3C433A83E467A9A8898B1 /* ErrorTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62AFCB583B01490991396582 /* ErrorTypes.swift */; };
-		C0123D6BAFB64A2486F2D117 /* CodexSdkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0123D6AAFB64A2486F2D117 /* CodexSdkService.swift */; };
-		C05F5E0E5C534D2AAF857B35 /* CodexSdkChatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C05F5E0D5C534D2AAF857B35 /* CodexSdkChatStore.swift */; };
-		C0B8F2E58C6E40AF97C6A57A /* CodexSdkChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0B8F2E48C6E40AF97C6A57A /* CodexSdkChatView.swift */; };
-		C0D2EEAB1FBB4AF4A1B4B0A1 /* CodexSdkModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D2EEAA1FBB4AF4A1B4B0A1 /* CodexSdkModels.swift */; };
 		4752F2A592944CEE943E4F1A /* RepositoriesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86441AFE05414D43802EF5C4 /* RepositoriesViewModel.swift */; };
 		48901A2C1C3A4F07A4C07AC5 /* RepositoryDashboardDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0DA0D842A254CC3AE705B93 /* RepositoryDashboardDetailView.swift */; };
 		4953E6AEE0DC45F6B21D40D7 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD2739DD2E6462598DF58F6 /* AuthView.swift */; };
@@ -55,6 +51,10 @@
 		AE6340CFE3014AA0A5BE8156 /* TerminalService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530A3844A91F4181B886D66A /* TerminalService.swift */; };
 		B8F20F83CDEE4C01A5511C4E /* GitDiffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FAFC804E96D4EA18BC8C696 /* GitDiffView.swift */; };
 		BB39580AF26A4E64B844EEE2 /* PortsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73403F03071342DE8B7F727E /* PortsService.swift */; };
+		C0123D6BAFB64A2486F2D117 /* CodexSdkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0123D6AAFB64A2486F2D117 /* CodexSdkService.swift */; };
+		C05F5E0E5C534D2AAF857B35 /* CodexSdkChatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C05F5E0D5C534D2AAF857B35 /* CodexSdkChatStore.swift */; };
+		C0B8F2E58C6E40AF97C6A57A /* CodexSdkChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0B8F2E48C6E40AF97C6A57A /* CodexSdkChatView.swift */; };
+		C0D2EEAB1FBB4AF4A1B4B0A1 /* CodexSdkModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D2EEAA1FBB4AF4A1B4B0A1 /* CodexSdkModels.swift */; };
 		C9A2688B25794FF2904EACB7 /* WorktreesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1318745A7CE040E3A18886DE /* WorktreesService.swift */; };
 		CB590651EF06452680CC0242 /* AgentrixAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B3E7EFA37E64E7491CA8AE3 /* AgentrixAPIClient.swift */; };
 		CFD53956608047BA8CE1BB9F /* RepositoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 492AB077D16E4DB688058114 /* RepositoryModels.swift */; };
@@ -318,6 +318,15 @@
 			path = Tasks;
 			sourceTree = "<group>";
 		};
+		C0AA5D0F399040B6B8AF65E2 /* Codex */ = {
+			isa = PBXGroup;
+			children = (
+				C05F5E0D5C534D2AAF857B35 /* CodexSdkChatStore.swift */,
+				C0B8F2E48C6E40AF97C6A57A /* CodexSdkChatView.swift */,
+			);
+			path = Codex;
+			sourceTree = "<group>";
+		};
 		C9D62C81DBFB4D3B92167C50 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -333,15 +342,6 @@
 				8FAFC804E96D4EA18BC8C696 /* GitDiffView.swift */,
 			);
 			path = GitStatus;
-			sourceTree = "<group>";
-		};
-		C0AA5D0F399040B6B8AF65E2 /* Codex */ = {
-			isa = PBXGroup;
-			children = (
-				C05F5E0D5C534D2AAF857B35 /* CodexSdkChatStore.swift */,
-				C0B8F2E48C6E40AF97C6A57A /* CodexSdkChatView.swift */,
-			);
-			path = Codex;
 			sourceTree = "<group>";
 		};
 		DC326B4DB1CC44A790FB3AFF /* Models */ = {
@@ -712,7 +712,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = J3GGLYH7P8;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -729,7 +729,7 @@
 					"@executable_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.0.1;
+				MARKETING_VERSION = 0.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = me.simonskinner.agentrix;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -749,7 +749,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = J3GGLYH7P8;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -766,7 +766,7 @@
 					"@executable_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.0.1;
+				MARKETING_VERSION = 0.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = me.simonskinner.agentrix;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;

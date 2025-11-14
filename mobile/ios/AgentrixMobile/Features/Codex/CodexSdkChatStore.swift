@@ -10,22 +10,34 @@ final class CodexSdkChatStore: ObservableObject {
     }
 
     @Published private(set) var sessions: [CodexSdkSessionSummary] = []
-    @Published var activeSessionId: String?
-    @Published private(set) var eventsBySession: [String: [CodexSdkEvent]] = [:]
+    @Published var activeSessionId: String? {
+        didSet {
+            updateActiveEvents()
+        }
+    }
+    @Published private(set) var eventsBySession: [String: [CodexSdkEvent]] = [:] {
+        didSet {
+            updateActiveEvents()
+        }
+    }
     @Published private(set) var connectionStateBySession: [String: ConnectionState] = [:]
     @Published private(set) var lastErrorBySession: [String: String] = [:]
     @Published private(set) var sendingSessionIds: Set<String> = []
     @Published private(set) var isLoading = false
     @Published private(set) var isCreatingSession = false
+    @Published private(set) var activeEvents: [CodexSdkEvent] = []
 
     var activeSession: CodexSdkSessionSummary? {
         guard let id = activeSessionId else { return nil }
         return sessions.first(where: { $0.id == id })
     }
 
-    var activeEvents: [CodexSdkEvent] {
-        guard let id = activeSessionId else { return [] }
-        return eventsBySession[id] ?? []
+    private func updateActiveEvents() {
+        guard let id = activeSessionId else {
+            activeEvents = []
+            return
+        }
+        activeEvents = eventsBySession[id] ?? []
     }
 
     var activeConnectionState: ConnectionState {
@@ -61,6 +73,7 @@ final class CodexSdkChatStore: ObservableObject {
         self.socketDecoder = decoder
     }
 
+    @MainActor
     deinit {
         closeAllSockets()
     }
@@ -111,7 +124,9 @@ final class CodexSdkChatStore: ObservableObject {
             let detail = try await service.createSession(org: worktree.org, repo: worktree.repo, branch: worktree.branch, label: label)
             let summary = detail.session
             sessions.append(summary)
-            eventsBySession[summary.id] = detail.events
+            var updatedDict = eventsBySession
+            updatedDict[summary.id] = detail.events
+            eventsBySession = updatedDict
             syncPendingState(for: summary.id, events: detail.events)
             connectionStateBySession[summary.id] = .idle
             lastErrorBySession[summary.id] = nil
@@ -275,17 +290,22 @@ private extension CodexSdkChatStore {
         switch payload.type {
         case "history":
             let history = payload.events ?? []
-            eventsBySession[sessionId] = history
+            var updatedDict = eventsBySession
+            updatedDict[sessionId] = history
+            eventsBySession = updatedDict
             syncPendingState(for: sessionId, events: history)
             let lastTimestamp = history.last?.timestamp
             updateSessionActivity(sessionId: sessionId, timestamp: lastTimestamp)
             lastErrorBySession[sessionId] = nil
         case "event":
             guard let event = payload.event else { return }
-            var events = eventsBySession[sessionId] ?? []
-            events.append(event)
-            eventsBySession[sessionId] = events
-            syncPendingState(for: sessionId, events: events)
+            let previous = eventsBySession[sessionId] ?? []
+            var updated = previous
+            updated.append(event)
+            var updatedDict = eventsBySession
+            updatedDict[sessionId] = updated
+            eventsBySession = updatedDict
+            syncPendingState(for: sessionId, events: updated)
             if event.type == .error {
                 lastErrorBySession[sessionId] = event.message
             } else if event.type == .agentResponse || event.type == .ready {
@@ -328,7 +348,9 @@ private extension CodexSdkChatStore {
     func removeSession(withId sessionId: String) {
         closeSocket(for: sessionId)
         sessions.removeAll { $0.id == sessionId }
-        eventsBySession.removeValue(forKey: sessionId)
+        var updatedDict = eventsBySession
+        updatedDict.removeValue(forKey: sessionId)
+        eventsBySession = updatedDict
         connectionStateBySession.removeValue(forKey: sessionId)
         lastErrorBySession.removeValue(forKey: sessionId)
         sendingSessionIds.remove(sessionId)
