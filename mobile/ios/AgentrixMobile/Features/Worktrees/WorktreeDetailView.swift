@@ -6,6 +6,10 @@ import UIKit
 struct WorktreeDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
     @StateObject var viewModel: WorktreeDetailViewModel
+#if os(iOS)
+    @EnvironmentObject private var watchBridge: CodexWatchBridge
+    @EnvironmentObject private var carPlayBridge: CodexCarPlayBridge
+#endif
     let selectionHandler: (WorktreeSummary) -> Void
     let logoutAction: () -> Void
     let repository: RepositoryListing
@@ -69,6 +73,11 @@ struct WorktreeDetailView: View {
                 viewModel.terminalStore.resumeActiveSession()
             }
             Task { await preloadDataIfNeeded(for: viewModel.selectedTab) }
+#if os(iOS)
+            let reference = WorktreeReference(org: worktree.org, repo: worktree.repo, branch: worktree.branch)
+            watchBridge.attach(store: viewModel.codexStore, worktree: reference)
+            carPlayBridge.attach(store: viewModel.codexStore, worktree: reference)
+#endif
         }
         .onChange(of: sessionChangeTokens) { _ in
             viewModel.updateSessions(sessions)
@@ -85,6 +94,10 @@ struct WorktreeDetailView: View {
             }
             copyFeedbackTask?.cancel()
             copyFeedbackTask = nil
+#if os(iOS)
+            watchBridge.detach(store: viewModel.codexStore)
+            carPlayBridge.detach(store: viewModel.codexStore)
+#endif
         }
         .onChange(of: viewModel.selectedTab) { tab in
             Task { await preloadDataIfNeeded(for: tab) }
