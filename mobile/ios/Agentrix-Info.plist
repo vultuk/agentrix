@@ -7,5 +7,17 @@
 		<key>UIColorName</key>
 		<string>System Background Color</string>
 	</dict>
+	<key>UISceneConfigurations</key>
+	<dict>
+		<key>CPTemplateApplicationSceneSessionRoleApplication</key>
+		<array>
+			<dict>
+				<key>UISceneClassName</key>
+				<string>CPTemplateApplicationScene</string>
+				<key>UISceneDelegateClassName</key>
+				<string>$(PRODUCT_MODULE_NAME).CodexCarPlaySceneDelegate</string>
+			</dict>
+		</array>
+	</dict>
 </dict>
 </plist>

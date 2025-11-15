@@ -32,6 +32,10 @@ final class CodexSdkChatStore: ObservableObject {
         return sessions.first(where: { $0.id == id })
     }
 
+    var currentWorktree: WorktreeReference? {
+        worktree
+    }
+
     private func updateActiveEvents() {
         guard let id = activeSessionId else {
             activeEvents = []
