@@ -116,10 +116,10 @@ export const renderMarkdown = (markdown) => {
   };
 
   const isDividerRow = (value: string | undefined, columnCount: number): boolean => {
-    if (!isTableRow(value)) {
+    if (!value || !isTableRow(value)) {
       return false;
     }
-    const cells = parseTableCells(value!);
+    const cells = parseTableCells(value);
     if (cells.length !== columnCount) {
       return false;
     }

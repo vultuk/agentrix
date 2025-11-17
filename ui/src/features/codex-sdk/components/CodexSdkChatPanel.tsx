@@ -3,11 +3,9 @@ import { ChevronDown } from 'lucide-react';
 import { renderSpinner } from '../../../components/Spinner.js';
 import type { CodexSdkEvent, CodexSdkSessionMetadata } from '../../../types/codex-sdk.js';
 import { renderMarkdown } from '../../../utils/markdown.js';
+import { PLAN_START_TAG, PLAN_END_TAG } from '../../../constants/planTags.js';
 
 const { createElement: h } = React;
-
-const PLAN_START_TAG = '<start-plan>';
-const PLAN_END_TAG = '<end-plan>';
 
 function extractPlanContent(text?: string | null): string | null {
   if (!text) {

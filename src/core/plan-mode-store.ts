@@ -216,14 +216,23 @@ interface DiffOperation {
   value: string;
 }
 
+/**
+ * Computes the ordered list of diff operations between two string arrays by
+ * running a classic Longest Common Subsequence dynamic programming pass.
+ * The resulting operations feed the diff hunk builder above so we can
+ * persist human-friendly plan change previews alongside each plan.
+ */
 function buildDiffOperations(previous: string[], next: string[]): DiffOperation[] {
   const rows = previous.length;
   const cols = next.length;
   const matrix: number[][] = Array.from({ length: rows + 1 }, () => Array(cols + 1).fill(0));
 
   for (let i = 1; i <= rows; i++) {
-    const currentRow = matrix[i]!;
-    const prevRow = matrix[i - 1]!;
+    const currentRow = matrix[i];
+    const prevRow = matrix[i - 1];
+    if (!currentRow || !prevRow) {
+      continue;
+    }
     for (let j = 1; j <= cols; j++) {
       if (previous[i - 1] === next[j - 1]) {
         currentRow[j] = (prevRow[j - 1] ?? 0) + 1;
@@ -239,8 +248,11 @@ function buildDiffOperations(previous: string[], next: string[]): DiffOperation[
   let i = rows;
   let j = cols;
   while (i > 0 && j > 0) {
-    const prevRow = matrix[i - 1]!;
-    const currentRow = matrix[i]!;
+    const prevRow = matrix[i - 1];
+    const currentRow = matrix[i];
+    if (!prevRow || !currentRow) {
+      break;
+    }
     const previousLine = previous[i - 1] ?? '';
     const nextLine = next[j - 1] ?? '';
     if (previousLine === nextLine) {
@@ -293,7 +305,7 @@ function createDiffSnapshot(oldValue: string, newValue: string, updatedBy: 'user
     if (!currentHunk || contextBuffer.length === 0) {
       return;
     }
-    contextBuffer.forEach((line) => currentHunk!.lines.push(line));
+    contextBuffer.forEach((line) => currentHunk.lines.push(line));
     contextBuffer.length = 0;
   };
 

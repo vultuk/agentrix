@@ -26,6 +26,8 @@ export interface PlanUpdateInput extends PlanIdentifyInput {
 
 export type PlanDeleteInput = PlanIdentifyInput;
 
+const PLAN_STATUS_VALUES: readonly PlanStatus[] = ['draft', 'updated', 'ready', 'building'] as const;
+
 function ensureRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object') {
     throw new Error('Invalid request payload');
@@ -102,8 +104,7 @@ export function validatePlanUpdateInput(payload: unknown): PlanUpdateInput {
   }
   if ('status' in record) {
     const status = record['status'];
-    const allowed: PlanStatus[] = ['draft', 'updated', 'ready', 'building'];
-    if (typeof status !== 'string' || !allowed.includes(status as PlanStatus)) {
+    if (typeof status !== 'string' || !PLAN_STATUS_VALUES.includes(status as PlanStatus)) {
       throw new Error('status must be a valid plan status');
     }
     update.status = status as PlanStatus;

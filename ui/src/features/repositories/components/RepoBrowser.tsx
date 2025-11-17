@@ -38,8 +38,7 @@ import * as planModeService from '../../../services/api/planModeService.js';
 import * as reposService from '../../../services/api/reposService.js';
 import type { PlanDetail, PlanSummary, PlanStatus } from '../../../types/plan-mode.js';
 import { usePlanCodexSession } from '../../plans/hooks/usePlanCodexSession.js';
-const PLAN_START_TAG = '<start-plan>';
-const PLAN_END_TAG = '<end-plan>';
+import { PLAN_START_TAG, PLAN_END_TAG } from '../../../constants/planTags.js';
 
 const { createElement: h } = React;
 const CODEX_SDK_TAB_PREFIX = 'codex-sdk:';
@@ -99,6 +98,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     sessionId: activePlan?.codexSessionId ?? null,
     onAuthExpired: notifyAuthExpired,
   });
+  const planChatSendMessage = planChat.sendMessage;
   const lastPlanUpdateEventRef = useRef<string | null>(null);
   
   // Mobile menu ref
@@ -189,15 +189,24 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
         setSelectedTabId(tabId);
         setActiveCodexSessionId(summary.id);
         if (options?.initialMessage) {
-          setTimeout(() => {
-            void (async () => {
+          void (async () => {
+            const maxAttempts = 10;
+            const retryDelayMs = 500;
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
               try {
                 await sendCodexMessage(summary.id, options.initialMessage);
-              } catch (error) {
-                console.warn('[plan-mode] Failed to send initial Codex message:', error);
+                return;
+              } catch (error: any) {
+                const message = typeof error?.message === 'string' ? error.message : '';
+                const canRetry = /not connected/i.test(message) || /connecting/i.test(message);
+                if (!canRetry || attempt === maxAttempts - 1) {
+                  console.warn('[plan-mode] Failed to send initial Codex message:', error);
+                  return;
+                }
+                await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
               }
-            })();
-          }, 500);
+            }
+          })();
         }
       }
       return summary;
@@ -347,16 +356,20 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     if (!activePlanContext) {
       return;
     }
-    const latestPlanEvent = [...planChat.events]
-      .reverse()
-      .find(
-        (event) =>
-          event &&
-          event.type === 'agent_response' &&
-          typeof event.text === 'string' &&
-          event.text.includes(PLAN_START_TAG) &&
-          event.text.includes(PLAN_END_TAG),
-      );
+    let latestPlanEvent: (typeof planChat.events)[number] | undefined;
+    for (let index = planChat.events.length - 1; index >= 0; index--) {
+      const event = planChat.events[index];
+      if (
+        event &&
+        event.type === 'agent_response' &&
+        typeof event.text === 'string' &&
+        event.text.includes(PLAN_START_TAG) &&
+        event.text.includes(PLAN_END_TAG)
+      ) {
+        latestPlanEvent = event;
+        break;
+      }
+    }
     if (!latestPlanEvent) {
       return;
     }
@@ -601,7 +614,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
       setActiveRepoDashboard(null);
       menus.setIsMobileMenuOpen(false);
     },
-    [dashboard, menus, setActiveWorktree],
+    [menus, setActivePlanContext, setActiveRepoDashboard, setActiveWorktree],
   );
 
   const handleRequestPlanDelete = useCallback(() => {
@@ -760,13 +773,13 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
         trimmed,
       ].join('\n\n');
       try {
-        await planChat.sendMessage(message);
+        await planChatSendMessage(message);
       } catch (error) {
         console.error('[plan-mode] Failed to send plan feedback to Codex:', error);
         window.alert('Failed to send message to Codex. Check the server logs for details.');
       }
     },
-    [activePlan, activePlanContext, planChat.sendMessage],
+    [activePlan, activePlanContext, planChatSendMessage],
   );
 
   const handleOpenPlanComposer = useCallback(

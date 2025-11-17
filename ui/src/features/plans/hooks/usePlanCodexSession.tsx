@@ -135,7 +135,17 @@ export function usePlanCodexSession({ sessionId, onAuthExpired }: UsePlanCodexSe
     async (text: string) => {
       const socket = socketRef.current;
       if (!socket || socket.readyState !== WebSocket.OPEN) {
-        throw new Error('Codex session is not connected');
+        const errorByState: Record<ConnectionState, string> = {
+          idle: 'Codex session is still initialising. Please wait a moment and try again.',
+          connecting: 'Codex session is still connecting. Please wait for it to finish initialising.',
+          connected: 'Codex session has not fully opened yet. Please retry in a moment.',
+          disconnected: 'Codex session has disconnected. Please reopen the session before sending messages.',
+        };
+        const friendlyMessage =
+          socket?.readyState === WebSocket.CONNECTING
+            ? 'Codex session is establishing a connection. Try again shortly.'
+            : errorByState[connectionState];
+        throw new Error(friendlyMessage);
       }
       const trimmed = typeof text === 'string' ? text.trim() : '';
       if (!trimmed) {
@@ -145,7 +155,7 @@ export function usePlanCodexSession({ sessionId, onAuthExpired }: UsePlanCodexSe
       setLastError(null);
       socket.send(JSON.stringify({ type: 'message', text: trimmed }));
     },
-    [],
+    [connectionState],
   );
 
   return {

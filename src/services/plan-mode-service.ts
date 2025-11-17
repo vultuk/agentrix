@@ -17,9 +17,7 @@ import {
   subscribeToCodexSdkEvents,
 } from '../core/codex-sdk-sessions.js';
 import { NotFoundError } from '../infrastructure/errors/not-found-error.js';
-
-const PLAN_START_TAG = '<start-plan>';
-const PLAN_END_TAG = '<end-plan>';
+import { PLAN_START_TAG, PLAN_END_TAG } from '../constants/plan-tags.js';
 
 interface PlanModeServiceConfig {
   workdir: string;
@@ -77,6 +75,7 @@ export class PlanModeService {
   private readonly defaultBranchConfig?: unknown;
   private readonly worktreeService: WorktreeService;
   private readonly sessionSubscriptions = new Map<string, () => void>();
+  private readonly planUpdateQueue = new Map<string, Promise<void>>();
 
   constructor({ workdir, defaultBranches, worktreeService }: PlanModeServiceConfig) {
     this.workdir = workdir;
@@ -189,7 +188,9 @@ export class PlanModeService {
       throw new NotFoundError('Plan');
     }
     if (plan.status !== 'ready' && plan.status !== 'draft') {
-      throw new Error('Plan is not ready to build');
+      throw new Error(
+        "Plan must be reviewed and marked as a draft or explicitly marked 'ready' before it can be built.",
+      );
     }
     const branch = await this.generateWorktreeBranch(plan);
     const locked = await updatePlan(
@@ -247,7 +248,7 @@ export class PlanModeService {
     }
   }
 
-  private handlePlanUpdateError(error: unknown): never {
+  private handlePlanUpdateError(error: unknown): void {
     if (error instanceof Error && /Plan not found/i.test(error.message)) {
       throw new NotFoundError('Plan', error);
     }
@@ -266,12 +267,7 @@ export class PlanModeService {
           if (!markdown) {
             return;
           }
-          updatePlan(
-            { workdir: this.workdir, org: plan.org, repo: plan.repo, id: plan.id },
-            { markdown, updatedBy: 'codex' },
-          ).catch((error) => {
-            console.warn('[agentrix] Failed to persist plan update from Codex:', error);
-          });
+          this.enqueuePlanUpdateFromCodex(plan, markdown);
         }
       });
       this.sessionSubscriptions.set(sessionId, unsubscribe);
@@ -294,6 +290,29 @@ export class PlanModeService {
         // ignore unsubscribe errors
       }
     }
+  }
+
+  private enqueuePlanUpdateFromCodex(plan: PlanRecord, markdown: string): void {
+    const key = `${plan.org}/${plan.repo}/${plan.id}`;
+    const previous = this.planUpdateQueue.get(key) ?? Promise.resolve();
+    const run = async () => {
+      await updatePlan(
+        { workdir: this.workdir, org: plan.org, repo: plan.repo, id: plan.id },
+        { markdown, updatedBy: 'codex' },
+      );
+    };
+    const next = previous
+      .catch(() => {})
+      .then(run)
+      .catch((error) => {
+        console.warn('[agentrix] Failed to persist plan update from Codex:', error);
+      })
+      .finally(() => {
+        if (this.planUpdateQueue.get(key) === next) {
+          this.planUpdateQueue.delete(key);
+        }
+      });
+    this.planUpdateQueue.set(key, next);
   }
 
   private async recreatePlanSession(plan: PlanRecord): Promise<void> {

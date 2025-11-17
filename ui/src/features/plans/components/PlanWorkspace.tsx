@@ -80,7 +80,7 @@ export default function PlanWorkspace({
       return '';
     }
     return renderMarkdown(plan.markdown || '');
-  }, [plan?.markdown]);
+  }, [plan]);
 
   const handleStartEdit = () => {
     if (!plan) {

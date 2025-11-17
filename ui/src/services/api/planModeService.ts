@@ -103,7 +103,11 @@ export async function ensurePlanSession(org: string, repo: string, id: string): 
   return response.data;
 }
 
-export async function buildPlan(org: string, repo: string, id: string): Promise<PlanBuildResponse['data']> {
+export async function buildPlan(
+  org: string,
+  repo: string,
+  id: string,
+): Promise<{ plan: PlanSummary; taskId: string } | null> {
   const params = new URLSearchParams({ org, repo });
   const response = await apiPost<PlanBuildResponse>(
     `/api/plan-mode/plans/${encodeURIComponent(id)}/build?${params.toString()}`,
