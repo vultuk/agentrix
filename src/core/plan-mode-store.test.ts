@@ -76,7 +76,7 @@ describe('plan-mode-store', () => {
     );
     assert.equal(updated.status, 'updated');
     assert.ok(updated.lastChange);
-    assert.equal(updated.lastChange?.hunks.length ?? 0 > 0, true);
+    assert.ok((updated.lastChange?.hunks.length ?? 0) > 0);
     const firstHunk = updated.lastChange?.hunks[0];
     assert.ok(firstHunk);
     const hasAddition = firstHunk?.lines.some((line) => line.type === 'added' && line.text.includes('step two'));
