@@ -33,6 +33,12 @@ import { closeTerminal } from '../../../services/api/terminalService.js';
 import type { Worktree } from '../../../types/domain.js';
 import { useCodexSdkChat } from '../../codex-sdk/hooks/useCodexSdkChat.js';
 import CodexSdkChatPanel from '../../codex-sdk/components/CodexSdkChatPanel.js';
+import { isAuthenticationError } from '../../../services/api/api-client.js';
+import * as planModeService from '../../../services/api/planModeService.js';
+import * as reposService from '../../../services/api/reposService.js';
+import type { PlanDetail, PlanSummary, PlanStatus } from '../../../types/plan-mode.js';
+import { usePlanCodexSession } from '../../plans/hooks/usePlanCodexSession.js';
+import { PLAN_START_TAG, PLAN_END_TAG } from '../../../constants/planTags.js';
 
 const { createElement: h } = React;
 const CODEX_SDK_TAB_PREFIX = 'codex-sdk:';
@@ -72,8 +78,28 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   } = browserState;
   
   const pendingTaskProcessorRef = useRef<((task: any, pending: any) => void) | null>(null);
+  const fetchedPlanReposRef = useRef<Set<string>>(new Set());
   const [pendingSessionContext, setPendingSessionContext] = useState<'default' | 'new-tab'>('default');
   const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
+  const [plansByRepo, setPlansByRepo] = useState<Record<string, PlanSummary[]>>({});
+  const [activePlanContext, setActivePlanContext] = useState<{ org: string; repo: string; id: string } | null>(null);
+  const [activePlan, setActivePlan] = useState<PlanDetail | null>(null);
+  const [planWorkspaceError, setPlanWorkspaceError] = useState<string | null>(null);
+  const [isPlanWorkspaceLoading, setIsPlanWorkspaceLoading] = useState(false);
+  const [isPlanBuildPending, setIsPlanBuildPending] = useState(false);
+  const [isDeletingPlan, setIsDeletingPlan] = useState(false);
+  const [isSubmittingPlanComposer, setIsSubmittingPlanComposer] = useState(false);
+  const notifyAuthExpired = useCallback(() => {
+    if (typeof onAuthExpired === 'function') {
+      onAuthExpired();
+    }
+  }, [onAuthExpired]);
+  const planChat = usePlanCodexSession({
+    sessionId: activePlan?.codexSessionId ?? null,
+    onAuthExpired: notifyAuthExpired,
+  });
+  const planChatSendMessage = planChat.sendMessage;
+  const lastPlanUpdateEventRef = useRef<string | null>(null);
   
   // Mobile menu ref
   const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -97,6 +123,19 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   
   // Use dashboard hook first (needed by repo data hook)
   const dashboard = useDashboard({ onAuthExpired });
+  const {
+    activeRepoDashboard,
+    setActiveRepoDashboard,
+    dashboardData,
+    dashboardError,
+    isDashboardLoading,
+    clearDashboardPolling,
+    dashboardCacheRef,
+    setDashboardData,
+    setDashboardError,
+    setIsDashboardLoading,
+    refreshDashboard,
+  } = dashboard;
   
   // Use repository data hook
   const repoData = useRepositoryData({
@@ -105,7 +144,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     sessionMapRef: terminal.sessionMapRef,
     sessionKeyByIdRef: terminal.sessionKeyByIdRef,
     isRealtimeConnected,
-    setActiveRepoDashboard: dashboard.setActiveRepoDashboard,
+    setActiveRepoDashboard,
   });
   const data = repoData.data;
   const activeWorktree = repoData.activeWorktree;
@@ -139,7 +178,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     setActiveSessionId: setActiveCodexSessionId,
   } = codexChat;
   const launchCodexSessionForWorktree = useCallback(
-    async (worktree: Worktree | null) => {
+    async (worktree: Worktree | null, options?: { initialMessage?: string }) => {
       if (!worktree) {
         return null;
       }
@@ -149,10 +188,30 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
         const tabId = getCodexTabId(summary.id);
         setSelectedTabId(tabId);
         setActiveCodexSessionId(summary.id);
+        if (options?.initialMessage) {
+          void (async () => {
+            const maxAttempts = 10;
+            const retryDelayMs = 500;
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+              try {
+                await sendCodexMessage(summary.id, options.initialMessage);
+                return;
+              } catch (error: any) {
+                const message = typeof error?.message === 'string' ? error.message : '';
+                const canRetry = /not connected/i.test(message) || /connecting/i.test(message);
+                if (!canRetry || attempt === maxAttempts - 1) {
+                  console.warn('[plan-mode] Failed to send initial Codex message:', error);
+                  return;
+                }
+                await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+              }
+            }
+          })();
+        }
       }
       return summary;
     },
-    [createCodexSessionForWorktree, setActiveCodexSessionId, setActiveWorktree, setSelectedTabId],
+    [createCodexSessionForWorktree, sendCodexMessage, setActiveCodexSessionId, setActiveWorktree, setSelectedTabId],
   );
   
   // Use command config hook
@@ -172,6 +231,26 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   
   // Use plan management hook
   const planMgmt = usePlanManagement({ onAuthExpired });
+  const refreshPlansForRepo = useCallback(
+    async (org: string, repo: string) => {
+      if (!org || !repo) {
+        return;
+      }
+      try {
+        const plans = await planModeService.listPlans(org, repo);
+        const key = `${org}/${repo}`;
+        setPlansByRepo((prev) => ({ ...prev, [key]: plans }));
+        fetchedPlanReposRef.current.add(key);
+      } catch (error: any) {
+        if (isAuthenticationError(error)) {
+          notifyAuthExpired();
+          return;
+        }
+        console.error('[plan-mode] Failed to load plans', error);
+      }
+    },
+    [notifyAuthExpired],
+  );
   
   // Use diff management hook
   const {
@@ -204,13 +283,151 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
       }
     }
   }, [codexSessions, selectedTabId, setActiveCodexSessionId]);
-  
-  const activeRepoDashboard = dashboard.activeRepoDashboard;
-  const setActiveRepoDashboard = dashboard.setActiveRepoDashboard;
-  const dashboardData = dashboard.dashboardData;
-  const dashboardError = dashboard.dashboardError;
-  const isDashboardLoading = dashboard.isDashboardLoading;
-  const clearDashboardPolling = dashboard.clearDashboardPolling;
+  useEffect(() => {
+    if (!activePlanContext) {
+      setActivePlan(null);
+      setPlanWorkspaceError(null);
+      setIsPlanWorkspaceLoading(false);
+      return;
+    }
+    lastPlanUpdateEventRef.current = null;
+    let cancelled = false;
+    setIsPlanWorkspaceLoading(true);
+    setPlanWorkspaceError(null);
+    const { org, repo, id } = activePlanContext;
+    const loadPlan = async () => {
+      try {
+        const detail = await planModeService.fetchPlan(org, repo, id);
+        if (cancelled) {
+          return;
+        }
+        setActivePlan(detail);
+        setPlanWorkspaceError(null);
+        setIsPlanWorkspaceLoading(false);
+      } catch (error: any) {
+        if (isAuthenticationError(error)) {
+          notifyAuthExpired();
+          return;
+        }
+        if (cancelled) {
+          return;
+        }
+        setPlanWorkspaceError(error?.message || 'Failed to load plan');
+        setIsPlanWorkspaceLoading(false);
+      }
+    };
+    void loadPlan();
+    return () => {
+      cancelled = true;
+    };
+  }, [activePlanContext, notifyAuthExpired]);
+  useEffect(() => {
+    if (!activePlanContext || !activePlan || activePlan.codexSessionId) {
+      return;
+    }
+    const { org, repo, id } = activePlanContext;
+    let cancelled = false;
+    const ensureSession = async () => {
+      try {
+        const detail = await planModeService.ensurePlanSession(org, repo, id);
+        if (cancelled) {
+          return;
+        }
+        setActivePlan(detail);
+        await refreshPlansForRepo(org, repo);
+      } catch (error: any) {
+        if (isAuthenticationError(error)) {
+          notifyAuthExpired();
+          return;
+        }
+        if (cancelled) {
+          return;
+        }
+        console.error('[plan-mode] Failed to start plan session', error);
+      }
+    };
+    void ensureSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [activePlan, activePlanContext, notifyAuthExpired, refreshPlansForRepo]);
+
+  useEffect(() => {
+    if (!activePlanContext) {
+      return;
+    }
+    let latestPlanEvent: (typeof planChat.events)[number] | undefined;
+    for (let index = planChat.events.length - 1; index >= 0; index--) {
+      const event = planChat.events[index];
+      if (
+        event &&
+        event.type === 'agent_response' &&
+        typeof event.text === 'string' &&
+        event.text.includes(PLAN_START_TAG) &&
+        event.text.includes(PLAN_END_TAG)
+      ) {
+        latestPlanEvent = event;
+        break;
+      }
+    }
+    if (!latestPlanEvent) {
+      return;
+    }
+    const identifier = latestPlanEvent.id || `${latestPlanEvent.timestamp}-${planChat.events.length}`;
+    if (lastPlanUpdateEventRef.current === identifier) {
+      return;
+    }
+    lastPlanUpdateEventRef.current = identifier;
+    const { org, repo, id } = activePlanContext;
+    void (async () => {
+      try {
+        const detail = await planModeService.fetchPlan(org, repo, id);
+        setActivePlan(detail);
+        await refreshPlansForRepo(org, repo);
+      } catch (error: any) {
+        if (isAuthenticationError(error)) {
+          notifyAuthExpired();
+          return;
+        }
+        console.warn('[plan-mode] Failed to refresh plan after Codex update:', error);
+      }
+    })();
+  }, [activePlanContext, notifyAuthExpired, planChat.events, refreshPlansForRepo]);
+  useEffect(() => {
+    if ((activeWorktree || activeRepoDashboard) && activePlanContext) {
+      setActivePlanContext(null);
+      setActivePlan(null);
+      setPlanWorkspaceError(null);
+    }
+  }, [activePlanContext, activeRepoDashboard, activeWorktree]);
+  useEffect(() => {
+    const repoKeys: string[] = [];
+    Object.entries(data).forEach(([org, repos]) => {
+      Object.keys(repos || {}).forEach((repo) => {
+        repoKeys.push(`${org}/${repo}`);
+      });
+    });
+    setPlansByRepo((current) => {
+      const next = { ...current };
+      Object.keys(next).forEach((key) => {
+        if (!repoKeys.includes(key)) {
+          delete next[key];
+          fetchedPlanReposRef.current.delete(key);
+        }
+      });
+      return next;
+    });
+    repoKeys.forEach((key) => {
+      if (fetchedPlanReposRef.current.has(key)) {
+        return;
+      }
+      fetchedPlanReposRef.current.add(key);
+      const [org, repo] = key.split('/');
+      if (org && repo) {
+        void refreshPlansForRepo(org, repo);
+      }
+    });
+  }, [data, refreshPlansForRepo]);
   
   const tasks = taskMgmt.tasks;
   const pendingLaunchesRef = taskMgmt.pendingLaunchesRef;
@@ -309,12 +526,6 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     activeWorktreeRef.current = activeWorktree;
   }, [activeWorktree]);
 
-  const notifyAuthExpired = useCallback(() => {
-    if (typeof onAuthExpired === 'function') {
-      onAuthExpired();
-    }
-  }, [onAuthExpired]);
-
   const createPlanFromPrompt = useCallback(
     async (
       promptValue: string,
@@ -335,47 +546,290 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   );
 
   const openIssuePlanModal = useCallback(
-    (issue: any, repoInfo: { org: string; repo: string }) => {
+    async (issue: any, repoInfo: { org: string; repo: string }) => {
       if (!issue || !repoInfo) {
         return;
       }
       const { org, repo } = repoInfo;
-      const issueNumberValue =
-        typeof issue?.number === 'number'
-          ? issue.number
-          : Number.parseInt(issue?.number, 10);
-      if (!org || !repo || Number.isNaN(issueNumberValue)) {
+      if (!org || !repo) {
         return;
       }
-      const promptValue = ISSUE_PLAN_PROMPT_TEMPLATE.replace(
-        /<ISSUE_NUMBER>/g,
-        String(issueNumberValue),
-      );
-      modals.setSelectedRepo([org, repo]);
-      modals.setPromptText(promptValue);
-      modals.setPromptInputMode('edit');
-      modals.setShowPromptWorktreeModal(true);
+
+      let issueDetails = issue;
+      let body = typeof issue?.body === 'string' ? issue.body : '';
+
+      if (!body?.trim() && typeof issue?.number === 'number') {
+        try {
+          const fetched = await reposService.fetchIssue(org, repo, issue.number);
+          if (fetched?.issue && typeof fetched.issue === 'object') {
+            issueDetails = fetched.issue;
+            if (typeof fetched.issue['body'] === 'string') {
+              body = fetched.issue['body'];
+            }
+          }
+        } catch (error) {
+          console.warn('[plan-mode] Failed to load issue body for Create Plan:', error);
+        }
+      }
+
+      const title =
+        typeof issueDetails?.title === 'string' && issueDetails.title.trim().length > 0
+          ? issueDetails.title.trim()
+          : `Issue #${issueDetails?.number ?? ''}`.trim();
+      const markdown = body && body.trim().length > 0 ? body : title;
+
       menus.setIsMobileMenuOpen(false);
-      const schedule =
-        typeof queueMicrotask === 'function'
-          ? queueMicrotask
-          : (callback: () => void) => {
-              setTimeout(callback, 0);
-            };
-      schedule(() => {
-        void createPlanFromPrompt(promptValue, org, repo, {
-          restorePromptOnError: true,
-          rawPrompt: true,
-          dangerousMode: true,
+      try {
+        const detail = await planModeService.createPlan({
+          org,
+          repo,
+          title: title || 'New Plan',
+          markdown,
+          description: body?.trim() || undefined,
+          issueNumber: typeof issue?.number === 'number' ? issue.number : undefined,
+          issueUrl: typeof issue?.url === 'string' ? issue.url : undefined,
         });
-      });
+        setActivePlanContext({ org, repo, id: detail.id });
+        setActivePlan(detail);
+        await refreshPlansForRepo(org, repo);
+      } catch (error: any) {
+        if (isAuthenticationError(error)) {
+          notifyAuthExpired();
+          return;
+        }
+        console.error('[plan-mode] Failed to create plan from issue', error);
+        window.alert('Failed to create plan from issue. Check server logs for details.');
+      }
     },
-    [
-      modals,
-      menus,
-      createPlanFromPrompt,
-    ],
+    [menus, notifyAuthExpired, refreshPlansForRepo],
   );
+
+  const handleSelectPlanEntry = useCallback(
+    (org: string, repo: string, planId: string) => {
+      if (!org || !repo || !planId) {
+        return;
+      }
+      setActivePlanContext({ org, repo, id: planId });
+      setActiveWorktree(null);
+      setActiveRepoDashboard(null);
+      menus.setIsMobileMenuOpen(false);
+    },
+    [menus, setActivePlanContext, setActiveRepoDashboard, setActiveWorktree],
+  );
+
+  const handleRequestPlanDelete = useCallback(() => {
+    if (!activePlan) {
+      return;
+    }
+    modals.openPlanDeleteModal(activePlan.title);
+  }, [activePlan, modals]);
+
+  const persistPlanUpdate = useCallback(
+    async (update: { markdown?: string; status?: PlanStatus }) => {
+      if (!activePlanContext) {
+        return null;
+      }
+      const { org, repo, id } = activePlanContext;
+      try {
+        let detail: PlanDetail | null = null;
+        if (typeof update.markdown === 'string') {
+          detail = await planModeService.updatePlanMarkdown(org, repo, id, update.markdown);
+        }
+        if (update.status) {
+          detail = await planModeService.updatePlanStatus(org, repo, id, update.status);
+        }
+        if (detail) {
+          setActivePlan(detail);
+          await refreshPlansForRepo(org, repo);
+        }
+        return detail;
+      } catch (error: any) {
+        if (isAuthenticationError(error)) {
+          notifyAuthExpired();
+          return null;
+        }
+        console.error('[plan-mode] Failed to update plan', error);
+        throw error;
+      }
+    },
+    [activePlanContext, notifyAuthExpired, refreshPlansForRepo],
+  );
+
+  const handleSavePlanMarkdown = useCallback(
+    async (markdown: string) => {
+      try {
+        await persistPlanUpdate({ markdown });
+        setPlanWorkspaceError(null);
+      } catch (error: any) {
+        setPlanWorkspaceError(error?.message || 'Failed to update plan');
+      }
+    },
+    [persistPlanUpdate],
+  );
+
+  const handleMarkPlanReady = useCallback(async () => {
+    try {
+      await persistPlanUpdate({ status: 'ready' });
+      setPlanWorkspaceError(null);
+    } catch (error: any) {
+      setPlanWorkspaceError(error?.message || 'Failed to update plan');
+    }
+  }, [persistPlanUpdate]);
+
+  const buildExecutionMessage = useCallback(
+    (org: string, repo: string, branch: string | null, plan: PlanDetail) => {
+      const scopeLine = branch
+        ? `You are working in ${org}/${repo} on branch ${branch}.`
+        : `You are working in ${org}/${repo}.`;
+      return [
+        scopeLine,
+        'Implement the approved plan exactly as written below. Do not restate the plan; start executing the steps.',
+        '',
+        plan.markdown,
+      ].join('\n');
+    },
+    [],
+  );
+
+  const handlePlanBuild = useCallback(async () => {
+    if (!activePlanContext || !activePlan) {
+      return;
+    }
+    const { org, repo, id } = activePlanContext;
+    setIsPlanBuildPending(true);
+    try {
+      const result = await planModeService.buildPlan(org, repo, id);
+      if (result?.taskId) {
+        pendingLaunchesRef.current.set(result.taskId, {
+          kind: 'plan-build',
+          org,
+          repo,
+          requestedBranch: result.plan?.worktreeBranch || '',
+          launchOption: 'codex_sdk',
+          planInstructions: buildExecutionMessage(org, repo, result.plan?.worktreeBranch || null, activePlan),
+        });
+      }
+      await refreshPlansForRepo(org, repo);
+      setActivePlanContext(null);
+      setActivePlan(null);
+    } catch (error: any) {
+      if (isAuthenticationError(error)) {
+        notifyAuthExpired();
+      } else {
+        setPlanWorkspaceError(error?.message || 'Failed to start build');
+      }
+    } finally {
+      setIsPlanBuildPending(false);
+    }
+  }, [
+    activePlan,
+    activePlanContext,
+    buildExecutionMessage,
+    notifyAuthExpired,
+    pendingLaunchesRef,
+    refreshPlansForRepo,
+  ]);
+
+  const handleConfirmPlanDelete = useCallback(async () => {
+    if (!activePlanContext) {
+      return;
+    }
+    const { org, repo, id } = activePlanContext;
+    setIsDeletingPlan(true);
+    try {
+      await planModeService.deletePlan(org, repo, id);
+      setActivePlanContext(null);
+      setActivePlan(null);
+      modals.closePlanDeleteModal();
+      await refreshPlansForRepo(org, repo);
+    } catch (error: any) {
+      if (isAuthenticationError(error)) {
+        notifyAuthExpired();
+      } else {
+        console.error('[plan-mode] Failed to delete plan', error);
+        window.alert(error?.message || 'Failed to delete plan. Check server logs.');
+      }
+    } finally {
+      setIsDeletingPlan(false);
+    }
+  }, [activePlanContext, modals, notifyAuthExpired, refreshPlansForRepo]);
+
+  const handleSendPlanMessage = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        return;
+      }
+      if (!activePlanContext || !activePlan) {
+        window.alert('Open a plan before sending feedback to the agent.');
+        return;
+      }
+      const { org, repo } = activePlanContext;
+      const message = [
+        `You are updating the existing plan for ${org}/${repo} titled "${activePlan.title}".`,
+        `Rewrite the entire plan strictly between ${PLAN_START_TAG} and ${PLAN_END_TAG}, preserving the canonical sections: Overview, Scope & Constraints, Implementation Plan (with subsystem subsections), Testing & Validation, Risks & Mitigations table, and the Done Checklist.`,
+        'Incorporate the user feedback below and respond with the refreshed plan only (no commentary outside the tags).',
+        'User feedback:',
+        trimmed,
+      ].join('\n\n');
+      try {
+        await planChatSendMessage(message);
+      } catch (error) {
+        console.error('[plan-mode] Failed to send plan feedback to Codex:', error);
+        window.alert('Failed to send message to Codex. Check the server logs for details.');
+      }
+    },
+    [activePlan, activePlanContext, planChatSendMessage],
+  );
+
+  const handleOpenPlanComposer = useCallback(
+    (org: string, repo: string) => {
+      if (!org || !repo) {
+        return;
+      }
+      modals.openPlanComposerModal(org, repo);
+      menus.setIsMobileMenuOpen(false);
+    },
+    [menus, modals],
+  );
+
+  const handlePlanComposerFieldChange = useCallback(
+    (field: 'title' | 'body', value: string) => {
+      modals.setPlanComposerModal((current) => ({ ...current, [field]: value }));
+    },
+    [modals],
+  );
+
+  const handleSubmitPlanComposer = useCallback(async () => {
+    const modal = modals.planComposerModal;
+    if (!modal.org || !modal.repo) {
+      return;
+    }
+    const title = modal.title.trim() || 'New Plan';
+    const markdown = modal.body?.trim() ? modal.body : `# ${title}\n`;
+    setIsSubmittingPlanComposer(true);
+    try {
+      const detail = await planModeService.createPlan({
+        org: modal.org,
+        repo: modal.repo,
+        title,
+        markdown,
+        description: modal.body?.trim() || markdown,
+      });
+      setActivePlanContext({ org: modal.org, repo: modal.repo, id: detail.id });
+      setActivePlan(detail);
+      await refreshPlansForRepo(modal.org, modal.repo);
+      modals.closePlanComposerModal();
+    } catch (error: any) {
+      if (isAuthenticationError(error)) {
+        notifyAuthExpired();
+      } else {
+        window.alert(error?.message || 'Failed to create plan.');
+      }
+    } finally {
+      setIsSubmittingPlanComposer(false);
+    }
+  }, [modals, notifyAuthExpired, refreshPlansForRepo]);
 
   const handleClosePlanModal = useCallback(() => {
     modals.closePlanModal();
@@ -434,16 +888,16 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     activeWorktreeRef,
     clearDashboardPolling,
     setActiveRepoDashboard,
-    setDashboardError: dashboard.setDashboardError,
-    setIsDashboardLoading: dashboard.setIsDashboardLoading,
+    setDashboardError,
+    setIsDashboardLoading,
     setActiveWorktree,
     setPendingWorktreeAction,
     setIsMobileMenuOpen: menus.setIsMobileMenuOpen,
     closePromptModal: modals.closePromptModal,
     closeWorktreeModal: modals.closeWorktreeModal,
     pendingLaunchesRef,
-    startCodexSdkSession: async (worktree: Worktree) => {
-      await launchCodexSessionForWorktree(worktree);
+    startCodexSdkSession: async (worktree: Worktree, options?: { initialMessage?: string }) => {
+      await launchCodexSessionForWorktree(worktree, options);
     },
   });
   useEffect(() => {
@@ -482,14 +936,14 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     knownSessionsRef: sessions.knownSessionsRef,
     sessionMetadataRef: sessions.sessionMetadataRef,
     idleAcknowledgementsRef: sessions.idleAcknowledgementsRef,
-    dashboardCacheRef: dashboard.dashboardCacheRef,
-    clearDashboardPolling: dashboard.clearDashboardPolling,
+    dashboardCacheRef,
+    clearDashboardPolling,
     setPendingWorktreeAction,
     setActiveWorktree: repoData.setActiveWorktree,
-    setActiveRepoDashboard: dashboard.setActiveRepoDashboard,
-    setDashboardData: dashboard.setDashboardData,
-    setDashboardError: dashboard.setDashboardError,
-    setIsDashboardLoading: dashboard.setIsDashboardLoading,
+    setActiveRepoDashboard,
+    setDashboardData,
+    setDashboardError,
+    setIsDashboardLoading,
     setIdleAcknowledgementsSnapshot: sessions.setIdleAcknowledgementsSnapshot,
     setIsMobileMenuOpen: menus.setIsMobileMenuOpen,
     disposeSocket: terminal.disposeSocket,
@@ -832,7 +1286,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
         disposeSocket();
         disposeTerminal();
       }
-      dashboard.dashboardCacheRef.current.delete(`${org}::${repo}`);
+      dashboardCacheRef.current.delete(`${org}::${repo}`);
       if (
         activeRepoDashboard &&
         activeRepoDashboard.org === org &&
@@ -840,9 +1294,9 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
       ) {
         clearDashboardPolling();
         setActiveRepoDashboard(null);
-        dashboard.setDashboardData(null);
-        dashboard.setDashboardError(null);
-        dashboard.setIsDashboardLoading(false);
+        setDashboardData(null);
+        setDashboardError(null);
+        setIsDashboardLoading(false);
       }
       modals.setConfirmDeleteRepo(null);
     });
@@ -955,9 +1409,6 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     modals.setConfirmDelete(null);
   };
 
-  const setDashboardError = dashboard.setDashboardError;
-  const setIsDashboardLoading = dashboard.setIsDashboardLoading;
-
   const handleWorktreeAction = useCallback(async (action: string) => {
     if (!pendingWorktreeAction || pendingActionLoading) {
       return;
@@ -1047,8 +1498,8 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   ]);
 
   const handleDashboardRefresh = useCallback(() => {
-    dashboard.refreshDashboard();
-  }, [dashboard]);
+    refreshDashboard();
+  }, [refreshDashboard]);
 
   const showDangerousModeOption =
     modals.worktreeLaunchOption === 'codex' || modals.worktreeLaunchOption === 'claude';
@@ -1109,6 +1560,41 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   const planHistoryButton = actionButtons.planHistoryButton;
   const gitSidebarButton = actionButtons.gitSidebarButton;
   const portsMenuButton = actionButtons.portsMenuButton;
+
+  useEffect(() => {
+    if (!activeWorktree) {
+      return;
+    }
+    const worktreeKey = getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch);
+    const hasTerminalSessions =
+      sessionMapRef.current.has(worktreeKey) || knownSessionsRef.current.has(worktreeKey);
+    if (hasTerminalSessions) {
+      return;
+    }
+    if (!codexSessions.length) {
+      return;
+    }
+    const firstSession = codexSessions[0];
+    if (!firstSession) {
+      return;
+    }
+    const tabId = getCodexTabId(firstSession.id);
+    if (selectedTabId === tabId && activeCodexSessionId === firstSession.id) {
+      return;
+    }
+    setSelectedTabId(tabId);
+    setActiveCodexSessionId(firstSession.id);
+  }, [
+    activeCodexSessionId,
+    activeWorktree,
+    codexSessions,
+    getWorktreeKey,
+    knownSessionsRef,
+    selectedTabId,
+    sessionMapRef,
+    setActiveCodexSessionId,
+    setSelectedTabId,
+  ]);
 
   const acknowledgeIdleSession = useCallback((org: string, repo: string, branch: string) => {
     const key = getWorktreeKey(org, repo, branch);
@@ -1178,11 +1664,31 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     onShowRepoDashboard: showRepoDashboard,
     onAddRepository: () => modals.setShowAddRepoModal(true),
     logoutButton,
+    plansByRepo,
+    activePlanId: activePlanContext?.id || null,
+    onSelectPlan: handleSelectPlanEntry,
+    onCreatePlan: handleOpenPlanComposer,
   });
 
   const mainPane = h(MainPane, {
     activeWorktree,
     activeRepoDashboard,
+    activePlan,
+    isPlanWorkspaceLoading,
+    planWorkspaceError,
+    onDeletePlan: handleRequestPlanDelete,
+    onSavePlan: handleSavePlanMarkdown,
+    onMarkPlanReady: handleMarkPlanReady,
+    onBuildPlan: handlePlanBuild,
+    isPlanBuildPending,
+    planChatState: {
+      events: planChat.events,
+      isSending: planChat.isSending,
+      connectionState: planChat.connectionState,
+      session: planChat.session,
+      lastError: planChat.lastError,
+      onSend: handleSendPlanMessage,
+    },
     dashboardData,
     isDashboardLoading,
     dashboardError,
@@ -1256,6 +1762,17 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
       planModal: modals.planModal,
       onClosePlanModal: handleClosePlanModal,
       onSelectPlan: handleSelectPlan,
+      
+      // Plan Composer Modal
+      planComposerModal: modals.planComposerModal,
+      onClosePlanComposer: modals.closePlanComposerModal,
+      onPlanComposerFieldChange: handlePlanComposerFieldChange,
+      onSubmitPlanComposer: handleSubmitPlanComposer,
+      isSubmittingPlanComposer,
+      planDeleteModal: modals.planDeleteModal,
+      onClosePlanDeleteModal: modals.closePlanDeleteModal,
+      onConfirmPlanDelete: handleConfirmPlanDelete,
+      isDeletingPlan,
       
       // Prompt Worktree Modal
       showPromptWorktreeModal: modals.showPromptWorktreeModal,

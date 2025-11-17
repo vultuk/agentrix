@@ -3,8 +3,51 @@ import { ChevronDown } from 'lucide-react';
 import { renderSpinner } from '../../../components/Spinner.js';
 import type { CodexSdkEvent, CodexSdkSessionMetadata } from '../../../types/codex-sdk.js';
 import { renderMarkdown } from '../../../utils/markdown.js';
+import { PLAN_START_TAG, PLAN_END_TAG } from '../../../constants/planTags.js';
 
 const { createElement: h } = React;
+
+function extractPlanContent(text?: string | null): string | null {
+  if (!text) {
+    return null;
+  }
+  const startIndex = text.indexOf(PLAN_START_TAG);
+  const endIndex = text.indexOf(PLAN_END_TAG);
+  if (startIndex === -1 || endIndex === -1 || endIndex <= startIndex) {
+    return null;
+  }
+  return text.slice(startIndex + PLAN_START_TAG.length, endIndex).trim();
+}
+
+function renderPlanPreview(planText: string, key: string) {
+  const snippet = planText
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+    .slice(0, 6)
+    .join('\n');
+  return h(
+    'div',
+    {
+      key,
+      className:
+        'rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-sm text-neutral-100 space-y-2',
+    },
+    h(
+      'div',
+      { className: 'text-xs font-semibold uppercase tracking-wide text-emerald-300' },
+      'Plan updated',
+    ),
+    h('div', {
+      className: 'text-xs leading-relaxed text-neutral-100 plan-chat-preview markdown-preview__content',
+      dangerouslySetInnerHTML: { __html: renderMarkdown(snippet || planText) },
+    }),
+    h(
+      'p',
+      { className: 'text-[11px] text-neutral-400' },
+      'Full plan refreshed in the left pane.',
+    ),
+  );
+}
 
 type ConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected';
 
@@ -53,6 +96,12 @@ function renderEvent(event: CodexSdkEvent, index: number) {
         event.message,
       );
     case 'agent_response':
+      {
+        const planContent = extractPlanContent(event.text);
+        if (planContent) {
+          return renderPlanPreview(planContent, key);
+        }
+      }
       return h(
         'div',
         { key, className: 'flex flex-col items-start text-left' },

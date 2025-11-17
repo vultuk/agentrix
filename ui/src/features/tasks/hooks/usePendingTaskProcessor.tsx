@@ -23,7 +23,7 @@ interface UsePendingTaskProcessorOptions {
   closePromptModal: () => void;
   closeWorktreeModal: () => void;
   pendingLaunchesRef?: MutableRefObject<Map<string, any>>;
-  startCodexSdkSession?: (worktree: Worktree) => Promise<void>;
+  startCodexSdkSession?: (worktree: Worktree, options?: { initialMessage?: string }) => Promise<void>;
 }
 
 export function usePendingTaskProcessor({
@@ -108,7 +108,6 @@ export function usePendingTaskProcessor({
       clearDashboardPolling();
       setDashboardError(null);
       setIsDashboardLoading(false);
-      setActiveWorktree(worktree);
 
       const worktreeKey = getWorktreeKey(worktree.org, worktree.repo, worktree.branch);
       const hasKnownSession =
@@ -123,7 +122,7 @@ export function usePendingTaskProcessor({
       const isCodexSdkLaunch = pending.launchOption === 'codex_sdk';
       const isAgentLaunch =
         pending.kind === 'prompt' ||
-        ['codex', 'claude', 'cursor'].includes(
+        ['codex', 'claude', 'cursor', 'codex_sdk'].includes(
           typeof pending.launchOption === 'string' ? pending.launchOption : '',
         );
       const sessionTool: 'terminal' | 'agent' = isAgentLaunch ? 'agent' : 'terminal';
@@ -139,7 +138,10 @@ export function usePendingTaskProcessor({
             });
           } else if (isCodexSdkLaunch) {
             if (typeof startCodexSdkSession === 'function') {
-              await startCodexSdkSession(worktree);
+              await startCodexSdkSession(
+                worktree,
+                pending.planInstructions ? { initialMessage: pending.planInstructions } : undefined,
+              );
             } else {
               console.error('Codex SDK chat is not available in this client.');
               setPendingWorktreeAction(worktree);
@@ -154,6 +156,7 @@ export function usePendingTaskProcessor({
           } else {
             await openTerminal(worktree, agentOptions);
           }
+          setActiveWorktree(worktree);
           setPendingWorktreeAction(null);
         } catch (error: any) {
           if (error && error.message === 'AUTH_REQUIRED') {

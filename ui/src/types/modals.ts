@@ -59,6 +59,34 @@ export interface PlanHistoryModalProps {
   onSelectPlan: (planId: string) => void;
 }
 
+export interface PlanComposerModalState {
+  open: boolean;
+  org: string | null;
+  repo: string | null;
+  title: string;
+  body: string;
+}
+
+export interface PlanComposerModalProps {
+  planComposerModal: PlanComposerModalState;
+  onClosePlanComposer: () => void;
+  onPlanComposerFieldChange: (field: 'title' | 'body', value: string) => void;
+  onSubmitPlanComposer: () => Promise<void>;
+  isSubmittingPlanComposer: boolean;
+}
+
+export interface PlanDeleteModalState {
+  open: boolean;
+  title: string | null;
+}
+
+export interface PlanDeleteModalProps {
+  planDeleteModal: PlanDeleteModalState;
+  onClosePlanDeleteModal: () => void;
+  onConfirmPlanDelete: () => Promise<void>;
+  isDeletingPlan: boolean;
+}
+
 // Prompt Worktree Modal
 export interface PromptWorktreeModalProps {
   showPromptWorktreeModal: boolean;
@@ -149,6 +177,8 @@ export interface ModalContainerProps
     EditRepoSettingsModalProps,
     GitDiffModalProps,
     PlanHistoryModalProps,
+    PlanComposerModalProps,
+    PlanDeleteModalProps,
     PromptWorktreeModalProps,
     CreateWorktreeModalProps,
     ConfirmDeleteWorktreeModalProps,

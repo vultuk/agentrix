@@ -2,6 +2,7 @@ import React, { Fragment } from 'react';
 import { Resizable } from 're-resizable';
 import RepositorySidebar from './RepositorySidebar.js';
 import type { Worktree, RepoDashboard } from '../../../types/domain.js';
+import type { PlanSummary } from '../../../types/plan-mode.js';
 
 const { createElement: h } = React;
 
@@ -32,6 +33,10 @@ interface SidebarProps {
   onShowRepoDashboard: (org: string, repo: string) => void;
   onAddRepository: () => void;
   logoutButton: React.ReactNode;
+  plansByRepo: Record<string, PlanSummary[]>;
+  activePlanId: string | null;
+  onSelectPlan: (org: string, repo: string, planId: string) => void;
+  onCreatePlan: (org: string, repo: string) => void;
 }
 
 export default function Sidebar({
@@ -56,6 +61,10 @@ export default function Sidebar({
   onShowRepoDashboard,
   onAddRepository,
   logoutButton,
+  plansByRepo,
+  activePlanId,
+  onSelectPlan,
+  onCreatePlan,
 }: SidebarProps) {
   const sidebarContent = h(RepositorySidebar, {
     data,
@@ -76,6 +85,10 @@ export default function Sidebar({
     onAddRepository,
     onCloseMobileMenu,
     logoutButton,
+    plansByRepo,
+    activePlanId,
+    onSelectPlan,
+    onCreatePlan,
   });
 
   const desktopSidebar = h(

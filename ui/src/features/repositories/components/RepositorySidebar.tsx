@@ -4,6 +4,7 @@ import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { ACTION_BUTTON_CLASS } from '../../../utils/constants.js';
 import { useTheme } from '../../../context/ThemeContext.js';
 import type { Worktree, RepoDashboard } from '../../../types/domain.js';
+import type { PlanSummary } from '../../../types/plan-mode.js';
 
 const { createElement: h } = React;
 
@@ -47,6 +48,10 @@ interface RepositorySidebarProps {
   onAddRepository: () => void;
   onCloseMobileMenu: () => void;
   logoutButton: React.ReactNode;
+  plansByRepo: Record<string, PlanSummary[]>;
+  activePlanId: string | null;
+  onSelectPlan: (org: string, repo: string, planId: string) => void;
+  onCreatePlan: (org: string, repo: string) => void;
 }
 
 export default function RepositorySidebar({
@@ -68,6 +73,10 @@ export default function RepositorySidebar({
   onAddRepository,
   onCloseMobileMenu,
   logoutButton,
+  plansByRepo,
+  activePlanId,
+  onSelectPlan,
+  onCreatePlan,
 }: RepositorySidebarProps) {
   const { mode, toggle: toggleTheme } = useTheme();
   const isLightMode = mode === 'light';
@@ -169,6 +178,8 @@ export default function RepositorySidebar({
                 const initCommand =
                   typeof repoInfo?.initCommand === 'string' ? repoInfo.initCommand : '';
                 const repoMenuKey = `repo-actions:${org}/${repo}`;
+                const repoKey = `${org}/${repo}`;
+                const plans = plansByRepo?.[repoKey] ?? [];
                 return h(
                   'li',
                   {
@@ -269,6 +280,81 @@ export default function RepositorySidebar({
                   h(
                     'ul',
                     { className: 'ml-5 mt-1 space-y-[2px]' },
+                    h(
+                      'li',
+                      null,
+                      h(
+                        'div',
+                        { className: 'flex items-center justify-between px-2 py-1 text-xs uppercase tracking-wide text-neutral-500' },
+                        h('span', null, 'Plans'),
+                        h(
+                          'button',
+                          {
+                            type: 'button',
+                            onClick: () => onCreatePlan(org, repo),
+                            className: 'text-emerald-300 hover:text-emerald-100 transition text-[11px]',
+                          },
+                          'New',
+                        ),
+                      ),
+                      plans.length
+                        ? h(
+                            'ul',
+                            { className: 'space-y-1' },
+                            plans.map((plan) => {
+                              const isActive = plan.id === activePlanId;
+                              const badge =
+                                plan.status === 'ready'
+                                  ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/40'
+                                  : plan.status === 'updated'
+                                  ? 'text-amber-300 bg-amber-500/10 border-amber-500/40'
+                                  : 'text-neutral-300 bg-neutral-800/50 border-neutral-700';
+                              return h(
+                                'li',
+                                { key: plan.id },
+                                h(
+                                  'button',
+                                  {
+                                    type: 'button',
+                                    onClick: () => onSelectPlan(org, repo, plan.id),
+                                    className: [
+                                      'w-full rounded-md border px-2.5 py-2 text-left text-xs transition-colors',
+                                      isActive
+                                        ? 'border-emerald-500/80 bg-emerald-500/10 text-emerald-100'
+                                        : 'border-neutral-800 bg-neutral-925 text-neutral-100 hover:border-neutral-600',
+                                    ].join(' '),
+                                  },
+                                  h(
+                                    'div',
+                                    { className: 'flex items-center justify-between gap-2' },
+                                    h('span', { className: 'truncate font-medium' }, plan.title),
+                                    h(
+                                      'span',
+                                      {
+                                        className: [
+                                          'inline-flex items-center rounded-full border px-1.5 py-[1px] text-[10px] font-medium',
+                                          badge,
+                                        ].join(' '),
+                                      },
+                                      plan.status === 'ready'
+                                        ? 'Ready'
+                                        : plan.status === 'updated'
+                                        ? 'Updated'
+                                        : plan.status === 'building'
+                                        ? 'Building'
+                                        : 'Draft',
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          )
+                        : h(
+                            'p',
+                            { className: 'text-[11px] text-neutral-500 px-2 py-1' },
+                            'No plans yet.',
+                          ),
+                    ),
                     branches.map((branch) => {
                       const isActiveWorktree =
                         activeWorktree &&

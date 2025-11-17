@@ -12,12 +12,14 @@ import { sendJson, readJsonBody } from '../utils/http.js';
 import { createConfigHandlers } from '../api/config.js';
 import { createPlanHandlers } from '../api/create-plan.js';
 import { createPlanArtifactHandlers } from '../api/plans.js';
+import { createPlanModeHandlers } from '../api/plan-mode.js';
 import { createEventStreamHandler } from './events.js';
 import { createTaskHandlers } from '../api/tasks.js';
 import { createPortHandlers } from '../api/ports.js';
 import { createCodexSdkHandlers } from '../api/codex-sdk.js';
 import type { AuthManager, CookieManager } from '../types/auth.js';
 import type { PortTunnelManager } from '../core/ports.js';
+import { createWorktreeService, createPlanModeService } from '../services/index.js';
 
 export interface RouterConfig {
   authManager: AuthManager;
@@ -126,6 +128,9 @@ export function createRouter({
     branchNameGenerator,
     defaultBranches,
   );
+  const worktreeService = createWorktreeService(workdir, branchNameGenerator, defaultBranches);
+  const planModeService = createPlanModeService({ workdir, defaultBranches, worktreeService });
+  const planModeHandlers = createPlanModeHandlers(planModeService);
   const terminalHandlers = getDependency('createTerminalHandlers')(workdir, {
     mode: terminalSessionMode,
   });
@@ -174,6 +179,16 @@ export function createRouter({
       {
         requiresAuth: false,
         handlers: { GET: authHandlers.status, HEAD: authHandlers.status },
+      },
+    ],
+    [
+      '/api/plan-mode/plans',
+      {
+        requiresAuth: true,
+        handlers: {
+          GET: planModeHandlers.list,
+          POST: planModeHandlers.create,
+        },
       },
     ],
     [
@@ -386,6 +401,61 @@ export function createRouter({
       } else {
         await codexSdkHandlers.deleteSession(context);
       }
+      return true;
+    }
+
+    if (url.pathname.startsWith('/api/plan-mode/plans/')) {
+      if (!authManager.isAuthenticated(req)) {
+        sendJsonResponse(res, 401, { error: 'Authentication required' });
+        return true;
+      }
+      const remainder = url.pathname.slice('/api/plan-mode/plans/'.length);
+      const segments = remainder.split('/').filter(Boolean);
+      if (segments.length === 0) {
+        sendJsonResponse(res, 404, { error: 'Plan not found' });
+        return true;
+      }
+      const [planId, action] = segments;
+      const method = req.method?.toUpperCase() || 'GET';
+      let handler: ((context: any) => Promise<void>) | null = null;
+      let allowedMethods: string[] = [];
+      if (!action) {
+        allowedMethods = ['GET', 'PATCH', 'DELETE'];
+        if (method === 'GET') {
+          handler = planModeHandlers.read;
+        } else if (method === 'PATCH') {
+          handler = planModeHandlers.update;
+        } else if (method === 'DELETE') {
+          handler = planModeHandlers.destroy;
+        }
+      } else if (action === 'session') {
+        allowedMethods = ['POST'];
+        if (method === 'POST') {
+          handler = planModeHandlers.startSession;
+        }
+      } else if (action === 'build') {
+        allowedMethods = ['POST'];
+        if (method === 'POST') {
+          handler = planModeHandlers.build;
+        }
+      } else {
+        sendJsonResponse(res, 404, { error: 'Plan not found' });
+        return true;
+      }
+      if (!handler) {
+        handleMethodNotAllowed(res, allowedMethods);
+        return true;
+      }
+      const context = {
+        req,
+        res,
+        url,
+        method,
+        params: { id: planId },
+        workdir,
+        readJsonBody: () => readJson(req),
+      };
+      await handler(context);
       return true;
     }
 

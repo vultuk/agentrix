@@ -10,6 +10,8 @@ export type { TerminalOpenResult, TerminalSendResult, TerminalCloseResult } from
 export { CodexSdkService, createCodexSdkService } from './codex-sdk-service.js';
 export type { CodexSdkSessionDetail } from './codex-sdk-service.js';
 
+export { PlanModeService, createPlanModeService } from './plan-mode-service.js';
+
 export { AuthService, createAuthService } from './auth-service.js';
 export type { AuthResult } from './auth-service.js';
 

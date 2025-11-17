@@ -3,6 +3,8 @@ import AddRepositoryModal from '../../repositories/components/modals/AddReposito
 import EditRepoSettingsModal from '../../repositories/components/modals/EditRepoSettingsModal.js';
 import GitDiffModal from '../../github/components/modals/GitDiffModal.js';
 import PlanHistoryModal from '../../plans/components/modals/PlanHistoryModal.js';
+import PlanComposerModal from '../../plans/components/modals/PlanComposerModal.js';
+import ConfirmPlanDeleteModal from '../../plans/components/modals/ConfirmPlanDeleteModal.js';
 import PromptWorktreeModal from '../../worktrees/components/modals/PromptWorktreeModal.js';
 import CreateWorktreeModal from '../../worktrees/components/modals/CreateWorktreeModal.js';
 import ConfirmDeleteWorktreeModal from '../../worktrees/components/modals/ConfirmDeleteWorktreeModal.js';
@@ -60,6 +62,25 @@ export default function ModalContainer(props: ModalContainerProps) {
       contentError: props.planModal.contentError,
       onClose: props.onClosePlanModal,
       onSelectPlan: props.onSelectPlan,
+    }),
+    h(PlanComposerModal, {
+      isOpen: props.planComposerModal.open,
+      org: props.planComposerModal.org,
+      repo: props.planComposerModal.repo,
+      title: props.planComposerModal.title,
+      body: props.planComposerModal.body,
+      isSubmitting: props.isSubmittingPlanComposer,
+      onClose: props.onClosePlanComposer,
+      onTitleChange: (value: string) => props.onPlanComposerFieldChange('title', value),
+      onBodyChange: (value: string) => props.onPlanComposerFieldChange('body', value),
+      onSubmit: props.onSubmitPlanComposer,
+    }),
+    h(ConfirmPlanDeleteModal, {
+      isOpen: props.planDeleteModal.open,
+      planTitle: props.planDeleteModal.title,
+      onClose: props.onClosePlanDeleteModal,
+      onConfirm: props.onConfirmPlanDelete,
+      isDeleting: props.isDeletingPlan,
     }),
     h(PromptWorktreeModal, {
       isOpen: props.showPromptWorktreeModal && Boolean(props.selectedRepo),
@@ -125,4 +146,3 @@ export default function ModalContainer(props: ModalContainerProps) {
     })
   );
 }
-

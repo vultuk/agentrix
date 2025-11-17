@@ -169,6 +169,135 @@
   border-top: 1px solid #27272a;
 }
 
+.plan-markdown h1 {
+  font-size: 1.45rem;
+  font-weight: 600;
+  color: #f4f4f5;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.35rem;
+}
+
+.plan-markdown h2 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #f4f4f5;
+  margin-top: 1.2rem;
+  margin-bottom: 0.35rem;
+}
+
+.plan-markdown h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #f4f4f5;
+  margin-top: 1rem;
+  margin-bottom: 0.3rem;
+}
+
+.plan-markdown p {
+  line-height: 1.6;
+}
+
+.plan-markdown ul {
+  list-style: disc;
+}
+
+.plan-markdown ol {
+  list-style: decimal;
+}
+
+.plan-markdown ul,
+.plan-markdown ol {
+  padding-left: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.plan-markdown table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  margin: 1rem 0;
+  background-color: rgba(12, 17, 23, 0.75);
+}
+
+.plan-markdown th {
+  background-color: rgba(253, 230, 138, 0.12);
+  color: #fef9c3;
+  font-weight: 600;
+  text-align: left;
+}
+
+.plan-markdown th,
+.plan-markdown td {
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.plan-markdown tbody tr:nth-child(odd) {
+  background-color: rgba(255, 255, 255, 0.015);
+}
+
+.plan-markdown tbody tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.plan-markdown tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.plan-markdown code {
+  background-color: rgba(253, 230, 138, 0.15);
+  color: #fefce8;
+}
+
+.plan-markdown pre {
+  background-color: rgba(8, 25, 50, 0.7);
+}
+
+.plan-markdown hr {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme='light'] .plan-markdown h1,
+[data-theme='light'] .plan-markdown h2,
+[data-theme='light'] .plan-markdown h3 {
+  color: #0f172a;
+}
+
+[data-theme='light'] .plan-markdown table {
+  border-color: rgba(15, 23, 42, 0.08);
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme='light'] .plan-markdown th {
+  background-color: rgba(254, 243, 199, 0.85);
+  color: #713f12;
+}
+
+[data-theme='light'] .plan-markdown tbody tr:nth-child(odd) {
+  background-color: rgba(15, 23, 42, 0.02);
+}
+
+[data-theme='light'] .plan-markdown tbody tr:nth-child(even) {
+  background-color: rgba(15, 23, 42, 0.04);
+}
+
+[data-theme='light'] .plan-markdown code {
+  background-color: rgba(253, 230, 138, 0.35);
+  color: #713f12;
+}
+
+[data-theme='light'] .plan-markdown pre {
+  background-color: rgba(15, 23, 42, 0.06);
+  color: #1f2937;
+}
+
+[data-theme='light'] .plan-markdown hr {
+  border-top-color: rgba(15, 23, 42, 0.08);
+}
+
 .issue-markdown {
   font-family: inherit;
   color: #e5e7eb;
