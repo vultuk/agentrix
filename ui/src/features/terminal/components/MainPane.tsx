@@ -5,7 +5,10 @@ import GitStatusSidebar from '../../github/components/GitStatusSidebar.js';
 import RepositoryDashboard from '../../repositories/components/RepositoryDashboard.js';
 import { REPOSITORY_POLL_INTERVAL_MS, ACTION_BUTTON_CLASS } from '../../../utils/constants.js';
 import TabbedTerminalPanel from './TabbedTerminalPanel.js';
+import PlanWorkspace from '../../plans/components/PlanWorkspace.js';
 import type { Worktree, RepoDashboard, WorktreeSessionTab } from '../../../types/domain.js';
+import type { PlanDetail } from '../../../types/plan-mode.js';
+import type { CodexSdkEvent, CodexSdkSessionMetadata } from '../../../types/codex-sdk.js';
 
 const { createElement: h } = React;
 
@@ -41,6 +44,22 @@ interface MainPaneProps {
   onCreateIssuePlan: (issue: any, repoInfo: { org: string; repo: string }) => void;
   nonClosableSessionIds?: Set<string>;
   renderSessionContent?: (sessionId: string | null) => React.ReactNode;
+  activePlan: PlanDetail | null;
+  isPlanWorkspaceLoading: boolean;
+  planWorkspaceError: string | null;
+  onDeletePlan: () => void;
+  onSavePlan: (markdown: string) => void;
+  onMarkPlanReady: () => void;
+  onBuildPlan: () => void;
+  isPlanBuildPending: boolean;
+  planChatState: {
+    events: CodexSdkEvent[];
+    isSending: boolean;
+    connectionState: 'idle' | 'connecting' | 'connected' | 'disconnected';
+    session: CodexSdkSessionMetadata | null;
+    lastError: string | null;
+    onSend: (text: string) => Promise<void>;
+  };
 }
 
 export default function MainPane({
@@ -75,10 +94,38 @@ export default function MainPane({
   onCreateIssuePlan,
   nonClosableSessionIds,
   renderSessionContent,
+  activePlan,
+  isPlanWorkspaceLoading,
+  planWorkspaceError,
+  onDeletePlan,
+  onSavePlan,
+  onMarkPlanReady,
+  onBuildPlan,
+  isPlanBuildPending,
+  planChatState,
 }: MainPaneProps) {
   let mainPaneContent = null;
 
-  if (activeWorktree) {
+  if (activePlan) {
+    mainPaneContent = h(
+      'div',
+      {
+        className:
+          'box-border bg-neutral-925 border border-neutral-800 h-full flex flex-col overflow-hidden min-h-0 flex-1 p-4',
+      },
+      h(PlanWorkspace, {
+        plan: activePlan,
+        isLoading: isPlanWorkspaceLoading,
+        error: planWorkspaceError,
+        chatState: planChatState,
+        onSave: onSavePlan,
+        onMarkReady: onMarkPlanReady,
+        onBuild: onBuildPlan,
+        isBuildPending: isPlanBuildPending,
+        onDeletePlan,
+      }),
+    );
+  } else if (activeWorktree) {
     mainPaneContent = h(
       'div',
       {

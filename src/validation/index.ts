@@ -32,4 +32,19 @@ export type {
   CodexSessionIdInput,
 } from './schemas/codex-sdk-schema.js';
 
+export {
+  validatePlanListInput,
+  validatePlanIdentifyInput,
+  validatePlanCreateInput,
+  validatePlanUpdateInput,
+  validatePlanDeleteInput,
+} from './schemas/plan-mode-schema.js';
+export type {
+  PlanListInput,
+  PlanIdentifyInput,
+  PlanCreateInput,
+  PlanUpdateInput,
+  PlanDeleteInput,
+} from './schemas/plan-mode-schema.js';
+
 export { ValidationError } from '../infrastructure/errors/index.js';

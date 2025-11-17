@@ -123,6 +123,22 @@ export async function apiPost<T = unknown>(
   });
 }
 
+export async function apiPatch<T = unknown>(
+  url: string,
+  body?: unknown,
+  options: Omit<FetchOptions, 'method' | 'body'> = {}
+): Promise<T> {
+  return apiRequest<T>(url, {
+    ...options,
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
 export async function apiDelete<T = unknown>(
   url: string,
   body?: unknown,

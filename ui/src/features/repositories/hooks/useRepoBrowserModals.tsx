@@ -27,6 +27,18 @@ interface EditInitCommandModal {
   saving: boolean;
 }
 
+interface PlanComposerModalState {
+  open: boolean;
+  org: string | null;
+  repo: string | null;
+  title: string;
+  body: string;
+}
+
+interface PlanDeleteModalState {
+  open: boolean;
+  title: string | null;
+}
 export function useRepoBrowserModals() {
   // Add repository modal
   const [showAddRepoModal, setShowAddRepoModal] = useState(false);
@@ -83,6 +95,17 @@ export function useRepoBrowserModals() {
 
   // Plan modal
   const [planModal, setPlanModal] = useState(() => createEmptyPlanModalState());
+  const [planComposerModal, setPlanComposerModal] = useState<PlanComposerModalState>({
+    open: false,
+    org: null,
+    repo: null,
+    title: '',
+    body: '',
+  });
+  const [planDeleteModal, setPlanDeleteModal] = useState<PlanDeleteModalState>({
+    open: false,
+    title: null,
+  });
 
   const openWorktreeModal = useCallback((org: string, repo: string) => {
     setSelectedRepo([org, repo]);
@@ -150,6 +173,34 @@ export function useRepoBrowserModals() {
     setPlanModal(createEmptyPlanModalState());
   }, []);
 
+  const openPlanComposerModal = useCallback((org: string, repo: string) => {
+    setPlanComposerModal({
+      open: true,
+      org,
+      repo,
+      title: '',
+      body: '',
+    });
+  }, []);
+
+  const closePlanComposerModal = useCallback(() => {
+    setPlanComposerModal({
+      open: false,
+      org: null,
+      repo: null,
+      title: '',
+      body: '',
+    });
+  }, []);
+
+  const openPlanDeleteModal = useCallback((title: string | null) => {
+    setPlanDeleteModal({ open: true, title: title ?? null });
+  }, []);
+
+  const closePlanDeleteModal = useCallback(() => {
+    setPlanDeleteModal({ open: false, title: null });
+  }, []);
+
   return {
     // Add repo modal
     showAddRepoModal,
@@ -208,6 +259,12 @@ export function useRepoBrowserModals() {
     planModal,
     setPlanModal,
     closePlanModal,
+    planComposerModal,
+    setPlanComposerModal,
+    openPlanComposerModal,
+    closePlanComposerModal,
+    planDeleteModal,
+    openPlanDeleteModal,
+    closePlanDeleteModal,
   };
 }
-

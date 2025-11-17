@@ -102,7 +102,48 @@ export const renderMarkdown = (markdown) => {
     codeBuffer = [];
   };
 
-  for (const line of lines) {
+  const isTableRow = (value: string | undefined): boolean => {
+    if (!value) {
+      return false;
+    }
+    return /^\s*\|(.+)\|\s*$/.test(value);
+  };
+
+  const parseTableCells = (value: string): string[] => {
+    const trimmedLine = value.trim();
+    const inner = trimmedLine.replace(/^\|/, '').replace(/\|$/, '');
+    return inner.split('|').map((cell) => cell.trim());
+  };
+
+  const isDividerRow = (value: string | undefined, columnCount: number): boolean => {
+    if (!isTableRow(value)) {
+      return false;
+    }
+    const cells = parseTableCells(value!);
+    if (cells.length !== columnCount) {
+      return false;
+    }
+    return cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+  };
+
+  const renderTable = (headerCells: string[], rows: string[][]) => {
+    const header = headerCells
+      .map((cell) => `<th>${renderInline(cell)}</th>`)
+      .join('');
+    const body =
+      rows.length > 0
+        ? rows
+            .map((row) => {
+              const safeRow = row.map((cell) => `<td>${renderInline(cell)}</td>`).join('');
+              return `<tr>${safeRow}</tr>`;
+            })
+            .join('')
+        : '';
+    return `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
+  };
+
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
     const trimmed = line.trim();
 
     if (inCodeBlock) {
@@ -176,6 +217,29 @@ export const renderMarkdown = (markdown) => {
       continue;
     }
 
+    if (isTableRow(trimmed)) {
+      const headerCells = parseTableCells(trimmed);
+      const dividerLine = lines[index + 1];
+      if (isDividerRow(dividerLine, headerCells.length)) {
+        flushParagraph();
+        flushList();
+        index += 1;
+        const rows: string[][] = [];
+        let scanIndex = index + 1;
+        while (scanIndex < lines.length) {
+          const nextLine = lines[scanIndex];
+          if (!isTableRow(nextLine?.trim())) {
+            break;
+          }
+          rows.push(parseTableCells(nextLine));
+          scanIndex += 1;
+        }
+        html.push(renderTable(headerCells, rows));
+        index = scanIndex - 1;
+        continue;
+      }
+    }
+
     paragraphBuffer.push(line);
   }
 
@@ -189,4 +253,3 @@ export const renderMarkdown = (markdown) => {
 
   return html.join('\n');
 };
-
