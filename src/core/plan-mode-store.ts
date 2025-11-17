@@ -305,7 +305,8 @@ function createDiffSnapshot(oldValue: string, newValue: string, updatedBy: 'user
     if (!currentHunk || contextBuffer.length === 0) {
       return;
     }
-    contextBuffer.forEach((line) => currentHunk.lines.push(line));
+    const hunk = currentHunk;
+    contextBuffer.forEach((line) => hunk.lines.push(line));
     contextBuffer.length = 0;
   };
 
