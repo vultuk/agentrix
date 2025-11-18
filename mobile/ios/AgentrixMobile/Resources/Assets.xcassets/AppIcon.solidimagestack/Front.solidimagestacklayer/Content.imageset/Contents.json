@@ -1,6 +1,16 @@
 {
   "images" : [
     {
+      "filename" : "agentrix.png",
+      "idiom" : "car",
+      "scale" : "2x"
+    },
+    {
+      "filename" : "agentrix 1.png",
+      "idiom" : "car",
+      "scale" : "3x"
+    },
+    {
       "filename" : "Generated Image November 12, 2025 - 11_49AM.png",
       "idiom" : "vision",
       "scale" : "2x"

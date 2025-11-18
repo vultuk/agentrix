@@ -3,11 +3,19 @@ import SwiftUI
 @main
 struct AgentrixApp: App {
     @StateObject private var coordinator = AppCoordinator()
+#if os(iOS)
+    @StateObject private var watchBridge = CodexWatchBridge()
+    @StateObject private var carPlayBridge = CodexCarPlayBridge.shared
+#endif
 
     var body: some Scene {
         WindowGroup {
             RootContainerView()
                 .environmentObject(coordinator)
+#if os(iOS)
+                .environmentObject(watchBridge)
+                .environmentObject(carPlayBridge)
+#endif
                 .tint(.agentrixAccent)
         }
     }
