@@ -90,6 +90,7 @@ describe('createCodexSdkHandlers', () => {
       repo: 'demo',
       branch: 'dev',
       label: 'New',
+      initialMessage: undefined,
     });
     const body = parseResponseBody(res);
     assert.deepEqual(body, {

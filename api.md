@@ -410,8 +410,8 @@ Lists Codex SDK chat sessions for a worktree.
 
 ### `POST /api/codex-sdk/sessions`
 
-Creates a new Codex SDK chat session. Sessions are persisted under `.codex-sdk/sessions/<id>.json`
-inside each worktree so they survive restarts.
+Creates a new Codex SDK chat session. Sessions are persisted under `~/.codex/agentrix/worktrees/<slug>/sessions/<id>.json`
+so they survive restarts without touching repository files.
 
 **Body**
 ```json

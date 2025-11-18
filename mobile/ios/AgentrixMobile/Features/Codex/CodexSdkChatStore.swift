@@ -113,7 +113,7 @@ final class CodexSdkChatStore: ObservableObject {
         }
     }
 
-    func createSession(label: String? = nil) async -> CodexSdkSessionSummary? {
+    func createSession(label: String? = nil, initialMessage: String? = nil) async -> CodexSdkSessionSummary? {
         guard let worktree else { return nil }
         if isCreatingSession {
             return nil
@@ -121,7 +121,13 @@ final class CodexSdkChatStore: ObservableObject {
         isCreatingSession = true
         defer { isCreatingSession = false }
         do {
-            let detail = try await service.createSession(org: worktree.org, repo: worktree.repo, branch: worktree.branch, label: label)
+            let detail = try await service.createSession(
+                org: worktree.org,
+                repo: worktree.repo,
+                branch: worktree.branch,
+                label: label,
+                initialMessage: initialMessage
+            )
             let summary = detail.session
             sessions.append(summary)
             var updatedDict = eventsBySession

@@ -32,16 +32,33 @@ import { PortsMenu } from '../../ports/components/PortsMenu.js';
 import { closeTerminal } from '../../../services/api/terminalService.js';
 import type { Worktree } from '../../../types/domain.js';
 import { useCodexSdkChat } from '../../codex-sdk/hooks/useCodexSdkChat.js';
+import { listCodexSessions } from '../../../services/api/codexSdkService.js';
 import CodexSdkChatPanel from '../../codex-sdk/components/CodexSdkChatPanel.js';
 import { isAuthenticationError } from '../../../services/api/api-client.js';
 import * as planModeService from '../../../services/api/planModeService.js';
 import * as reposService from '../../../services/api/reposService.js';
 import type { PlanDetail, PlanSummary, PlanStatus } from '../../../types/plan-mode.js';
 import { usePlanCodexSession } from '../../plans/hooks/usePlanCodexSession.js';
-import { PLAN_START_TAG, PLAN_END_TAG } from '../../../constants/planTags.js';
+import {
+  PLAN_START_TAG,
+  PLAN_END_TAG,
+  LEGACY_PLAN_START_TAG,
+  LEGACY_PLAN_END_TAG,
+} from '../../../constants/planTags.js';
 
 const { createElement: h } = React;
 const CODEX_SDK_TAB_PREFIX = 'codex-sdk:';
+const PLAN_TAG_PAIRS: Array<[string, string]> = [
+  [PLAN_START_TAG, PLAN_END_TAG],
+  [LEGACY_PLAN_START_TAG, LEGACY_PLAN_END_TAG],
+];
+
+function containsPlanTags(text: string | undefined | null): boolean {
+  if (!text) {
+    return false;
+  }
+  return PLAN_TAG_PAIRS.some(([start, end]) => text.includes(start) && text.includes(end));
+}
 
 function getCodexTabId(sessionId: string): string {
   return `${CODEX_SDK_TAB_PREFIX}${sessionId}`;
@@ -100,6 +117,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
   });
   const planChatSendMessage = planChat.sendMessage;
   const lastPlanUpdateEventRef = useRef<string | null>(null);
+  const codexSessionPresenceRef = useRef(new Map<string, boolean>());
   
   // Mobile menu ref
   const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -182,37 +200,26 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
       if (!worktree) {
         return null;
       }
-      const summary = await createCodexSessionForWorktree(worktree);
+      const summary = await createCodexSessionForWorktree(worktree, options);
       if (summary) {
         setActiveWorktree(worktree);
         const tabId = getCodexTabId(summary.id);
         setSelectedTabId(tabId);
         setActiveCodexSessionId(summary.id);
-        if (options?.initialMessage) {
-          void (async () => {
-            const maxAttempts = 10;
-            const retryDelayMs = 500;
-            for (let attempt = 0; attempt < maxAttempts; attempt++) {
-              try {
-                await sendCodexMessage(summary.id, options.initialMessage);
-                return;
-              } catch (error: any) {
-                const message = typeof error?.message === 'string' ? error.message : '';
-                const canRetry = /not connected/i.test(message) || /connecting/i.test(message);
-                if (!canRetry || attempt === maxAttempts - 1) {
-                  console.warn('[plan-mode] Failed to send initial Codex message:', error);
-                  return;
-                }
-                await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-              }
-            }
-          })();
-        }
+        const key = getWorktreeKey(worktree.org, worktree.repo, worktree.branch);
+        codexSessionPresenceRef.current.set(key, true);
       }
       return summary;
     },
-    [createCodexSessionForWorktree, sendCodexMessage, setActiveCodexSessionId, setActiveWorktree, setSelectedTabId],
+    [createCodexSessionForWorktree, getWorktreeKey, setActiveCodexSessionId, setActiveWorktree, setSelectedTabId],
   );
+  useEffect(() => {
+    if (!activeWorktree) {
+      return;
+    }
+    const key = getWorktreeKey(activeWorktree.org, activeWorktree.repo, activeWorktree.branch);
+    codexSessionPresenceRef.current.set(key, codexSessions.length > 0);
+  }, [activeWorktree, codexSessions, getWorktreeKey]);
   
   // Use command config hook
   const commandCfg = useCommandConfig({ onAuthExpired });
@@ -228,6 +235,29 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     onAuthExpired,
     onDataUpdate: repoData.applyDataUpdate,
   });
+  const hasCodexSessionsForWorktree = useCallback(
+    async (worktree: Worktree) => {
+      const key = getWorktreeKey(worktree.org, worktree.repo, worktree.branch);
+      const cached = codexSessionPresenceRef.current.get(key);
+      if (typeof cached === 'boolean') {
+        return cached;
+      }
+      try {
+        const sessions = await listCodexSessions(worktree.org, worktree.repo, worktree.branch);
+        const hasAny = Array.isArray(sessions) && sessions.length > 0;
+        codexSessionPresenceRef.current.set(key, hasAny);
+        return hasAny;
+      } catch (error: any) {
+        if (isAuthenticationError(error)) {
+          notifyAuthExpired();
+          return false;
+        }
+        console.warn('[codex-sdk] Failed to check Codex sessions for worktree:', error);
+        return false;
+      }
+    },
+    [getWorktreeKey, notifyAuthExpired],
+  );
   
   // Use plan management hook
   const planMgmt = usePlanManagement({ onAuthExpired });
@@ -359,13 +389,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     let latestPlanEvent: (typeof planChat.events)[number] | undefined;
     for (let index = planChat.events.length - 1; index >= 0; index--) {
       const event = planChat.events[index];
-      if (
-        event &&
-        event.type === 'agent_response' &&
-        typeof event.text === 'string' &&
-        event.text.includes(PLAN_START_TAG) &&
-        event.text.includes(PLAN_END_TAG)
-      ) {
+      if (event && event.type === 'agent_response' && typeof event.text === 'string' && containsPlanTags(event.text)) {
         latestPlanEvent = event;
         break;
       }
@@ -951,6 +975,7 @@ export default function RepoBrowser({ onAuthExpired, onLogout, isLoggingOut }: R
     closeGitSidebar: gitSidebar.closeGitSidebar,
     loadSessions: polling.loadSessions,
     openTerminalForWorktree: terminal.openTerminal,
+    hasCodexSessionForWorktree: hasCodexSessionsForWorktree,
   });
 
 

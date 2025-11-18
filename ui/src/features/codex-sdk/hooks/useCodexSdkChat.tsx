@@ -5,6 +5,7 @@ import {
   deleteCodexSession,
   getCodexSdkSocketUrl,
 } from '../../../services/api/codexSdkService.js';
+import type { CreateCodexSessionOptions } from '../../../services/api/codexSdkService.js';
 import { isAuthenticationError } from '../../../services/api/api-client.js';
 import type { Worktree } from '../../../types/domain.js';
 import type { CodexSdkEvent, CodexSdkSessionSummary } from '../../../types/codex-sdk.js';
@@ -277,12 +278,12 @@ function isTurnPending(events: CodexSdkEvent[] | undefined): boolean {
   }, [activeWorktree, loadSessions]);
 
   const createSessionForWorktree = useCallback(
-    async (worktree: Worktree | null, options: { label?: string } = {}) => {
+    async (worktree: Worktree | null, options: CreateCodexSessionOptions = {}) => {
       if (!worktree) {
         return null;
       }
       try {
-        const detail = await createCodexSession(worktree.org, worktree.repo, worktree.branch, options.label);
+        const detail = await createCodexSession(worktree.org, worktree.repo, worktree.branch, options);
         const initialEvents = detail.events ?? [];
         setSessions((prev) => [...prev, detail.session]);
         setEventsBySession((prev) => ({ ...prev, [detail.session.id]: initialEvents }));

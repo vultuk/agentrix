@@ -1,6 +1,11 @@
 import { apiDelete, apiGet, apiPost } from './api-client.js';
 import type { CodexSdkSessionDetail, CodexSdkSessionSummary } from '../../types/codex-sdk.js';
 
+export interface CreateCodexSessionOptions {
+  label?: string;
+  initialMessage?: string;
+}
+
 export async function listCodexSessions(org: string, repo: string, branch: string): Promise<CodexSdkSessionSummary[]> {
   const params = new URLSearchParams({ org, repo, branch });
   const response = await apiGet<{ sessions: CodexSdkSessionSummary[] }>(
@@ -10,10 +15,26 @@ export async function listCodexSessions(org: string, repo: string, branch: strin
   return response.sessions ?? [];
 }
 
-export async function createCodexSession(org: string, repo: string, branch: string, label?: string): Promise<CodexSdkSessionDetail> {
+export async function createCodexSession(
+  org: string,
+  repo: string,
+  branch: string,
+  options: CreateCodexSessionOptions = {},
+): Promise<CodexSdkSessionDetail> {
+  const payload: { org: string; repo: string; branch: string; label?: string; initialMessage?: string } = {
+    org,
+    repo,
+    branch,
+  };
+  if (options.label) {
+    payload.label = options.label;
+  }
+  if (options.initialMessage) {
+    payload.initialMessage = options.initialMessage;
+  }
   const body = await apiPost<CodexSdkSessionDetail>(
     '/api/codex-sdk/sessions',
-    { org, repo, branch, label },
+    payload,
     { errorPrefix: 'Failed to start Codex session' },
   );
   return body;

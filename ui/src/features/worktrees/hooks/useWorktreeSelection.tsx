@@ -27,6 +27,7 @@ interface UseWorktreeSelectionOptions {
   closeGitSidebar: () => void;
   loadSessions: () => Promise<void>;
   openTerminalForWorktree: (worktree: Worktree, options?: any) => Promise<void>;
+  hasCodexSessionForWorktree?: (worktree: Worktree) => Promise<boolean>;
 }
 
 export function useWorktreeSelection({
@@ -50,6 +51,7 @@ export function useWorktreeSelection({
   closeGitSidebar,
   loadSessions,
   openTerminalForWorktree,
+  hasCodexSessionForWorktree,
 }: UseWorktreeSelectionOptions) {
   const handleWorktreeSelection = useCallback(
     async (org: string, repo: string, branch: string) => {
@@ -130,6 +132,19 @@ export function useWorktreeSelection({
           window.alert('Failed to reconnect to the existing session.');
         }
       } else {
+        if (hasCodexSessionForWorktree) {
+          try {
+            const hasCodex = await hasCodexSessionForWorktree(worktree);
+            if (hasCodex) {
+              setActiveWorktree(worktree);
+              setPendingWorktreeAction(null);
+              setIsMobileMenuOpen(false);
+              return;
+            }
+          } catch (error) {
+            console.warn('[worktree] Failed to check Codex sessions for worktree:', error);
+          }
+        }
         setPendingWorktreeAction(worktree);
         setIsMobileMenuOpen(false);
       }
@@ -147,6 +162,7 @@ export function useWorktreeSelection({
       sessionMetadataRef,
       idleAcknowledgementsRef,
       dashboardCacheRef,
+      hasCodexSessionForWorktree,
       setPendingWorktreeAction,
       setActiveWorktree,
       setActiveRepoDashboard,

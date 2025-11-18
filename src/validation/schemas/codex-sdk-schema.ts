@@ -8,6 +8,7 @@ export interface CodexSessionWorktreeInput {
 
 export interface CodexSessionCreateInput extends CodexSessionWorktreeInput {
   label?: string;
+  initialMessage?: string;
 }
 
 export interface CodexSessionIdInput {
@@ -21,9 +22,13 @@ export function validateCodexSessionList(payload: unknown): CodexSessionWorktree
 export function validateCodexSessionCreate(payload: unknown): CodexSessionCreateInput {
   const base = validateCodexSessionList(payload);
   const label = typeof (payload as { label?: string }).label === 'string' ? (payload as { label?: string }).label : undefined;
+  const providedInitialMessage = (payload as { initialMessage?: string }).initialMessage;
+  const initialMessageRaw =
+    typeof providedInitialMessage === 'string' ? providedInitialMessage.trim() : undefined;
   return {
     ...base,
     label,
+    initialMessage: initialMessageRaw && initialMessageRaw.length > 0 ? initialMessageRaw : undefined,
   };
 }
 

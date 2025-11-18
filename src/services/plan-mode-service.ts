@@ -54,14 +54,10 @@ interface PlanBuildResult {
   taskId: string;
 }
 
-function normalisePlanMarkdown(text: string): string {
+export function normalisePlanMarkdown(text: string): string {
   const trimmed = (text ?? '').trim();
   if (!trimmed) {
     return '';
-  }
-  const taggedMatch = new RegExp(`${PLAN_START_TAG}([\\s\\S]+?)${PLAN_END_TAG}`, 'i').exec(trimmed);
-  if (taggedMatch && taggedMatch[1]) {
-    return taggedMatch[1].trim();
   }
   const fenced = /^```[a-zA-Z0-9-]*\s*([\s\S]+?)```$/m.exec(trimmed);
   if (fenced && fenced[1]) {

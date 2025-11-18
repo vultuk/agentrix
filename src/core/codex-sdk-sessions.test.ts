@@ -83,6 +83,44 @@ describe('codex-sdk-sessions', () => {
     assert.equal(writeMock.mock.callCount(), 1);
   });
 
+  it('sends an initial prompt when provided during session creation', async () => {
+    const events: ThreadEvent[] = [
+      { type: 'thread.started', thread_id: 'thread-seeded' },
+      { type: 'item.completed', item: { id: 'agent-msg', type: 'agent_message', text: 'Working...' } },
+      { type: 'turn.completed', usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 2 } },
+    ];
+    const { thread, calls } = createThread(events);
+    const startThreadMock = mock.fn(() => thread);
+    __setCodexSdkSessionOverrides({
+      codexFactory: () => ({ startThread: startThreadMock } as never),
+      getWorktreePath: async () => ({ worktreePath: '/tmp/worktrees/acme-demo' }),
+      randomUUID: () => 'session-initial',
+      now: () => new Date('2024-03-01T00:00:00.000Z'),
+      createEventEmitter: () => new EventEmitter(),
+      listStoredSessions: async () => [],
+      writeStoredSession: async () => {},
+      deleteStoredSession: async () => {},
+      isVerboseLoggingEnabled: () => false,
+    });
+
+    await createCodexSdkSession({
+      workdir: '/tmp',
+      org: 'acme',
+      repo: 'demo',
+      branch: 'main',
+      initialMessage: '  Execute the plan  ',
+    });
+
+    await flushAsync();
+    await flushAsync();
+
+    assert.deepEqual(calls, ['Execute the plan']);
+    const history = getCodexSdkSessionEvents('session-initial');
+    assert.equal(history[0]?.type, 'user_message');
+    assert.equal(history[0]?.text, 'Execute the plan');
+    assert.equal(history[1]?.type, 'agent_response');
+  });
+
   it('hydrates persisted sessions when listing a worktree', async () => {
     __setCodexSdkSessionOverrides({
       codexFactory: () => ({ startThread: () => ({}) } as never),

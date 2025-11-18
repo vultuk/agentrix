@@ -31,6 +31,17 @@ Call `run()` repeatedly on the same `Thread` instance to continue that conversat
 const nextTurn = await thread.run("Implement the fix");
 ```
 
+### Seeding the first turn
+
+If you know the initial instructions up front, start the thread and immediately kick off the first turn instead of waiting for a separate user action:
+
+```typescript
+const thread = codex.startThread({ workingDirectory: '/repo/acme/demo' });
+void thread.runStreamed("Accept the approved plan and begin executing it.");
+```
+
+Agentrix exposes the same capability over HTTP: POST `/api/codex-sdk/sessions` supports an `initialMessage` field so new sessions enter the chat with that prompt already queued.
+
 ### Streaming responses
 
 `run()` buffers events until the turn finishes. To react to intermediate progress—tool calls, streaming responses, and file change notifications—use `runStreamed()` instead, which returns an async generator of structured events.
@@ -118,4 +129,4 @@ const thread = codex.startThread({
 
 ### Verbose CLI logs
 
-Set the `CODEX_SDK_VERBOSE=1` environment variable before starting Agentrix to mirror the Codex CLI's verbose output into the Codex SDK chat tab. When disabled (the default), only structured chat/thinking events are streamed. Codex SDK conversations are stored under `.codex-sdk/sessions/<session-id>.json` inside each worktree so history and thread IDs survive server restarts and worktree switches.
+Set the `CODEX_SDK_VERBOSE=1` environment variable before starting Agentrix to mirror the Codex CLI's verbose output into the Codex SDK chat tab. When disabled (the default), only structured chat/thinking events are streamed. Codex SDK conversations are stored under `~/.codex/agentrix/worktrees/<slug>/sessions/<session-id>.json` so history and thread IDs survive restarts without modifying repository files.

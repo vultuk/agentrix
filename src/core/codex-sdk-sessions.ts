@@ -420,6 +420,7 @@ export async function createCodexSdkSession({
   branch,
   label,
   threadOptions,
+  initialMessage,
 }: {
   workdir: string;
   org: string;
@@ -427,6 +428,7 @@ export async function createCodexSdkSession({
   branch: string;
   label?: string;
   threadOptions?: ThreadOptions;
+  initialMessage?: string;
 }): Promise<{ summary: CodexSdkSessionSummary; events: CodexSdkEvent[] }> {
   const { worktreePath } = await getDependency('getWorktreePath')(workdir, org, repo, branch);
   const sessionId = getDependency('randomUUID')();
@@ -458,6 +460,12 @@ export async function createCodexSdkSession({
     ...(threadOptions || {}),
   });
   session.threadId = session.thread.id;
+  const trimmedInitialMessage = typeof initialMessage === 'string' ? initialMessage.trim() : '';
+  if (trimmedInitialMessage) {
+    void sendCodexSdkUserMessage(sessionId, trimmedInitialMessage).catch((error) => {
+      console.warn('[agentrix] Failed to process initial Codex prompt:', error);
+    });
+  }
 
   return { summary: toSummary(session), events: session.history };
 }

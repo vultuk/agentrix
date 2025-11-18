@@ -1,8 +1,12 @@
 import { mkdir, readdir, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
+import { createHash } from 'node:crypto';
 import type { CodexSdkEvent } from '../types/codex-sdk.js';
 
-const STORAGE_DIR = '.codex-sdk';
+const HOME_STORAGE_DIR = '.codex';
+const NAMESPACE_DIR = 'agentrix';
+const WORKTREE_DIR = 'worktrees';
 const SESSIONS_DIR = 'sessions';
 
 export interface CodexSdkStoredSession {
@@ -17,17 +21,28 @@ export interface CodexSdkStoredSession {
   events: CodexSdkEvent[];
 }
 
-function getSessionDirectory(worktreePath: string): string {
-  return path.join(worktreePath, STORAGE_DIR, SESSIONS_DIR);
+function getSessionDirectory(worktreePath: string): string | null {
+  const homeDir = os.homedir?.() || '';
+  if (!homeDir) {
+    return null;
+  }
+  return path.join(homeDir, HOME_STORAGE_DIR, NAMESPACE_DIR, WORKTREE_DIR, createWorktreeKey(worktreePath), SESSIONS_DIR);
 }
 
-function getSessionPath(worktreePath: string, sessionId: string): string {
-  return path.join(getSessionDirectory(worktreePath), `${sessionId}.json`);
+function getSessionPath(worktreePath: string, sessionId: string): string | null {
+  const directory = getSessionDirectory(worktreePath);
+  if (!directory) {
+    return null;
+  }
+  return path.join(directory, `${sessionId}.json`);
 }
 
 export async function listStoredSessions(worktreePath: string): Promise<CodexSdkStoredSession[]> {
   try {
     const directory = getSessionDirectory(worktreePath);
+    if (!directory) {
+      return [];
+    }
     const files = await readdir(directory);
     const results: CodexSdkStoredSession[] = [];
     for (const file of files) {
@@ -57,8 +72,12 @@ export async function listStoredSessions(worktreePath: string): Promise<CodexSdk
 }
 
 export async function readStoredSession(worktreePath: string, sessionId: string): Promise<CodexSdkStoredSession | null> {
+  const sessionPath = getSessionPath(worktreePath, sessionId);
+  if (!sessionPath) {
+    return null;
+  }
   try {
-    const raw = await readFile(getSessionPath(worktreePath, sessionId), 'utf8');
+    const raw = await readFile(sessionPath, 'utf8');
     return normaliseRecord(JSON.parse(raw));
   } catch (error: unknown) {
     const err = error as { code?: string };
@@ -71,14 +90,26 @@ export async function readStoredSession(worktreePath: string, sessionId: string)
 
 export async function writeStoredSession(worktreePath: string, record: CodexSdkStoredSession): Promise<void> {
   const directory = getSessionDirectory(worktreePath);
+  if (!directory) {
+    console.warn('[agentrix] Skipping Codex SDK persistence because homedir is unavailable.');
+    return;
+  }
   await mkdir(directory, { recursive: true });
   const payload = JSON.stringify(record, null, 2);
-  await writeFile(getSessionPath(worktreePath, record.sessionId), payload, 'utf8');
+  const sessionPath = getSessionPath(worktreePath, record.sessionId);
+  if (!sessionPath) {
+    return;
+  }
+  await writeFile(sessionPath, payload, 'utf8');
 }
 
 export async function deleteStoredSession(worktreePath: string, sessionId: string): Promise<void> {
+  const sessionPath = getSessionPath(worktreePath, sessionId);
+  if (!sessionPath) {
+    return;
+  }
   try {
-    await rm(getSessionPath(worktreePath, sessionId));
+    await rm(sessionPath);
   } catch (error: unknown) {
     const err = error as { code?: string };
     if (err?.code === 'ENOENT') {
@@ -100,4 +131,10 @@ function normaliseRecord(raw: any): CodexSdkStoredSession {
     threadId: typeof raw.threadId === 'string' ? raw.threadId : null,
     events: Array.isArray(raw.events) ? (raw.events as CodexSdkEvent[]) : [],
   };
+}
+
+function createWorktreeKey(worktreePath: string): string {
+  const baseName = (path.basename(worktreePath) || 'worktree').replace(/[^a-zA-Z0-9._-]+/g, '-');
+  const hash = createHash('sha1').update(worktreePath).digest('hex').slice(0, 12);
+  return `${baseName || 'worktree'}-${hash}`;
 }

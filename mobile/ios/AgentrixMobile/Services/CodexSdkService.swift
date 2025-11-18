@@ -22,17 +22,18 @@ final class CodexSdkService {
         return response.sessions
     }
 
-    func createSession(org: String, repo: String, branch: String, label: String?) async throws -> CodexSdkSessionDetail {
+    func createSession(org: String, repo: String, branch: String, label: String?, initialMessage: String? = nil) async throws -> CodexSdkSessionDetail {
         struct Payload: Encodable {
             let org: String
             let repo: String
             let branch: String
             let label: String?
+            let initialMessage: String?
         }
         return try await api.request(
             "/api/codex-sdk/sessions",
             method: .post,
-            body: Payload(org: org, repo: repo, branch: branch, label: label)
+            body: Payload(org: org, repo: repo, branch: branch, label: label, initialMessage: initialMessage)
         )
     }
 

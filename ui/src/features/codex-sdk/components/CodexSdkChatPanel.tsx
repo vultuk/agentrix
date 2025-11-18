@@ -3,20 +3,36 @@ import { ChevronDown } from 'lucide-react';
 import { renderSpinner } from '../../../components/Spinner.js';
 import type { CodexSdkEvent, CodexSdkSessionMetadata } from '../../../types/codex-sdk.js';
 import { renderMarkdown } from '../../../utils/markdown.js';
-import { PLAN_START_TAG, PLAN_END_TAG } from '../../../constants/planTags.js';
+import {
+  PLAN_START_TAG,
+  PLAN_END_TAG,
+  LEGACY_PLAN_START_TAG,
+  LEGACY_PLAN_END_TAG,
+} from '../../../constants/planTags.js';
 
 const { createElement: h } = React;
+
+const PLAN_TAG_PAIRS: Array<[string, string]> = [
+  [PLAN_START_TAG, PLAN_END_TAG],
+  [LEGACY_PLAN_START_TAG, LEGACY_PLAN_END_TAG],
+];
 
 function extractPlanContent(text?: string | null): string | null {
   if (!text) {
     return null;
   }
-  const startIndex = text.indexOf(PLAN_START_TAG);
-  const endIndex = text.indexOf(PLAN_END_TAG);
-  if (startIndex === -1 || endIndex === -1 || endIndex <= startIndex) {
-    return null;
+  const lower = text.toLowerCase();
+  for (const [startTagRaw, endTagRaw] of PLAN_TAG_PAIRS) {
+    const startTag = startTagRaw.toLowerCase();
+    const endTag = endTagRaw.toLowerCase();
+    const startIndex = lower.indexOf(startTag);
+    const endIndex = lower.lastIndexOf(endTag);
+    if (startIndex === -1 || endIndex === -1 || endIndex <= startIndex) {
+      continue;
+    }
+    return text.slice(startIndex + startTagRaw.length, endIndex).trim();
   }
-  return text.slice(startIndex + PLAN_START_TAG.length, endIndex).trim();
+  return null;
 }
 
 function renderPlanPreview(planText: string, key: string) {

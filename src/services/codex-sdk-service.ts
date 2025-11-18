@@ -24,6 +24,7 @@ export class CodexSdkService {
     repo: string;
     branch: string;
     label?: string;
+    initialMessage?: string;
   }): Promise<CodexSdkSessionDetail> {
     const result = await createCodexSdkSession({ ...input, workdir: this.workdir });
     return { session: result.summary, events: result.events };
