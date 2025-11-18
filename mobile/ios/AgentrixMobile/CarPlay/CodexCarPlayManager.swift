@@ -11,6 +11,9 @@ final class CodexCarPlayManager: NSObject {
     private let bridge: CodexCarPlayBridge
     private let speechSynthesizer = AVSpeechSynthesizer()
     private var latestSnapshot: CodexWatchSnapshot?
+    private weak var activeReplyTemplate: CPSearchTemplate?
+    private var activeReplySessionId: String?
+    private var pendingReplyText: String?
 
     init(bridge: CodexCarPlayBridge = .shared) {
         self.bridge = bridge
@@ -39,7 +42,9 @@ private extension CodexCarPlayManager {
     func reloadTemplate() {
         guard let controller = interfaceController else { return }
         let template = makeTemplate(for: latestSnapshot)
-        controller.setRootTemplate(template, animated: true)
+        Task { @MainActor in
+            try? await controller.setRootTemplate(template, animated: true)
+        }
     }
 
     func makeTemplate(for snapshot: CodexWatchSnapshot?) -> CPTemplate {
@@ -58,7 +63,7 @@ private extension CodexCarPlayManager {
             )
             item.userInfo = session.id
             if let preview = session.latestPreview {
-                item.detailText = preview
+                item.setDetailText(preview)
             }
             return CPListSection(items: [item])
         }
@@ -82,26 +87,30 @@ private extension CodexCarPlayManager {
 
     func presentReplyInput(for session: CodexWatchSnapshot.Session) {
         guard let controller = interfaceController else { return }
-        controller.presentTextInputController(withTitle: "Reply to \(session.label)", text: nil, style: .default) { [weak self] results in
-            guard
-                let text = results?.first?.trimmingCharacters(in: .whitespacesAndNewlines),
-                !text.isEmpty
-            else {
-                return
-            }
-            Task {
-                let success = await self?.bridge.sendMessage(text, sessionId: session.id) ?? false
-                await self?.presentSendResult(success: success)
-            }
+        let template = CPSearchTemplate()
+        template.delegate = self
+        activeReplySessionId = session.id
+        activeReplyTemplate = template
+        pendingReplyText = nil
+        Task { @MainActor in
+            try? await controller.presentTemplate(template, animated: true)
         }
     }
 
     func presentSendResult(success: Bool) async {
         guard let controller = interfaceController else { return }
+        if let activeTemplate = activeReplyTemplate {
+            if controller.topTemplate == activeTemplate {
+                try? await controller.dismissTemplate(animated: true)
+            }
+            activeReplyTemplate = nil
+            activeReplySessionId = nil
+            pendingReplyText = nil
+        }
         let message = success ? "Sent" : "Unable to send"
-        let action = CPAlertAction(title: "OK") { _ in }
+        let action = CPAlertAction(title: "OK", style: .default) { _ in }
         let template = CPAlertTemplate(titleVariants: [message], actions: [action])
-        controller.presentTemplate(template, animated: true)
+        try? await controller.presentTemplate(template, animated: true)
     }
 }
 
@@ -111,6 +120,35 @@ extension CodexCarPlayManager: CPListTemplateDelegate {
             handleSelection(sessionId: sessionId)
         }
         completionHandler()
+    }
+}
+
+extension CodexCarPlayManager: CPSearchTemplateDelegate {
+    func searchTemplate(_ searchTemplate: CPSearchTemplate, updatedSearchText searchText: String, completionHandler: @escaping ([CPListItem]) -> Void) {
+        guard searchTemplate === activeReplyTemplate else {
+            completionHandler([])
+            return
+        }
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        pendingReplyText = trimmed
+        completionHandler([])
+    }
+
+    func searchTemplate(_ searchTemplate: CPSearchTemplate, selectedResult: CPListItem, completionHandler: @escaping () -> Void) {
+        completionHandler()
+    }
+
+    func searchTemplateSearchButtonPressed(_ searchTemplate: CPSearchTemplate) {
+        guard
+            searchTemplate === activeReplyTemplate,
+            let sessionId = activeReplySessionId,
+            let text = pendingReplyText,
+            !text.isEmpty
+        else { return }
+        Task {
+            let success = await bridge.sendMessage(text, sessionId: sessionId)
+            await presentSendResult(success: success)
+        }
     }
 }
 #endif

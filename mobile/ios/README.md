@@ -36,3 +36,9 @@ See inline doc comments for extension hooks (automation launchers, advanced git 
 - Unit tests live in `AgentrixMobileTests`.
 - The suite uses a `MockURLProtocol` to simulate backend responses. Run with `⌘U` in Xcode or `xcodebuild test` from the project root.
 
+## Archiving & Watch Companion
+
+- Archive the iOS app with `xcodebuild -project Agentrix.xcodeproj -scheme Agentrix -destination 'generic/platform=iOS' archive -archivePath build/Agentrix`.
+- Before releasing, run `./mobile/ios/scripts/verify-watch-bundle.sh` to ensure the watch target is marked `SKIP_INSTALL = YES`; this keeps the watch app embedded under the iOS bundle and prevents “Generic Xcode Archive” issues.
+- After archiving, run `./mobile/ios/scripts/verify-watch-profiles.sh build/Agentrix.xcarchive` to confirm both the watch app and its extension are signed with the explicit `me.simonskinner.agentrix.watch*` provisioning profiles before installing to a real device.
+- The resulting archive should contain a single installable `Agentrix.app` with `AgentrixWatch.app` nested inside `Agentrix.app/Watch/`.

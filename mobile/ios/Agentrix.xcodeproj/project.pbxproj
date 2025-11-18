@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0543D60F6CD845828BD989A3 /* TerminalViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B11EECE49BF41209234CFB6 /* TerminalViewModel.swift */; };
 		0D6B0F61368D4446ABA7A474 /* GitModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E032D7B113E43278924DCC0 /* GitModels.swift */; };
+		0F41D6E0E69E42769E4219BD /* CodexWatchSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D01941D59344BE9B5C93E1 /* CodexWatchSnapshot.swift */; };
 		1128364B746645739F1E01F5 /* PlansService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B58DE349214E36A27FDBD4 /* PlansService.swift */; };
 		2357C205963B4D66BF2542A3 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A7075AC7BE44315B1CA4B06 /* AuthService.swift */; };
 		2CA97C0F6CD046469C3EB282 /* AgentrixApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF791275C8D44ACF9BD967F2 /* AgentrixApp.swift */; };
@@ -20,8 +21,12 @@
 		48901A2C1C3A4F07A4C07AC5 /* RepositoryDashboardDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0DA0D842A254CC3AE705B93 /* RepositoryDashboardDetailView.swift */; };
 		4953E6AEE0DC45F6B21D40D7 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD2739DD2E6462598DF58F6 /* AuthView.swift */; };
 		4BEB917287124AE2A80B92FD /* TaskModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45F018AD786460784B83E87 /* TaskModels.swift */; };
+		501AABBD50E94C27AD09751A /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F9C3F78ADD7C41C88F8F3F5B /* LaunchScreen.storyboard */; };
+		57113468E822423080C739CD /* CodexWatchSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D01941D59344BE9B5C93E1 /* CodexWatchSnapshot.swift */; };
 		580610920E8F4A599C171A2F /* DashboardModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BBB6BD3E14F435199D86620 /* DashboardModels.swift */; };
+		59F83B73B42B409799677001 /* CodexWatchSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00EC37FE25B142FC8575F06E /* CodexWatchSessionStore.swift */; };
 		5DA73DE80092435E8432579C /* GitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D6F876D8CD84A47A9BB2F38 /* GitService.swift */; };
+		5F506398CDCE4A3DAC9FE1DD /* CodexCarPlayBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6FDD7AA9F4B44FCA85E6C8A /* CodexCarPlayBridge.swift */; };
 		6155C141CD8C4B838EE1B044 /* EventStreamService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3831CBF2241A410D8F96CEF7 /* EventStreamService.swift */; };
 		63B526145FF376F913F8560E /* TerminalSessionVisualStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AD5FCD820F1D3333C32BB28 /* TerminalSessionVisualStyle.swift */; };
 		64A82C19A49A49D98D6E9ED3 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70BD2CE761B44BD0B594640C /* AppSettings.swift */; };
@@ -31,9 +36,12 @@
 		6EE93078E6DB47439B80DB01 /* PortsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DC689D0DB834509B6368559 /* PortsModels.swift */; };
 		74F4C51C546B47D68DBBBEC0 /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19DCAE74256B4032B637318C /* TerminalView.swift */; };
 		7A0132F58C144C1BBE16E1E4 /* RepoDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96253B8255954FB8B8461D59 /* RepoDashboardView.swift */; };
+		7C9E23D3855B41DB9429D367 /* CodexCarPlayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6146286FEEA4F13AEB749A0 /* CodexCarPlayManager.swift */; };
 		86C9A0169A1F47D7A9D9D81B /* TasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E31FD12627142198CC95D6C /* TasksView.swift */; };
 		8A64044875E244DBA93F56D6 /* PortsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F6CDDB4FD941C4A7CEE8E7 /* PortsView.swift */; };
+		8AB5659539914D7D94E614DF /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62418E0C883442098411B62F /* SessionDetailView.swift */; };
 		8CD2E29D47DE442C9EDE6CB5 /* TasksService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C06CAD3D5946E185FB744D /* TasksService.swift */; };
+		901C82702A644FAF8FD07309 /* CodexWatchSnapshotBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDD696501DF74601AB2A2D78 /* CodexWatchSnapshotBuilder.swift */; };
 		92D87E3FA77E4BABA860552F /* IssueModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98C1F02B883D4A20BBEC9B56 /* IssueModels.swift */; };
 		949654591C4B427FB6FC5569 /* PlanComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27EB4A97735349388A3F7A9C /* PlanComposerView.swift */; };
 		9626A4A95AEC4E78BC0817AD /* GitStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7F771DD0C3049E99A574176 /* GitStatusView.swift */; };
@@ -48,39 +56,35 @@
 		AAECB3F416E94050A807356B /* TerminalModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25AFC5973F4B45189C92CB83 /* TerminalModels.swift */; };
 		AC0BEE0FE2AB4C64B0F73E9B /* IssuePresentationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B80282D9B64D5B970243D1 /* IssuePresentationState.swift */; };
 		AC1731B9FC9748B79205A639 /* DiffPresentationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C5C81BB50C4A039C2F6D2E /* DiffPresentationState.swift */; };
+		ACCE6B6DD444402589B55823 /* AgentrixWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A529E077F7554AF9B27A5D2A /* AgentrixWatchApp.swift */; };
 		AE6340CFE3014AA0A5BE8156 /* TerminalService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530A3844A91F4181B886D66A /* TerminalService.swift */; };
+		AEAE2FE63BEA4DA4B8DA87E8 /* CodexWatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2072D8AB4C65440FA60757AB /* CodexWatchBridge.swift */; };
+		B7F042CF4866435895576030 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D5C79C5AFA34617BEADAC77 /* SessionListView.swift */; };
 		B8F20F83CDEE4C01A5511C4E /* GitDiffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FAFC804E96D4EA18BC8C696 /* GitDiffView.swift */; };
 		BB39580AF26A4E64B844EEE2 /* PortsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73403F03071342DE8B7F727E /* PortsService.swift */; };
 		C0123D6BAFB64A2486F2D117 /* CodexSdkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0123D6AAFB64A2486F2D117 /* CodexSdkService.swift */; };
 		C05F5E0E5C534D2AAF857B35 /* CodexSdkChatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C05F5E0D5C534D2AAF857B35 /* CodexSdkChatStore.swift */; };
 		C0B8F2E58C6E40AF97C6A57A /* CodexSdkChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0B8F2E48C6E40AF97C6A57A /* CodexSdkChatView.swift */; };
 		C0D2EEAB1FBB4AF4A1B4B0A1 /* CodexSdkModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D2EEAA1FBB4AF4A1B4B0A1 /* CodexSdkModels.swift */; };
+		C8CF308F7F6940D2AD079FF0 /* AgentrixWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A0384000DFEA44D9B967749A /* AgentrixWatch.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		C9A2688B25794FF2904EACB7 /* WorktreesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1318745A7CE040E3A18886DE /* WorktreesService.swift */; };
 		CB590651EF06452680CC0242 /* AgentrixAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B3E7EFA37E64E7491CA8AE3 /* AgentrixAPIClient.swift */; };
 		CFD53956608047BA8CE1BB9F /* RepositoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 492AB077D16E4DB688058114 /* RepositoryModels.swift */; };
 		D67637079B844659AF2BB0C0 /* PlansView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DEAEFA6AC5F431DBB9BEFAF /* PlansView.swift */; };
 		D8AE06D0D4C64568A0C60F2A /* CommandModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93E3847F5172415C9B6E61A0 /* CommandModels.swift */; };
+		DC8D9F510B77405BA0BC3CEB /* CodexCarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E4CA251A09E4D81AF54AF4B /* CodexCarPlaySceneDelegate.swift */; };
 		DD1415CFBA974B7DB289F046 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78382F38837E40D591D38A02 /* AppCoordinator.swift */; };
 		E4B7F5D2234A4DA5B2A5F5AA /* SwiftTermTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4B7F5D1234A4DA5B2A5F5AA /* SwiftTermTerminalView.swift */; };
 		E554DAFC43C3885B88FE21F9 /* TerminalSessionStyleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFBB7D91E1F97356467377C7 /* TerminalSessionStyleTests.swift */; };
 		E8D28737A8D60D0D7C390BCD /* WorktreeDetailTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA32EE7CA8E0A77E67C1D7BF /* WorktreeDetailTab.swift */; };
 		EF4D70F1E88E413AABABB092 /* EnvironmentConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46E5FC43D6804B4592181472 /* EnvironmentConfig.swift */; };
+		F9523B73330D476680AFC669 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B9422C93A30248129E116BD0 /* Assets.xcassets */; };
+		E4D5670D4C3F4C24A1B5AF69 /* AgentrixWatchExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = FCA7EF9C0DCC4D1299CDE5D0 /* AgentrixWatchExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F4E1E8099F7C46BE83CE4ED9 /* ExtensionDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C8CC24F629F474696848C05 /* ExtensionDelegate.swift */; };
 		FBEF21AC9852489993755A6C /* AgentrixMobileUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF33F33D6313415CA45ED046 /* AgentrixMobileUITests.swift */; };
 		FD11D7D0290846FFBEDADD60 /* WorktreeDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7489BEB5E754AF2837402A5 /* WorktreeDetailView.swift */; };
 		FE2C0E14D75447F6A4F7FD9D /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3246D038942B4BFC859263CB /* AuthViewModel.swift */; };
 		FEA0F1CB1593BD8BA12BF8A3 /* CustomTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B070A21FF8A62965B3AF2C2 /* CustomTerminalView.swift */; };
-		0F41D6E0E69E42769E4219BD /* CodexWatchSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D01941D59344BE9B5C93E1 /* CodexWatchSnapshot.swift */; };
-		901C82702A644FAF8FD07309 /* CodexWatchSnapshotBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDD696501DF74601AB2A2D78 /* CodexWatchSnapshotBuilder.swift */; };
-		ACCE6B6DD444402589B55823 /* AgentrixWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A529E077F7554AF9B27A5D2A /* AgentrixWatchApp.swift */; };
-		59F83B73B42B409799677001 /* CodexWatchSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00EC37FE25B142FC8575F06E /* CodexWatchSessionStore.swift */; };
-		B7F042CF4866435895576030 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D5C79C5AFA34617BEADAC77 /* SessionListView.swift */; };
-		8AB5659539914D7D94E614DF /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62418E0C883442098411B62F /* SessionDetailView.swift */; };
-		57113468E822423080C739CD /* CodexWatchSnapshot.swift in Watch Sources */ = {isa = PBXBuildFile; fileRef = 58D01941D59344BE9B5C93E1 /* CodexWatchSnapshot.swift */; };
-		F9523B73330D476680AFC669 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B9422C93A30248129E116BD0 /* Assets.xcassets */; };
-		C8CF308F7F6940D2AD079FF0 /* AgentrixWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A0384000DFEA44D9B967749A /* AgentrixWatch.app */; };
-		5F506398CDCE4A3DAC9FE1DD /* CodexCarPlayBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6FDD7AA9F4B44FCA85E6C8A /* CodexCarPlayBridge.swift */; };
-		7C9E23D3855B41DB9429D367 /* CodexCarPlayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6146286FEEA4F13AEB749A0 /* CodexCarPlayManager.swift */; };
-		DC8D9F510B77405BA0BC3CEB /* CodexCarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E4CA251A09E4D81AF54AF4B /* CodexCarPlaySceneDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -98,11 +102,18 @@
 			remoteGlobalIDString = D48BC5F754B14CD8970B786A;
 			remoteInfo = AgentrixMobile;
 		};
-		58876DF659354CF487FD138D /* PBXContainerItemProxy */ = {
+		EE031C90039F46B9974E272C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 8311A56504A041C08D290B7C /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 20BC44392194404491918EBA;
+			remoteInfo = AgentrixWatchExtension;
+		};
+		F02AE74BD0CB4507AA0BE77A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8311A56504A041C08D290B7C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B0A77C83000043D7931B77E4;
 			remoteInfo = AgentrixWatch;
 		};
 /* End PBXContainerItemProxy section */
@@ -119,9 +130,21 @@
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E0B5671BA0D84D0A8D1485EB /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				E4D5670D4C3F4C24A1B5AF69 /* AgentrixWatchExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		00EC37FE25B142FC8575F06E /* CodexWatchSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexWatchSessionStore.swift; sourceTree = "<group>"; };
 		0DEAEFA6AC5F431DBB9BEFAF /* PlansView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlansView.swift; sourceTree = "<group>"; };
 		0E032D7B113E43278924DCC0 /* GitModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitModels.swift; sourceTree = "<group>"; };
 		1318745A7CE040E3A18886DE /* WorktreesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreesService.swift; sourceTree = "<group>"; };
@@ -129,9 +152,11 @@
 		1B11EECE49BF41209234CFB6 /* TerminalViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalViewModel.swift; sourceTree = "<group>"; };
 		1B6587445EE44CCE86A398F6 /* RepositoriesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoriesService.swift; sourceTree = "<group>"; };
 		1D6F876D8CD84A47A9BB2F38 /* GitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitService.swift; sourceTree = "<group>"; };
+		2072D8AB4C65440FA60757AB /* CodexWatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexWatchBridge.swift; sourceTree = "<group>"; };
 		25AFC5973F4B45189C92CB83 /* TerminalModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalModels.swift; sourceTree = "<group>"; };
 		27EB4A97735349388A3F7A9C /* PlanComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanComposerView.swift; sourceTree = "<group>"; };
 		2AC69FBBAB1D4CCE96AE9E3A /* TerminalSessionsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionsStore.swift; sourceTree = "<group>"; };
+		2E4CA251A09E4D81AF54AF4B /* CodexCarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexCarPlaySceneDelegate.swift; sourceTree = "<group>"; };
 		3246D038942B4BFC859263CB /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		35ECBD6C0A95431AA56A7821 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3831CBF2241A410D8F96CEF7 /* EventStreamService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventStreamService.swift; sourceTree = "<group>"; };
@@ -145,10 +170,11 @@
 		52B58DE349214E36A27FDBD4 /* PlansService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlansService.swift; sourceTree = "<group>"; };
 		530A3844A91F4181B886D66A /* TerminalService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalService.swift; sourceTree = "<group>"; };
 		54AF6EF891104087A698DD28 /* PlanModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanModels.swift; sourceTree = "<group>"; };
+		58D01941D59344BE9B5C93E1 /* CodexWatchSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexWatchSnapshot.swift; sourceTree = "<group>"; };
 		5AD5FCD820F1D3333C32BB28 /* TerminalSessionVisualStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionVisualStyle.swift; sourceTree = "<group>"; };
+		62418E0C883442098411B62F /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
 		62AFCB583B01490991396582 /* ErrorTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorTypes.swift; sourceTree = "<group>"; };
 		67B80282D9B64D5B970243D1 /* IssuePresentationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssuePresentationState.swift; sourceTree = "<group>"; };
-		67D5FE7B2EC74E7B0077C44E /* Agentrix-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Agentrix-Info.plist"; sourceTree = "<group>"; };
 		6BBB6BD3E14F435199D86620 /* DashboardModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardModels.swift; sourceTree = "<group>"; };
 		6DD2739DD2E6462598DF58F6 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		6E31FD12627142198CC95D6C /* TasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksView.swift; sourceTree = "<group>"; };
@@ -158,6 +184,8 @@
 		73403F03071342DE8B7F727E /* PortsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortsService.swift; sourceTree = "<group>"; };
 		78382F38837E40D591D38A02 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
 		7C0606B4A2C1433DB5E4F2C9 /* IssueDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssueDetailView.swift; sourceTree = "<group>"; };
+		7C8CC24F629F474696848C05 /* ExtensionDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionDelegate.swift; sourceTree = "<group>"; };
+		7D5C79C5AFA34617BEADAC77 /* SessionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionListView.swift; sourceTree = "<group>"; };
 		8482A2ADBBC24D16BE5D1930 /* RepositoriesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoriesView.swift; sourceTree = "<group>"; };
 		86441AFE05414D43802EF5C4 /* RepositoriesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoriesViewModel.swift; sourceTree = "<group>"; };
 		8FAFC804E96D4EA18BC8C696 /* GitDiffView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitDiffView.swift; sourceTree = "<group>"; };
@@ -166,13 +194,18 @@
 		96D5F1752D814B789CC5D9F1 /* .xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = .xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		98C1F02B883D4A20BBEC9B56 /* IssueModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IssueModels.swift; sourceTree = "<group>"; };
 		9B070A21FF8A62965B3AF2C2 /* CustomTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomTerminalView.swift; sourceTree = "<group>"; };
+		A0384000DFEA44D9B967749A /* AgentrixWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AgentrixWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A251238B695B49799B659DA4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A3C5C81BB50C4A039C2F6D2E /* DiffPresentationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffPresentationState.swift; sourceTree = "<group>"; };
 		A45F018AD786460784B83E87 /* TaskModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskModels.swift; sourceTree = "<group>"; };
+		A529E077F7554AF9B27A5D2A /* AgentrixWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentrixWatchApp.swift; sourceTree = "<group>"; };
 		AF791275C8D44ACF9BD967F2 /* AgentrixApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentrixApp.swift; sourceTree = "<group>"; };
 		B0DA0D842A254CC3AE705B93 /* RepositoryDashboardDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoryDashboardDetailView.swift; sourceTree = "<group>"; };
+		B6FDD7AA9F4B44FCA85E6C8A /* CodexCarPlayBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexCarPlayBridge.swift; sourceTree = "<group>"; };
 		B7489BEB5E754AF2837402A5 /* WorktreeDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeDetailView.swift; sourceTree = "<group>"; };
 		B7C06CAD3D5946E185FB744D /* TasksService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksService.swift; sourceTree = "<group>"; };
 		B7F771DD0C3049E99A574176 /* GitStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitStatusView.swift; sourceTree = "<group>"; };
+		B9422C93A30248129E116BD0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C0123D6AAFB64A2486F2D117 /* CodexSdkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSdkService.swift; sourceTree = "<group>"; };
 		C05F5E0D5C534D2AAF857B35 /* CodexSdkChatStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSdkChatStore.swift; sourceTree = "<group>"; };
 		C0B8F2E48C6E40AF97C6A57A /* CodexSdkChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSdkChatView.swift; sourceTree = "<group>"; };
@@ -182,38 +215,31 @@
 		D5F6CDDB4FD941C4A7CEE8E7 /* PortsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortsView.swift; sourceTree = "<group>"; };
 		D77D30A55CF64F94B67E09C4 /* WorktreeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeViewModel.swift; sourceTree = "<group>"; };
 		E4B7F5D1234A4DA5B2A5F5AA /* SwiftTermTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftTermTerminalView.swift; sourceTree = "<group>"; };
+		E0EC79A8F9F54D2FBBFC3A56 /* AgentrixWatchExtension-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "AgentrixWatchExtension-Info.plist"; sourceTree = "<group>"; };
 		E8D4DA132607483B82A75F33 /* .xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = .xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FCA7EF9C0DCC4D1299CDE5D0 /* AgentrixWatchExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AgentrixWatchExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		EA32EE7CA8E0A77E67C1D7BF /* WorktreeDetailTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeDetailTab.swift; sourceTree = "<group>"; };
 		ECB7B94B7B3C1EADBA5594B8 /* UITestHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestHarness.swift; sourceTree = "<group>"; };
-		EFBB7D91E1F97356467377C7 /* TerminalSessionStyleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionStyleTests.swift; sourceTree = "<group>"; };
-		FEDA99F029504BCAB4ADF39B /* DashboardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardService.swift; sourceTree = "<group>"; };
-		58D01941D59344BE9B5C93E1 /* CodexWatchSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexWatchSnapshot.swift; sourceTree = "<group>"; };
 		EDD696501DF74601AB2A2D78 /* CodexWatchSnapshotBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexWatchSnapshotBuilder.swift; sourceTree = "<group>"; };
-		A529E077F7554AF9B27A5D2A /* AgentrixWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentrixWatchApp.swift; sourceTree = "<group>"; };
-		00EC37FE25B142FC8575F06E /* CodexWatchSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexWatchSessionStore.swift; sourceTree = "<group>"; };
-		7D5C79C5AFA34617BEADAC77 /* SessionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionListView.swift; sourceTree = "<group>"; };
-		62418E0C883442098411B62F /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
-		A251238B695B49799B659DA4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		B9422C93A30248129E116BD0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		A0384000DFEA44D9B967749A /* AgentrixWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AgentrixWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B6FDD7AA9F4B44FCA85E6C8A /* CodexCarPlayBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexCarPlayBridge.swift; sourceTree = "<group>"; };
+		EFBB7D91E1F97356467377C7 /* TerminalSessionStyleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionStyleTests.swift; sourceTree = "<group>"; };
 		F6146286FEEA4F13AEB749A0 /* CodexCarPlayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexCarPlayManager.swift; sourceTree = "<group>"; };
-		2E4CA251A09E4D81AF54AF4B /* CodexCarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexCarPlaySceneDelegate.swift; sourceTree = "<group>"; };
+		F9C3F78ADD7C41C88F8F3F5B /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		FEDA99F029504BCAB4ADF39B /* DashboardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		5F66897A77B14B3CA01317EA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6ECCC7C4A9C6408CB202C8FA /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				674700F82EC3DFAA0080F7E7 /* SwiftTerm in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		5F66897A77B14B3CA01317EA /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -231,6 +257,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B0A77C80000043D7931B77E4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -240,6 +273,14 @@
 				CF33F33D6313415CA45ED046 /* AgentrixMobileUITests.swift */,
 			);
 			path = AgentrixMobileUITests;
+			sourceTree = "<group>";
+		};
+		071170AD6ACF4016B4F9DD13 /* Stores */ = {
+			isa = PBXGroup;
+			children = (
+				00EC37FE25B142FC8575F06E /* CodexWatchSessionStore.swift */,
+			);
+			path = Stores;
 			sourceTree = "<group>";
 		};
 		0AF1945A928C459A8985F1DD /* Repositories */ = {
@@ -333,32 +374,6 @@
 			path = Ports;
 			sourceTree = "<group>";
 		};
-		CE2A6260B9F54BFCA6880A1F /* CarPlay */ = {
-			isa = PBXGroup;
-			children = (
-				B6FDD7AA9F4B44FCA85E6C8A /* CodexCarPlayBridge.swift */,
-				F6146286FEEA4F13AEB749A0 /* CodexCarPlayManager.swift */,
-				2E4CA251A09E4D81AF54AF4B /* CodexCarPlaySceneDelegate.swift */,
-			);
-			path = CarPlay;
-			sourceTree = "<group>";
-		};
-		70892DBCF3E94A8DA0E97107 /* App */ = {
-			isa = PBXGroup;
-			children = (
-				A529E077F7554AF9B27A5D2A /* AgentrixWatchApp.swift */,
-			);
-			path = App;
-			sourceTree = "<group>";
-		};
-		071170AD6ACF4016B4F9DD13 /* Stores */ = {
-			isa = PBXGroup;
-			children = (
-				00EC37FE25B142FC8575F06E /* CodexWatchSessionStore.swift */,
-			);
-			path = Stores;
-			sourceTree = "<group>";
-		};
 		66263A16273640778F39C4E7 /* Views */ = {
 			isa = PBXGroup;
 			children = (
@@ -368,24 +383,13 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
-		A3ACF3F2DCD4420CAFB4E831 /* Resources */ = {
+		70892DBCF3E94A8DA0E97107 /* App */ = {
 			isa = PBXGroup;
 			children = (
-				B9422C93A30248129E116BD0 /* Assets.xcassets */,
+				A529E077F7554AF9B27A5D2A /* AgentrixWatchApp.swift */,
+				7C8CC24F629F474696848C05 /* ExtensionDelegate.swift */,
 			);
-			path = Resources;
-			sourceTree = "<group>";
-		};
-		DE6888B1FCE74611BC09C53B /* AgentrixWatch */ = {
-			isa = PBXGroup;
-			children = (
-				70892DBCF3E94A8DA0E97107 /* App */,
-				071170AD6ACF4016B4F9DD13 /* Stores */,
-				66263A16273640778F39C4E7 /* Views */,
-				A3ACF3F2DCD4420CAFB4E831 /* Resources */,
-				A251238B695B49799B659DA4 /* Info.plist */,
-			);
-			path = AgentrixWatch;
+			path = App;
 			sourceTree = "<group>";
 		};
 		7425577F1C3E488EADE3C9CD /* Worktrees */ = {
@@ -412,10 +416,19 @@
 			children = (
 				6EE5C8B2B4E348CE94F95EA0 /* Agentrix.app */,
 				A0384000DFEA44D9B967749A /* AgentrixWatch.app */,
+				FCA7EF9C0DCC4D1299CDE5D0 /* AgentrixWatchExtension.appex */,
 				E8D4DA132607483B82A75F33 /* .xctest */,
 				96D5F1752D814B789CC5D9F1 /* .xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A3ACF3F2DCD4420CAFB4E831 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				B9422C93A30248129E116BD0 /* Assets.xcassets */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		A4A2BE884821412E8B29A2F2 /* Tasks */ = {
@@ -441,8 +454,19 @@
 			isa = PBXGroup;
 			children = (
 				35ECBD6C0A95431AA56A7821 /* Assets.xcassets */,
+				F9C3F78ADD7C41C88F8F3F5B /* LaunchScreen.storyboard */,
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		CE2A6260B9F54BFCA6880A1F /* CarPlay */ = {
+			isa = PBXGroup;
+			children = (
+				B6FDD7AA9F4B44FCA85E6C8A /* CodexCarPlayBridge.swift */,
+				F6146286FEEA4F13AEB749A0 /* CodexCarPlayManager.swift */,
+				2E4CA251A09E4D81AF54AF4B /* CodexCarPlaySceneDelegate.swift */,
+			);
+			path = CarPlay;
 			sourceTree = "<group>";
 		};
 		D3389BBEAABF4C0EB9A66AB2 /* GitStatus */ = {
@@ -473,6 +497,19 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
+		DE6888B1FCE74611BC09C53B /* AgentrixWatch */ = {
+			isa = PBXGroup;
+			children = (
+				70892DBCF3E94A8DA0E97107 /* App */,
+				071170AD6ACF4016B4F9DD13 /* Stores */,
+				66263A16273640778F39C4E7 /* Views */,
+				A3ACF3F2DCD4420CAFB4E831 /* Resources */,
+				A251238B695B49799B659DA4 /* Info.plist */,
+				E0EC79A8F9F54D2FBBFC3A56 /* AgentrixWatchExtension-Info.plist */,
+			);
+			path = AgentrixWatch;
+			sourceTree = "<group>";
+		};
 		DF26FB47D28545C0B0E22468 /* AgentrixMobile */ = {
 			isa = PBXGroup;
 			children = (
@@ -482,6 +519,7 @@
 				C9D62C81DBFB4D3B92167C50 /* Resources */,
 				DC326B4DB1CC44A790FB3AFF /* Models */,
 				DFB7ADD4EEBC459EB9F211BD /* Features */,
+				E17D4DBA245349D6A67F2930 /* WatchConnectivity */,
 				CE2A6260B9F54BFCA6880A1F /* CarPlay */,
 			);
 			path = AgentrixMobile;
@@ -504,6 +542,14 @@
 			path = Features;
 			sourceTree = "<group>";
 		};
+		E17D4DBA245349D6A67F2930 /* WatchConnectivity */ = {
+			isa = PBXGroup;
+			children = (
+				2072D8AB4C65440FA60757AB /* CodexWatchBridge.swift */,
+			);
+			path = WatchConnectivity;
+			sourceTree = "<group>";
+		};
 		F0AFF50999264282BCA151F7 /* AgentrixMobileTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -516,7 +562,6 @@
 		F1BD73C2886E40D98F19D726 = {
 			isa = PBXGroup;
 			children = (
-				67D5FE7B2EC74E7B0077C44E /* Agentrix-Info.plist */,
 				DF26FB47D28545C0B0E22468 /* AgentrixMobile */,
 				DE6888B1FCE74611BC09C53B /* AgentrixWatch */,
 				F0AFF50999264282BCA151F7 /* AgentrixMobileTests */,
@@ -528,6 +573,42 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		20BC44392194404491918EBA /* AgentrixWatchExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2EAAE8E397E946A38AECCEA7 /* Build configuration list for PBXNativeTarget "AgentrixWatchExtension" */;
+			buildPhases = (
+				5F66897A77B14B3CA01317EA /* Frameworks */,
+				8B76EF401EE444919032FCC2 /* Sources */,
+				8F9B8FF502C14C7D993F7A61 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AgentrixWatchExtension;
+			productName = AgentrixWatchExtension;
+			productReference = FCA7EF9C0DCC4D1299CDE5D0 /* AgentrixWatchExtension.appex */;
+			productType = "com.apple.product-type.watchkit2-extension";
+		};
+		B0A77C83000043D7931B77E4 /* AgentrixWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B0A77CA2000043D7931B77E4 /* Build configuration list for PBXNativeTarget "AgentrixWatch" */;
+			buildPhases = (
+				B0A77C80000043D7931B77E4 /* Frameworks */,
+				B0A77C81000043D7931B77E4 /* Sources */,
+				B0A77C82000043D7931B77E4 /* Resources */,
+				E0B5671BA0D84D0A8D1485EB /* Embed App Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B0A77C85000043D7931B77E4 /* PBXTargetDependency */,
+			);
+			name = AgentrixWatch;
+			productName = AgentrixWatch;
+			productReference = A0384000DFEA44D9B967749A /* AgentrixWatch.app */;
+			productType = "com.apple.product-type.application.watchapp2";
+		};
 		4775ACA3F0AA4F17B9E68D05 /* AgentrixTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1589B23A57FB476395525AC7 /* Build configuration list for PBXNativeTarget "AgentrixTests" */;
@@ -559,29 +640,12 @@
 			buildRules = (
 			);
 			dependencies = (
-				26146D61D97B4EDCA5965EA4 /* PBXTargetDependency */,
+				542093A1667841E2A9D1EFF3 /* PBXTargetDependency */,
 			);
 			name = Agentrix;
 			productName = AgentrixMobile;
 			productReference = 6EE5C8B2B4E348CE94F95EA0 /* Agentrix.app */;
 			productType = "com.apple.product-type.application";
-		};
-		20BC44392194404491918EBA /* AgentrixWatch */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 2EAAE8E397E946A38AECCEA7 /* Build configuration list for PBXNativeTarget "AgentrixWatch" */;
-			buildPhases = (
-				5F66897A77B14B3CA01317EA /* Frameworks */,
-				8B76EF401EE444919032FCC2 /* Sources */,
-				8F9B8FF502C14C7D993F7A61 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = AgentrixWatch;
-			productName = AgentrixWatch;
-			productReference = A0384000DFEA44D9B967749A /* AgentrixWatch.app */;
-			productType = "com.apple.product-type.application.watchapp2";
 		};
 		F6EFAAE9C17648D1BE5785E1 /* AgentrixUITests */ = {
 			isa = PBXNativeTarget;
@@ -610,13 +674,18 @@
 				LastSwiftUpdateCheck = 1540;
 				LastUpgradeCheck = 1540;
 				TargetAttributes = {
+					20BC44392194404491918EBA = {
+						CreatedOnToolsVersion = 15.4;
+						ProvisioningStyle = Manual;
+					};
 					4775ACA3F0AA4F17B9E68D05 = {
 						CreatedOnToolsVersion = 15.4;
 					};
-					D48BC5F754B14CD8970B786A = {
+					B0A77C83000043D7931B77E4 = {
 						CreatedOnToolsVersion = 15.4;
+						ProvisioningStyle = Manual;
 					};
-					20BC44392194404491918EBA = {
+					D48BC5F754B14CD8970B786A = {
 						CreatedOnToolsVersion = 15.4;
 					};
 					F6EFAAE9C17648D1BE5785E1 = {
@@ -641,7 +710,8 @@
 			projectRoot = "";
 			targets = (
 				D48BC5F754B14CD8970B786A /* Agentrix */,
-				20BC44392194404491918EBA /* AgentrixWatch */,
+				20BC44392194404491918EBA /* AgentrixWatchExtension */,
+				B0A77C83000043D7931B77E4 /* AgentrixWatch */,
 				4775ACA3F0AA4F17B9E68D05 /* AgentrixTests */,
 				F6EFAAE9C17648D1BE5785E1 /* AgentrixUITests */,
 			);
@@ -654,14 +724,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				321B682AF8D64027851A1CA5 /* Assets.xcassets in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		8F9B8FF502C14C7D993F7A61 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				F9523B73330D476680AFC669 /* Assets.xcassets in Resources */,
+				501AABBD50E94C27AD09751A /* LaunchScreen.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -676,6 +739,21 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8F9B8FF502C14C7D993F7A61 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B0A77C82000043D7931B77E4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F9523B73330D476680AFC669 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -698,7 +776,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PROJECT_DIR}/scripts/apply-swiftterm-visionos-patch.sh\"";
+			shellScript = "\"${PROJECT_DIR}/scripts/apply-swiftterm-visionos-patch.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -772,6 +850,7 @@
 				35B3C433A83E467A9A8898B1 /* ErrorTypes.swift in Sources */,
 				A6C633BABB6B4B29A7C3F2F5 /* PlanPromptTemplates.swift in Sources */,
 				A791C9F0D4FA4F7586D20CEC /* MarkdownRenderer.swift in Sources */,
+				AEAE2FE63BEA4DA4B8DA87E8 /* CodexWatchBridge.swift in Sources */,
 				0F41D6E0E69E42769E4219BD /* CodexWatchSnapshot.swift in Sources */,
 				901C82702A644FAF8FD07309 /* CodexWatchSnapshotBuilder.swift in Sources */,
 				5F506398CDCE4A3DAC9FE1DD /* CodexCarPlayBridge.swift in Sources */,
@@ -788,7 +867,8 @@
 				59F83B73B42B409799677001 /* CodexWatchSessionStore.swift in Sources */,
 				B7F042CF4866435895576030 /* SessionListView.swift in Sources */,
 				8AB5659539914D7D94E614DF /* SessionDetailView.swift in Sources */,
-				57113468E822423080C739CD /* CodexWatchSnapshot.swift in Watch Sources */,
+				57113468E822423080C739CD /* CodexWatchSnapshot.swift in Sources */,
+				F4E1E8099F7C46BE83CE4ED9 /* ExtensionDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -801,6 +881,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B0A77C81000043D7931B77E4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -809,15 +896,20 @@
 			target = D48BC5F754B14CD8970B786A /* Agentrix */;
 			targetProxy = 3D10D2EC87634D0188DEBCB4 /* PBXContainerItemProxy */;
 		};
+		B0A77C85000043D7931B77E4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 20BC44392194404491918EBA /* AgentrixWatchExtension */;
+			targetProxy = EE031C90039F46B9974E272C /* PBXContainerItemProxy */;
+		};
+		542093A1667841E2A9D1EFF3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B0A77C83000043D7931B77E4 /* AgentrixWatch */;
+			targetProxy = F02AE74BD0CB4507AA0BE77A /* PBXContainerItemProxy */;
+		};
 		ABC1E94D9ACC44748D77D59E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = D48BC5F754B14CD8970B786A /* Agentrix */;
 			targetProxy = 3CA40857781D4221893B22DA /* PBXContainerItemProxy */;
-		};
-		26146D61D97B4EDCA5965EA4 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 20BC44392194404491918EBA /* AgentrixWatch */;
-			targetProxy = 58876DF659354CF487FD138D /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -877,7 +969,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = J3GGLYH7P8;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -885,7 +977,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Agentrix-Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_UILaunchStoryboardName = "";
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -894,7 +986,7 @@
 					"@executable_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.0.2;
+				MARKETING_VERSION = 0.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = me.simonskinner.agentrix;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -909,12 +1001,62 @@
 			};
 			name = Debug;
 		};
+		A4D395734E564D2789E62769 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = J3GGLYH7P8;
+				INFOPLIST_FILE = "AgentrixWatch/AgentrixWatchExtension-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.0.3;
+				PRODUCT_BUNDLE_IDENTIFIER = me.simonskinner.agentrix.watch.extension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Agentrix Watch Extension";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+				WK_APP_BUNDLE_IDENTIFIER = me.simonskinner.agentrix.watch;
+			};
+			name = Release;
+		};
+		B0A77CA4000043D7931B77E4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = J3GGLYH7P8;
+				INFOPLIST_FILE = AgentrixWatch/Info.plist;
+				MARKETING_VERSION = 0.0.3;
+				PRODUCT_BUNDLE_IDENTIFIER = me.simonskinner.agentrix.watch;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Agentrix Watch";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
 		A8D36F36FD5249B7AEF2CB89 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = J3GGLYH7P8;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -922,7 +1064,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Agentrix-Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_UILaunchStoryboardName = "";
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -931,7 +1073,7 @@
 					"@executable_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.0.2;
+				MARKETING_VERSION = 0.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = me.simonskinner.agentrix;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -945,6 +1087,56 @@
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 			};
 			name = Release;
+		};
+		BA78104182964CA4B6B7E501 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = J3GGLYH7P8;
+				INFOPLIST_FILE = "AgentrixWatch/AgentrixWatchExtension-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.0.3;
+				PRODUCT_BUNDLE_IDENTIFIER = me.simonskinner.agentrix.watch.extension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Agentrix Watch Extension";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+				WK_APP_BUNDLE_IDENTIFIER = me.simonskinner.agentrix.watch;
+			};
+			name = Debug;
+		};
+		B0A77CA3000043D7931B77E4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = J3GGLYH7P8;
+				INFOPLIST_FILE = AgentrixWatch/Info.plist;
+				MARKETING_VERSION = 0.0.3;
+				PRODUCT_BUNDLE_IDENTIFIER = me.simonskinner.agentrix.watch;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Agentrix Watch";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
 		};
 		C46A9D67B2B14BB0ABAF84EB /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -980,44 +1172,6 @@
 			};
 			name = Release;
 		};
-		BA78104182964CA4B6B7E501 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = J3GGLYH7P8;
-				INFOPLIST_FILE = AgentrixWatch/Info.plist;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = me.simonskinner.agentrix.watch;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = watchos;
-				SUPPORTED_PLATFORMS = "watchos watchsimulator";
-				SWIFT_VERSION = 5.9;
-				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 10.0;
-			};
-			name = Debug;
-		};
-		A4D395734E564D2789E62769 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = J3GGLYH7P8;
-				INFOPLIST_FILE = AgentrixWatch/Info.plist;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = me.simonskinner.agentrix.watch;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = watchos;
-				SUPPORTED_PLATFORMS = "watchos watchsimulator";
-				SWIFT_VERSION = 5.9;
-				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 10.0;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1039,20 +1193,29 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		2EAAE8E397E946A38AECCEA7 /* Build configuration list for PBXNativeTarget "AgentrixWatchExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BA78104182964CA4B6B7E501 /* Debug */,
+				A4D395734E564D2789E62769 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B0A77CA2000043D7931B77E4 /* Build configuration list for PBXNativeTarget "AgentrixWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B0A77CA3000043D7931B77E4 /* Debug */,
+				B0A77CA4000043D7931B77E4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		30CB5EE153FF429BA899C26B /* Build configuration list for PBXNativeTarget "Agentrix" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				6F186A60524841D88295A49D /* Debug */,
 				A8D36F36FD5249B7AEF2CB89 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		2EAAE8E397E946A38AECCEA7 /* Build configuration list for PBXNativeTarget "AgentrixWatch" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				BA78104182964CA4B6B7E501 /* Debug */,
-				A4D395734E564D2789E62769 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

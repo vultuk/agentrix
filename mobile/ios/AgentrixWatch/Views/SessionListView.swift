@@ -89,11 +89,10 @@ private struct CodexSessionRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
-            if let activity = session.lastActivityAt ?? session.createdAt {
-                Text(formatter.localizedString(for: activity, relativeTo: Date()))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+            let activity = session.lastActivityAt ?? session.createdAt
+            Text(formatter.localizedString(for: activity, relativeTo: Date()))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 }
