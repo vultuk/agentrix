@@ -49,6 +49,7 @@ pub fn workspaces_from_dir(workdir: &Path) -> Result<Vec<SessionWorkspace>> {
     }
 
     let mut workspaces = Vec::new();
+    let mut orgs = Vec::new();
     for entry in fs::read_dir(workdir)
         .with_context(|| format!("failed to read workdir {}", workdir.display()))?
     {
@@ -57,8 +58,16 @@ pub fn workspaces_from_dir(workdir: &Path) -> Result<Vec<SessionWorkspace>> {
             continue;
         }
 
-        let org_name = entry.file_name().to_string_lossy().into_owned();
-        let repos = repositories_from_dir(entry.path())?;
+        orgs.push((
+            entry.file_name().to_string_lossy().into_owned(),
+            entry.path(),
+        ));
+    }
+
+    orgs.sort_by(|a, b| a.0.cmp(&b.0));
+
+    for (org_name, org_path) in orgs {
+        let repos = repositories_from_dir(org_path)?;
         workspaces.push(SessionWorkspace {
             name: org_name,
             repositories: repos,
@@ -70,6 +79,7 @@ pub fn workspaces_from_dir(workdir: &Path) -> Result<Vec<SessionWorkspace>> {
 
 fn repositories_from_dir(org_path: PathBuf) -> Result<Vec<SessionRepository>> {
     let mut repositories = Vec::new();
+    let mut names = Vec::new();
 
     for entry in fs::read_dir(&org_path)
         .with_context(|| format!("failed to read org directory {}", org_path.display()))?
@@ -79,12 +89,17 @@ fn repositories_from_dir(org_path: PathBuf) -> Result<Vec<SessionRepository>> {
             continue;
         }
 
-        let repo = SessionRepository {
-            name: entry.file_name().to_string_lossy().into_owned(),
+        names.push(entry.file_name().to_string_lossy().into_owned());
+    }
+
+    names.sort();
+
+    for name in names {
+        repositories.push(SessionRepository {
+            name,
             plans: Vec::new(),
             worktrees: Vec::new(),
-        };
-        repositories.push(repo);
+        });
     }
 
     Ok(repositories)
@@ -130,5 +145,31 @@ mod tests {
         let repos = repositories_from_dir(org_path).unwrap();
         assert_eq!(repos.len(), 1);
         assert_eq!(repos[0].name, "repo_a");
+    }
+
+    #[test]
+    fn workspaces_are_sorted_alphabetically() {
+        let tmp = tempdir().unwrap();
+        let org_b = tmp.path().join("z_workspace");
+        let org_a = tmp.path().join("a_workspace");
+        fs::create_dir_all(org_b.join("repo_one")).unwrap();
+        fs::create_dir_all(org_a.join("repo_two")).unwrap();
+
+        let workspaces = workspaces_from_dir(tmp.path()).unwrap();
+        assert_eq!(workspaces[0].name, "a_workspace");
+        assert_eq!(workspaces[1].name, "z_workspace");
+    }
+
+    #[test]
+    fn repositories_are_sorted_alphabetically() {
+        let tmp = tempdir().unwrap();
+        let org_path = tmp.path().join("org");
+        fs::create_dir_all(&org_path).unwrap();
+        fs::create_dir_all(org_path.join("b_repo")).unwrap();
+        fs::create_dir_all(org_path.join("a_repo")).unwrap();
+
+        let repos = repositories_from_dir(org_path).unwrap();
+        assert_eq!(repos[0].name, "a_repo");
+        assert_eq!(repos[1].name, "b_repo");
     }
 }
