@@ -23,3 +23,9 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
       - name: Cargo test
         run: cargo test --all
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Cargo coverage
+        run: cargo llvm-cov --summary-only

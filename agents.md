@@ -16,6 +16,7 @@
 - **Unit tests**: Each handler module includes `#[cfg(test)]` coverage (use `tower::ServiceExt` with the router for in-memory requests).
 - **Integration tests**: Mirror user-visible CLI or API behavior under `tests/`; start spinning up the server/binary for full REST checks as functionality expands.
 - Run `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and `cargo test --all` locally; CI enforces the same.
+- Coverage: Run `cargo llvm-cov --summary-only` (requires rustup + cargo-llvm-cov) to report code coverage; CI runs this after tests.
 
 ## Documentation
 - API payload references and other specs live in `docs/` (e.g., `docs/sessions.md` for the `/sessions` endpoint). Review these before changing types or responses.
