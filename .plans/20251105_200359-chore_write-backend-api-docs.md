@@ -1,1 +1,0 @@
-Please can you write a full API documentation for the backend? Something that exposes all of the functions, options required, how to auth, etc. I should be able to give it to another developer and they should understand it perfectly. It will be stored in the file `api.md` with appropriate Markdown formatting.

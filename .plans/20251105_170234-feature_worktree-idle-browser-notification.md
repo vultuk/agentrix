@@ -1,1 +1,0 @@
-Currently, when a work tree is detected as being idle, it changes the name of the work tree to green. Can we make it so that it also sends a browser notification saying the name of the work tree and that work has finished?
