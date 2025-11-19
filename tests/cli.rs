@@ -2,27 +2,27 @@ use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 
 #[test]
-fn prints_greeting_by_default() {
-    cargo_bin_cmd!("agentrix")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Hello, world!"))
-        .stderr(predicate::str::is_empty());
-}
-
-#[test]
-fn prints_help_text_when_requested() {
+fn help_describes_server_usage() {
     cargo_bin_cmd!("agentrix")
         .arg("--help")
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Usage: agentrix")
-                .and(predicate::str::contains("-h, --help"))
-                .and(predicate::str::contains("-V, --version"))
-                .and(predicate::str::contains(
-                    "A starter command-line interface for experimenting with Rust.",
-                )),
+            predicate::str::contains(
+                "A starter command-line interface for experimenting with Rust.",
+            )
+            .and(predicate::str::contains("--addr <ADDR>"))
+            .and(predicate::str::contains("default: 0.0.0.0:4567")),
         )
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn version_flag_prints_version() {
+    cargo_bin_cmd!("agentrix")
+        .arg("--version")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(env!("CARGO_PKG_VERSION")))
         .stderr(predicate::str::is_empty());
 }
