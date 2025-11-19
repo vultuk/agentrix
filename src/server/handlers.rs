@@ -29,10 +29,11 @@ pub async fn root() -> Json<ApiResponse<GreetingResponse>> {
 }
 
 pub async fn sessions(State(state): State<AppState>) -> Json<ApiResponse<Vec<SessionWorkspace>>> {
-    let workspaces = workspaces_from_dir(state.workdir.as_ref()).unwrap_or_else(|err| {
-        tracing::error!(target: "agentrix::server", error = %err, "failed to read sessions");
-        Vec::new()
-    });
+    let workspaces = workspaces_from_dir(state.workdir.as_ref(), state.worktrees_root.as_ref())
+        .unwrap_or_else(|err| {
+            tracing::error!(target: "agentrix::server", error = %err, "failed to read sessions");
+            Vec::new()
+        });
 
     success(workspaces)
 }
@@ -342,6 +343,43 @@ mod tests {
             .as_array()
             .unwrap()
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn sessions_payload_includes_worktrees() {
+        let tmp = tempdir().unwrap();
+        let workdir = tmp.path().join("workdir");
+        let worktrees_root = tmp.path().join("worktrees");
+        fs::create_dir_all(workdir.join("org/repo")).unwrap();
+        fs::create_dir_all(worktrees_root.join("org/repo/feat_one")).unwrap();
+        fs::create_dir_all(worktrees_root.join("org/repo/feat_two")).unwrap();
+
+        let app = crate::server::router(state_with_root(&workdir, &worktrees_root));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/sessions")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("request succeeds");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = response
+            .into_body()
+            .collect()
+            .await
+            .expect("read body")
+            .to_bytes();
+        let payload: serde_json::Value = serde_json::from_slice(&bytes).expect("valid json");
+
+        let worktrees = payload["data"][0]["repositories"][0]["worktrees"]
+            .as_array()
+            .expect("worktrees array");
+        assert_eq!(worktrees.len(), 2);
+        assert_eq!(worktrees[0]["name"], "feat_one");
+        assert_eq!(worktrees[1]["name"], "feat_two");
     }
 
     #[tokio::test]
