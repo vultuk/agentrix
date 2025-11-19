@@ -10,7 +10,7 @@ pub async fn run() -> Result<()> {
     init_tracing();
 
     let args = cli::Args::parse();
-    server::run(args.addr).await
+    server::run(&args).await
 }
 
 fn init_tracing() {
