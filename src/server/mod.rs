@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use axum::{
     routing::{get, post},
     Router,
@@ -73,6 +73,10 @@ where
 }
 
 fn resolve_workdir(path: &Path) -> Result<PathBuf> {
+    if path.exists() && !path.is_dir() {
+        return Err(anyhow!("workdir {} is not a directory", path.display()));
+    }
+
     if !path.exists() {
         fs::create_dir_all(path)
             .with_context(|| format!("failed to create workdir {}", path.display()))?;
@@ -161,5 +165,17 @@ mod tests {
         let existing = tmp.path();
         let resolved = resolve_workdir(existing).unwrap();
         assert_eq!(resolved, existing.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn resolve_workdir_errors_when_path_is_file() {
+        let tmp = tempdir().unwrap();
+        let file_path = tmp.path().join("not_a_dir");
+        std::fs::write(&file_path, "content").unwrap();
+
+        let err = resolve_workdir(&file_path).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains(&format!("{} is not a directory", file_path.display())));
     }
 }
