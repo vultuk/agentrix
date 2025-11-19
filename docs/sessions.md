@@ -2,6 +2,8 @@
 
 The `/sessions` endpoint returns an array of workspaces (GitHub organisations), each aggregating their repositories, active plans, worktrees, and associated terminals. These types mirror the Rust data structures in `src/server/types.rs` and should be kept in sync whenever the API evolves. The current implementation discovers workspaces by scanning the configured `workdir`, expecting a folder hierarchy of `<organisation>/<repository>`.
 
+Posting to `/sessions` clones a repository into that hierarchy. Provide a `repository_url` (SSH or HTTPS) matching GitHub’s `org/repo.git` structure and Agentrix will create `<workdir>/<org>/<repo>` by running `git clone` and leaving the default branch checked out.
+
 ## Domain Mapping
 
 - **Workspace** → GitHub organisation.
@@ -57,3 +59,44 @@ The `/sessions` endpoint returns an array of workspaces (GitHub organisations), 
   }
 ]
 ```
+
+### POST `/sessions` request/response
+
+```json
+POST /sessions
+{
+  "repository_url": "git@github.com:afx-hedge-fund/platform.git"
+}
+
+200 OK
+{
+  "data": {
+    "workspace": "afx-hedge-fund",
+    "repository": "platform",
+    "path": "/absolute/path/to/<workdir>/afx-hedge-fund/platform"
+  }
+}
+```
+
+If the repository already exists locally or the URL is invalid, the endpoint returns an error JSON with an explanatory message.
+
+### POST `/sessions/{workspace}/{repository}` worktrees
+
+```json
+POST /sessions/afx-hedge-fund/platform
+{
+  "branch": "feat/new-feature"
+}
+
+200 OK
+{
+  "data": {
+    "workspace": "afx-hedge-fund",
+    "repository": "platform",
+    "branch": "feat/new-feature",
+    "path": "/home/user/.agentrix/worktrees/afx-hedge-fund/platform/feat_new-feature"
+  }
+}
+```
+
+The request must target an existing repository in the configured `workdir`. The branch name becomes both the `git worktree add -b <branch>` argument and the final directory suffix, though the directory is sanitised (any character that is not alphanumeric or a dash becomes `_`). Multiple worktrees can be created per repository by posting different branch names.
