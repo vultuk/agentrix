@@ -1,6 +1,6 @@
 # Sessions Payload Reference
 
-The `/sessions` endpoint returns an array of workspaces (GitHub organisations), each aggregating their repositories, active plans, worktrees, and associated terminals. These types mirror the Rust data structures in `src/server/types.rs` and should be kept in sync whenever the API evolves. The current implementation discovers workspaces by scanning the configured `workdir`, expecting a folder hierarchy of `<organisation>/<repository>`.
+The `/sessions` endpoint returns an array of workspaces (GitHub organisations), each aggregating their repositories, active plans, worktrees, and associated terminals. These types mirror the Rust data structures in `src/server/types.rs` and should be kept in sync whenever the API evolves. The current implementation discovers workspaces by scanning the configured `workdir`, expecting a folder hierarchy of `<organisation>/<repository>`. Worktrees are surfaced by reading the Agentrix worktrees root (default: `~/.agentrix/worktrees/<organisation>/<repository>/<branch>`).
 
 Posting to `/sessions` clones a repository into that hierarchy. Provide a `repository_url` (SSH or HTTPS) matching GitHub’s `org/repo.git` structure and Agentrix will create `<workdir>/<org>/<repo>` by running `git clone` and leaving the default branch checked out.
 
