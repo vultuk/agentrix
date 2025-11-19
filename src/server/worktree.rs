@@ -14,8 +14,13 @@ pub async fn create_worktree(
     branch: &str,
     worktrees_root: &Path,
 ) -> Result<PathBuf> {
-    if branch.trim().is_empty() {
+    let branch = branch.trim();
+    if branch.is_empty() {
         return Err(anyhow!("branch name cannot be empty"));
+    }
+
+    if !repo_path.join(".git").exists() {
+        return Err(anyhow!("{} is not a git repository", repo_path.display()));
     }
 
     let sanitized_branch = sanitize_branch_name(branch);
@@ -53,6 +58,7 @@ pub async fn create_worktree(
 
 pub fn sanitize_branch_name(input: &str) -> String {
     input
+        .trim()
         .chars()
         .map(|c| {
             if c.is_ascii_alphanumeric() || c == '-' {
@@ -75,11 +81,74 @@ mod tests {
     use std::process::Command as StdCommand;
     use tempfile::tempdir;
 
+    struct EnvVarGuard {
+        key: &'static str,
+        original: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let original = env::var(key).ok();
+            env::set_var(key, value);
+            Self { key, original }
+        }
+
+        fn clear(key: &'static str) -> Self {
+            let original = env::var(key).ok();
+            env::remove_var(key);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match &self.original {
+                Some(value) => env::set_var(self.key, value),
+                None => env::remove_var(self.key),
+            }
+        }
+    }
+
     #[test]
     fn sanitizes_branch_names() {
         assert_eq!(sanitize_branch_name("feat/new-feature"), "feat_new-feature");
         assert_eq!(sanitize_branch_name("fix/horrible-bug"), "fix_horrible-bug");
         assert_eq!(sanitize_branch_name("weird chars!*"), "weird_chars__");
+        assert_eq!(sanitize_branch_name("  spaced "), "spaced");
+    }
+
+    #[tokio::test]
+    async fn rejects_empty_branch_names() {
+        let tmp = tempdir().unwrap();
+        let repo_path = tmp.path().join("repo");
+        fs::create_dir_all(&repo_path).await.unwrap();
+
+        let err = create_worktree(&repo_path, "workspace", "repository", "   ", tmp.path())
+            .await
+            .unwrap_err();
+
+        assert!(err.to_string().contains("branch name cannot be empty"));
+    }
+
+    #[tokio::test]
+    async fn errors_when_repo_is_not_git_repo() {
+        let tmp = tempdir().unwrap();
+        let repo_path = tmp.path().join("repo");
+        fs::create_dir_all(&repo_path).await.unwrap();
+
+        let err = create_worktree(
+            &repo_path,
+            "workspace",
+            "repository",
+            "feature/one",
+            tmp.path(),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err
+            .to_string()
+            .contains(&format!("{} is not a git repository", repo_path.display())));
     }
 
     #[tokio::test]
@@ -141,5 +210,21 @@ mod tests {
         assert!(
             created.starts_with(worktrees_root.join("afx-hedge-fund/platform/feat_new-feature"))
         );
+    }
+
+    #[test]
+    fn default_worktrees_root_uses_home_environment_variable() {
+        let tmp = tempdir().unwrap();
+        let _guard = EnvVarGuard::set("HOME", tmp.path().to_str().unwrap());
+
+        let root = default_worktrees_root().expect("root can be computed");
+        assert_eq!(root, tmp.path().join(".agentrix/worktrees"));
+    }
+
+    #[test]
+    fn default_worktrees_root_errors_when_home_missing() {
+        let _guard = EnvVarGuard::clear("HOME");
+        let err = default_worktrees_root().unwrap_err();
+        assert!(err.to_string().contains("$HOME must be set"));
     }
 }

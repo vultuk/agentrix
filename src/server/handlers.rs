@@ -135,13 +135,15 @@ pub async fn create_worktree(
     State(state): State<AppState>,
     Json(payload): Json<CreateWorktreeRequest>,
 ) -> HandlerResult<CreateWorktreeResponse> {
-    if payload.branch.trim().is_empty() {
+    let branch = payload.branch.trim();
+    if branch.is_empty() {
         return Err(error(
             StatusCode::BAD_REQUEST,
             "branch name cannot be empty",
         ));
     }
 
+    let branch = branch.to_owned();
     let repo_path = state.workdir.join(&workspace).join(&repository);
     if !repo_path.exists() {
         return Err(error(
@@ -157,7 +159,7 @@ pub async fn create_worktree(
         &repo_path,
         &workspace,
         &repository,
-        &payload.branch,
+        &branch,
         state.worktrees_root.as_ref().as_path(),
     )
     .await
@@ -165,7 +167,7 @@ pub async fn create_worktree(
         Ok(path) => Ok(success(CreateWorktreeResponse {
             workspace: workspace.clone(),
             repository: repository.clone(),
-            branch: payload.branch,
+            branch,
             path: path.to_string_lossy().into_owned(),
         })),
         Err(err) => {
@@ -174,7 +176,7 @@ pub async fn create_worktree(
                 error = %err,
                 workspace = %workspace,
                 repository = %repository,
-                branch = %payload.branch,
+                branch = %branch,
                 "failed to create worktree"
             );
             Err(error(
@@ -384,6 +386,21 @@ mod tests {
     }
 
     #[test]
+    fn parses_plain_workspace_repository_path() {
+        let repo = super::parse_repository_url("workspace/repo").expect("valid path");
+        assert_eq!(repo.workspace, "workspace");
+        assert_eq!(repo.repository, "repo");
+    }
+
+    #[test]
+    fn trims_trailing_slashes_and_whitespace_in_repository_url() {
+        let repo = super::parse_repository_url("  https://github.com/workspace/repo.git///  ")
+            .expect("valid url");
+        assert_eq!(repo.workspace, "workspace");
+        assert_eq!(repo.repository, "repo");
+    }
+
+    #[test]
     fn parses_ssh_repository_url() {
         let repo =
             super::parse_repository_url("git@github.com:afx-hedge-fund/platform.git").unwrap();
@@ -398,6 +415,12 @@ mod tests {
             err.contains("workspace"),
             "expected workspace/repository error"
         );
+    }
+
+    #[test]
+    fn rejects_empty_repository_url() {
+        let err = super::parse_repository_url("   ").unwrap_err();
+        assert!(err.contains("cannot be empty"));
     }
 
     #[tokio::test]
@@ -457,6 +480,111 @@ mod tests {
             .expect("request succeeds");
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn create_worktree_rejects_empty_branch_after_trim() {
+        let tmp = tempdir().unwrap();
+        let workdir = tmp.path().join("workdir");
+        fs::create_dir_all(&workdir).unwrap();
+
+        let app = crate::server::router(test_state(&workdir));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/sessions/afx-hedge-fund/platform")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{ "branch": "   " }"#))
+                    .unwrap(),
+            )
+            .await
+            .expect("request succeeds");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn create_worktree_trims_branch_names_before_creation() {
+        let tmp = tempdir().unwrap();
+        let workdir = tmp.path().join("workdir");
+        fs::create_dir_all(&workdir).unwrap();
+
+        let repo_path = workdir.join("afx-hedge-fund/platform");
+        init_git_repo(&repo_path);
+
+        let app = crate::server::router(test_state(&workdir));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/sessions/afx-hedge-fund/platform")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({ "branch": "  feat/spaced  " }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .expect("request succeeds");
+
+        let status = response.status();
+        assert_eq!(status, StatusCode::OK);
+
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let payload: serde_json::Value = serde_json::from_slice(&bytes).expect("valid json");
+        assert_eq!(payload["data"]["branch"], "feat/spaced");
+
+        let path = payload["data"]["path"].as_str().unwrap();
+        assert!(Path::new(path).exists());
+        assert!(path.ends_with("feat_spaced"));
+    }
+
+    #[tokio::test]
+    async fn clone_session_errors_when_repository_already_exists() {
+        let tmp = tempdir().unwrap();
+        let workdir = tmp.path().join("workdir");
+        let existing = workdir.join("org/repo");
+        fs::create_dir_all(&existing).unwrap();
+
+        let state = test_state(&workdir);
+        let payload = super::CloneSessionRequest {
+            repository_url: "https://github.com/org/repo.git".into(),
+        };
+
+        let err = super::clone_session(State(state), Json(payload))
+            .await
+            .expect_err("expected conflict error");
+
+        assert_eq!(err.0, StatusCode::CONFLICT);
+        assert!(
+            err.1 .0.message.contains("already exists"),
+            "unexpected message: {}",
+            err.1 .0.message
+        );
+    }
+
+    #[tokio::test]
+    async fn clone_session_cleans_up_after_failed_clone() {
+        let tmp = tempdir().unwrap();
+        let workdir = tmp.path().join("workdir");
+        fs::create_dir_all(&workdir).unwrap();
+
+        let state = test_state(&workdir);
+        let payload = super::CloneSessionRequest {
+            repository_url: "file:///nonexistent/path/to/repo.git".into(),
+        };
+
+        let result = super::clone_session(State(state), Json(payload)).await;
+        assert!(result.is_err());
+
+        let target = workdir.join("nonexistent/repo");
+        assert!(
+            !target.exists(),
+            "target directory should be cleaned up on failure"
+        );
     }
 
     fn init_git_repo(path: &Path) {
