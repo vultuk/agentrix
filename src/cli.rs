@@ -5,7 +5,7 @@ use std::{
 };
 
 /// Command-line arguments for the Agentrix CLI.
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Clone)]
 #[command(
     name = "Agentrix",
     version,

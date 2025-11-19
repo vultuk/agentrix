@@ -109,4 +109,26 @@ mod tests {
         assert_eq!(workspaces[0].repositories.len(), 1);
         assert_eq!(workspaces[0].repositories[0].name, "simonskinner_me");
     }
+
+    #[test]
+    fn workspaces_from_dir_handles_missing_path() {
+        let tmp = tempdir().unwrap();
+        let missing = tmp.path().join("does_not_exist");
+
+        let workspaces = workspaces_from_dir(&missing).unwrap();
+        assert!(workspaces.is_empty());
+    }
+
+    #[test]
+    fn repositories_skip_non_directory_entries() {
+        let tmp = tempdir().unwrap();
+        let org_path = tmp.path().join("vultuk");
+        fs::create_dir_all(&org_path).unwrap();
+        fs::write(org_path.join("README.md"), "docs").unwrap();
+        fs::create_dir_all(org_path.join("repo_a")).unwrap();
+
+        let repos = repositories_from_dir(org_path).unwrap();
+        assert_eq!(repos.len(), 1);
+        assert_eq!(repos[0].name, "repo_a");
+    }
 }

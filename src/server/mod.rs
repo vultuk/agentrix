@@ -1,33 +1,54 @@
 use std::{
     env, fs,
+    future::Future,
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
 use anyhow::Context;
-use axum::{routing::get, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 
 pub mod handlers;
 pub mod responses;
 pub mod types;
+pub mod worktree;
 
 use crate::{cli::Args, Result};
 
 #[derive(Clone)]
 pub struct AppState {
     pub workdir: Arc<PathBuf>,
+    pub worktrees_root: Arc<PathBuf>,
 }
 
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/", get(handlers::root))
-        .route("/sessions", get(handlers::sessions))
+        .route(
+            "/sessions",
+            get(handlers::sessions).post(handlers::clone_session),
+        )
+        .route(
+            "/sessions/:workspace/:repository",
+            post(handlers::create_worktree),
+        )
         .with_state(state)
 }
 
 pub async fn run(args: &Args) -> Result<()> {
+    run_with_shutdown(args, shutdown_signal()).await
+}
+
+pub async fn run_with_shutdown<F>(args: &Args, shutdown: F) -> Result<()>
+where
+    F: Future<Output = ()> + Send + 'static,
+{
     let workdir = resolve_workdir(&args.workdir)?;
+    let worktrees_root = worktree::default_worktrees_root()?;
     env::set_current_dir(&workdir).context("failed to switch to workdir")?;
 
     let addr = args.addr();
@@ -42,10 +63,11 @@ pub async fn run(args: &Args) -> Result<()> {
 
     let state = AppState {
         workdir: Arc::new(workdir.clone()),
+        worktrees_root: Arc::new(worktrees_root),
     };
 
     axum::serve(listener, router(state))
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(shutdown)
         .await
         .context("server task failed")
 }
@@ -109,6 +131,7 @@ async fn shutdown_signal() {
 mod tests {
     use super::*;
     use std::path::Path;
+    use tempfile::tempdir;
 
     #[test]
     fn formats_startup_message() {
@@ -119,5 +142,24 @@ mod tests {
             message,
             "Agentrix server listening on http://127.0.0.1:4567 (workdir: /tmp)"
         );
+    }
+
+    #[test]
+    fn resolve_workdir_creates_missing_directory() {
+        let tmp = tempdir().unwrap();
+        let missing = tmp.path().join("org/new_repo");
+        assert!(!missing.exists());
+
+        let resolved = resolve_workdir(&missing).unwrap();
+        assert_eq!(resolved, missing.canonicalize().unwrap());
+        assert!(missing.exists());
+    }
+
+    #[test]
+    fn resolve_workdir_returns_existing_directory() {
+        let tmp = tempdir().unwrap();
+        let existing = tmp.path();
+        let resolved = resolve_workdir(existing).unwrap();
+        assert_eq!(resolved, existing.canonicalize().unwrap());
     }
 }
