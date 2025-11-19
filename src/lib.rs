@@ -1,20 +1,16 @@
-use anyhow::Context;
 use clap::Parser;
 
 pub mod cli;
-pub mod commands;
-pub mod error;
+pub mod server;
 
 pub type Result<T> = anyhow::Result<T>;
 
 /// Entry point used by the binary crate and integration tests.
-pub fn run() -> Result<()> {
+pub async fn run() -> Result<()> {
     init_tracing();
 
     let args = cli::Args::parse();
-    let message = commands::execute(&args).context("failed to execute command")?;
-    println!("{message}");
-    Ok(())
+    server::run(args.addr).await
 }
 
 fn init_tracing() {
