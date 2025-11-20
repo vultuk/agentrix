@@ -34,10 +34,12 @@ type ApiResponse<T> = {
   message?: string;
 };
 
+const HANDLE_WIDTH = 5;
+
 const pageStyle: React.CSSProperties = {
   minHeight: "100vh",
   display: "grid",
-  gridTemplateColumns: "320px 10px 1fr",
+  gridTemplateColumns: `320px ${HANDLE_WIDTH}px 1fr`,
   background: "radial-gradient(circle at 25% 25%, #0ea5e9 0, #0f172a 40%)",
   color: "#e2e8f0",
   fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -64,7 +66,7 @@ const contentAreaStyle: React.CSSProperties = {
 };
 
 const handleStyle: React.CSSProperties = {
-  width: "5px",
+  width: `${HANDLE_WIDTH}px`,
   cursor: "col-resize",
   background: "transparent",
 };
@@ -128,7 +130,9 @@ export default function Home() {
   };
 
   return (
-    <main style={{ ...pageStyle, gridTemplateColumns: `${sidebarWidth}px 10px 1fr` }}>
+    <main
+      style={{ ...pageStyle, gridTemplateColumns: `${sidebarWidth}px ${HANDLE_WIDTH}px 1fr` }}
+    >
       <aside style={sidebarStyle}>
         <div style={{ marginBottom: "1.25rem" }}>
           <p
