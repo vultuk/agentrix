@@ -73,7 +73,7 @@ const handleStyle: React.CSSProperties = {
 };
 
 export default function Home() {
-  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const [sidebarWidth, setSidebarWidth] = useState(160);
   const dragging = useRef(false);
 
   const [sessions, setSessions] = useState<SessionWorkspace[]>([]);
@@ -109,7 +109,7 @@ export default function Home() {
   useEffect(() => {
     const handleMove = (event: MouseEvent) => {
       if (!dragging.current) return;
-      const next = Math.min(500, Math.max(220, event.clientX));
+      const next = Math.min(400, Math.max(140, event.clientX));
       setSidebarWidth(next);
     };
 
