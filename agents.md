@@ -7,7 +7,7 @@
 
 ## Process
 1. Add new flags/subcommands to `cli::Args` (e.g., host/port/workdir already defined).
-2. Register endpoints in `src/server/mod.rs::router()` and build handlers under `src/server/handlers/`.
+2. Register endpoints under the `/api` prefix in `src/server/mod.rs::router()` and build handlers under `src/server/handlers/`. The root path `/` is reserved for the built Next.js UI served by Axum via `tower-http`.
 3. Shape payloads via `src/server/responses` helpers for consistent JSON, and return `Result` where logic might fail.
 4. Log important operations via `tracing` + stdout messages (server startup must print host/port/workdir).
 5. Keep code formatted (`cargo fmt`), linted (`cargo clippy -- -D warnings`), and tested (`cargo test`).
@@ -15,7 +15,7 @@
 ## Testing Expectations
 - **Unit tests**: Each handler module includes `#[cfg(test)]` coverage (use `tower::ServiceExt` with the router for in-memory requests).
 - **Integration tests**: Mirror user-visible CLI or API behavior under `tests/`; start spinning up the server/binary for full REST checks as functionality expands.
-- Run `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and `cargo test --all` locally; CI enforces the same.
+- Run `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and `cargo test --all` locally; CI enforces the same. Next.js lives in `web/` with `npm run dev` for local dev and `npm run build` (output: export) to emit static assets to `web/out`. Set `AGENTRIX_FRONTEND_DIR` to point at a built export if you relocate it.
 - Coverage: Run `cargo llvm-cov --summary-only` (requires rustup + cargo-llvm-cov) to report code coverage; CI runs this after tests.
 
 ## Documentation

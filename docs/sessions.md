@@ -1,8 +1,8 @@
 # Sessions Payload Reference
 
-The `/sessions` endpoint returns an array of workspaces (GitHub organisations), each aggregating their repositories, active plans, worktrees, and associated terminals. These types mirror the Rust data structures in `src/server/types.rs` and should be kept in sync whenever the API evolves. The current implementation discovers workspaces by scanning the configured `workdir`, expecting a folder hierarchy of `<organisation>/<repository>`. Worktrees are surfaced by reading the Agentrix worktrees root (default: `~/.agentrix/worktrees/<organisation>/<repository>/<branch>`).
+All API routes are served under the `/api` prefix because the root path is reserved for the Next.js UI served by the Rust binary. The `/api/sessions` endpoint returns an array of workspaces (GitHub organisations), each aggregating their repositories, active plans, worktrees, and associated terminals. These types mirror the Rust data structures in `src/server/types.rs` and should be kept in sync whenever the API evolves. The current implementation discovers workspaces by scanning the configured `workdir`, expecting a folder hierarchy of `<organisation>/<repository>`. Worktrees are surfaced by reading the Agentrix worktrees root (default: `~/.agentrix/worktrees/<organisation>/<repository>/<branch>`).
 
-Posting to `/sessions` clones a repository into that hierarchy. Provide a `repository_url` (SSH or HTTPS) matching GitHub’s `org/repo.git` structure and Agentrix will create `<workdir>/<org>/<repo>` by running `git clone` and leaving the default branch checked out.
+Posting to `/api/sessions` clones a repository into that hierarchy. Provide a `repository_url` (SSH or HTTPS) matching GitHub’s `org/repo.git` structure and Agentrix will create `<workdir>/<org>/<repo>` by running `git clone` and leaving the default branch checked out.
 
 ## Domain Mapping
 
@@ -60,10 +60,10 @@ Posting to `/sessions` clones a repository into that hierarchy. Provide a `repos
 ]
 ```
 
-### POST `/sessions` request/response
+### POST `/api/sessions` request/response
 
 ```json
-POST /sessions
+POST /api/sessions
 {
   "repository_url": "git@github.com:afx-hedge-fund/platform.git"
 }
@@ -80,10 +80,10 @@ POST /sessions
 
 If the repository already exists locally or the URL is invalid, the endpoint returns an error JSON with an explanatory message.
 
-### POST `/sessions/{workspace}/{repository}` worktrees
+### POST `/api/sessions/{workspace}/{repository}` worktrees
 
 ```json
-POST /sessions/afx-hedge-fund/platform
+POST /api/sessions/afx-hedge-fund/platform
 {
   "branch": "feat/new-feature"
 }
