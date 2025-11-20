@@ -64,16 +64,13 @@ const contentAreaStyle: React.CSSProperties = {
 };
 
 const handleStyle: React.CSSProperties = {
-  width: "10px",
+  width: "5px",
   cursor: "col-resize",
-  background:
-    "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%)",
-  borderLeft: "1px solid rgba(255,255,255,0.06)",
-  borderRight: "1px solid rgba(0,0,0,0.25)",
+  background: "transparent",
 };
 
 export default function Home() {
-  const [sidebarWidth, setSidebarWidth] = useState(160);
+  const [sidebarWidth, setSidebarWidth] = useState(320);
   const dragging = useRef(false);
 
   const [sessions, setSessions] = useState<SessionWorkspace[]>([]);
@@ -109,7 +106,7 @@ export default function Home() {
   useEffect(() => {
     const handleMove = (event: MouseEvent) => {
       if (!dragging.current) return;
-      const next = Math.min(400, Math.max(140, event.clientX));
+      const next = Math.min(500, Math.max(220, event.clientX));
       setSidebarWidth(next);
     };
 
