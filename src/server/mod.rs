@@ -16,6 +16,7 @@ use axum::{
 use tower::{service_fn, ServiceExt};
 use tower_http::services::{ServeDir, ServeFile};
 
+pub mod github;
 pub mod handlers;
 pub mod responses;
 pub mod types;
@@ -28,6 +29,7 @@ pub struct AppState {
     pub workdir: Arc<PathBuf>,
     pub worktrees_root: Arc<PathBuf>,
     pub frontend_root: Option<Arc<PathBuf>>,
+    pub github: Option<github::GitHubClient>,
 }
 
 pub fn router(state: AppState) -> Router {
@@ -40,6 +42,18 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/sessions/:workspace/:repository",
             post(handlers::create_worktree),
+        )
+        .route(
+            "/repos/:workspace/:repository/summary",
+            get(handlers::repo_summary),
+        )
+        .route(
+            "/repos/:workspace/:repository/issues/:number",
+            get(handlers::repo_issue_detail),
+        )
+        .route(
+            "/repos/:workspace/:repository/pulls/:number",
+            get(handlers::repo_pull_detail),
         )
         .with_state(state.clone());
 
@@ -75,6 +89,7 @@ where
         workdir: Arc::new(workdir.clone()),
         worktrees_root: Arc::new(worktrees_root),
         frontend_root: frontend_root.clone(),
+        github: github::GitHubClient::from_token(args.github_token.clone())?,
     };
 
     axum::serve(listener, router(state))
@@ -264,6 +279,7 @@ mod tests {
             workdir: Arc::new(tmp.path().join("workdir")),
             worktrees_root: Arc::new(tmp.path().join("worktrees")),
             frontend_root: Some(Arc::new(frontend)),
+            github: None,
         };
 
         let app = router(state);
@@ -294,6 +310,7 @@ mod tests {
             workdir: Arc::new(tmp.path().join("workdir")),
             worktrees_root: Arc::new(tmp.path().join("worktrees")),
             frontend_root: None,
+            github: None,
         };
 
         let app = router(state);

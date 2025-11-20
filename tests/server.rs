@@ -45,6 +45,7 @@ async fn run_with_shutdown_serves_requests() {
         host: IpAddr::V4(Ipv4Addr::LOCALHOST),
         port,
         workdir: tmp.path().to_path_buf(),
+        github_token: None,
     };
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel();

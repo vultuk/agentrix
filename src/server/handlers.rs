@@ -9,6 +9,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tokio::{fs, process::Command};
 
+use crate::server::github::{IssueDetail, PullDetail, RepoSummary};
 use crate::server::{
     responses::{error, success, ApiError, ApiResponse},
     types::{workspaces_from_dir, SessionWorkspace},
@@ -183,6 +184,101 @@ pub async fn create_worktree(
             Err(error(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "failed to create worktree",
+            ))
+        }
+    }
+}
+
+pub async fn repo_summary(
+    AxumPath((workspace, repository)): AxumPath<(String, String)>,
+    State(state): State<AppState>,
+) -> HandlerResult<RepoSummary> {
+    let client =
+        match &state.github {
+            Some(client) => client.clone(),
+            None => return Err(error(
+                StatusCode::BAD_REQUEST,
+                "GitHub token not configured; start agent with --github-token or set GITHUB_TOKEN",
+            )),
+        };
+
+    match client.repo_summary(&workspace, &repository).await {
+        Ok(summary) => Ok(success(summary)),
+        Err(err) => {
+            tracing::error!(
+                target: "agentrix::server",
+                error = %err,
+                workspace = %workspace,
+                repository = %repository,
+                "failed to fetch GitHub summary"
+            );
+            Err(error(
+                StatusCode::BAD_GATEWAY,
+                "failed to fetch repository data from GitHub",
+            ))
+        }
+    }
+}
+
+pub async fn repo_issue_detail(
+    AxumPath((workspace, repository, number)): AxumPath<(String, String, u32)>,
+    State(state): State<AppState>,
+) -> HandlerResult<IssueDetail> {
+    let client =
+        match &state.github {
+            Some(client) => client.clone(),
+            None => return Err(error(
+                StatusCode::BAD_REQUEST,
+                "GitHub token not configured; start agent with --github-token or set GITHUB_TOKEN",
+            )),
+        };
+
+    match client.issue_detail(&workspace, &repository, number).await {
+        Ok(detail) => Ok(success(detail)),
+        Err(err) => {
+            tracing::error!(
+                target: "agentrix::server",
+                error = %err,
+                workspace = %workspace,
+                repository = %repository,
+                number,
+                "failed to fetch GitHub issue"
+            );
+            Err(error(
+                StatusCode::BAD_GATEWAY,
+                "failed to fetch issue from GitHub",
+            ))
+        }
+    }
+}
+
+pub async fn repo_pull_detail(
+    AxumPath((workspace, repository, number)): AxumPath<(String, String, u32)>,
+    State(state): State<AppState>,
+) -> HandlerResult<PullDetail> {
+    let client =
+        match &state.github {
+            Some(client) => client.clone(),
+            None => return Err(error(
+                StatusCode::BAD_REQUEST,
+                "GitHub token not configured; start agent with --github-token or set GITHUB_TOKEN",
+            )),
+        };
+
+    match client.pull_detail(&workspace, &repository, number).await {
+        Ok(detail) => Ok(success(detail)),
+        Err(err) => {
+            tracing::error!(
+                target: "agentrix::server",
+                error = %err,
+                workspace = %workspace,
+                repository = %repository,
+                number,
+                "failed to fetch GitHub pull request"
+            );
+            Err(error(
+                StatusCode::BAD_GATEWAY,
+                "failed to fetch pull request from GitHub",
             ))
         }
     }
@@ -402,6 +498,7 @@ mod tests {
             workdir: Arc::new(workdir.clone()),
             worktrees_root: Arc::new(workdir.join("worktrees")),
             frontend_root: None,
+            github: None,
         };
         let payload = super::CloneSessionRequest {
             repository_url: format!("file://{}", remote.display()),
@@ -669,6 +766,7 @@ mod tests {
             workdir: Arc::new(workdir.to_path_buf()),
             worktrees_root: Arc::new(workdir.join("worktrees")),
             frontend_root: None,
+            github: None,
         }
     }
 
@@ -677,6 +775,7 @@ mod tests {
             workdir: Arc::new(workdir.to_path_buf()),
             worktrees_root: Arc::new(worktrees_root.to_path_buf()),
             frontend_root: None,
+            github: None,
         }
     }
 }

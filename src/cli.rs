@@ -24,6 +24,10 @@ pub struct Args {
     /// Working directory the server will operate within.
     #[arg(long, default_value = ".", value_name = "PATH")]
     pub workdir: PathBuf,
+
+    /// GitHub token used for repository data (issues, pull requests).
+    #[arg(long, env = "GITHUB_TOKEN")]
+    pub github_token: Option<String>,
 }
 
 impl Args {
@@ -43,6 +47,7 @@ mod tests {
             host: IpAddr::V4(Ipv4Addr::LOCALHOST),
             port: 8080,
             workdir: PathBuf::from("/tmp"),
+            github_token: None,
         };
 
         assert_eq!(args.addr(), SocketAddr::from(([127, 0, 0, 1], 8080)));
