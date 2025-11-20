@@ -45,25 +45,20 @@ const pageStyle: React.CSSProperties = {
 };
 
 const sidebarStyle: React.CSSProperties = {
-  borderRight: "1px solid rgba(226, 232, 240, 0.12)",
-  background:
-    "linear-gradient(180deg, rgba(12, 20, 40, 0.88) 0%, rgba(12, 26, 48, 0.82) 100%)",
-  backdropFilter: "blur(10px)",
+  background: "transparent",
   padding: "1.75rem",
   overflowY: "auto",
-  boxShadow: "inset -12px 0 30px rgba(0,0,0,0.35)",
   zIndex: 0,
 };
 
 const contentAreaStyle: React.CSSProperties = {
   padding: "1.5rem",
   overflow: "hidden",
-  background: "linear-gradient(135deg, rgba(15, 23, 42, 0.72), rgba(17, 24, 39, 0.9))",
-  boxShadow: "-28px 0 60px rgba(0,0,0,0.3)",
-  borderRadius: "28px 0 0 28px",
-  clipPath: "inset(0 round 28px 0 0 28px)",
+  background: "#0b1224",
+  boxShadow: "none",
+  borderRadius: "32px 0 0 32px",
   borderLeft: "1px solid rgba(226, 232, 240, 0.06)",
-  transform: "translateX(18px)",
+  transform: "translateX(0)",
   position: "relative",
   zIndex: 1,
 };
