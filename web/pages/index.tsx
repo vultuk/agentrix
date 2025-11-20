@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type SessionTerminal = {
   name: string;
@@ -37,7 +37,7 @@ type ApiResponse<T> = {
 const pageStyle: React.CSSProperties = {
   minHeight: "100vh",
   display: "grid",
-  gridTemplateColumns: "320px 1fr",
+  gridTemplateColumns: "320px 10px 1fr",
   background: "radial-gradient(circle at 25% 25%, #0ea5e9 0, #0f172a 40%)",
   color: "#e2e8f0",
   fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -63,7 +63,19 @@ const contentAreaStyle: React.CSSProperties = {
   zIndex: 1,
 };
 
+const handleStyle: React.CSSProperties = {
+  width: "10px",
+  cursor: "col-resize",
+  background:
+    "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%)",
+  borderLeft: "1px solid rgba(255,255,255,0.06)",
+  borderRight: "1px solid rgba(0,0,0,0.25)",
+};
+
 export default function Home() {
+  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const dragging = useRef(false);
+
   const [sessions, setSessions] = useState<SessionWorkspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,8 +106,32 @@ export default function Home() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    const handleMove = (event: MouseEvent) => {
+      if (!dragging.current) return;
+      const next = Math.min(500, Math.max(220, event.clientX));
+      setSidebarWidth(next);
+    };
+
+    const handleUp = () => {
+      dragging.current = false;
+    };
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+  }, []);
+
+  const startDrag = (event: React.MouseEvent) => {
+    event.preventDefault();
+    dragging.current = true;
+  };
+
   return (
-    <main style={pageStyle}>
+    <main style={{ ...pageStyle, gridTemplateColumns: `${sidebarWidth}px 10px 1fr` }}>
       <aside style={sidebarStyle}>
         <div style={{ marginBottom: "1.25rem" }}>
           <p
@@ -260,6 +296,14 @@ export default function Home() {
             </div>
           ))}
       </aside>
+
+      <div
+        style={handleStyle}
+        onMouseDown={startDrag}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+      />
 
       <section style={contentAreaStyle}>
         <div
