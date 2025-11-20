@@ -287,7 +287,7 @@ mod tests {
         let tmp = tempdir().unwrap();
         let app = crate::server::router(test_state(tmp.path()));
         let response = app
-            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+            .oneshot(Request::builder().uri("/api").body(Body::empty()).unwrap())
             .await
             .expect("request succeeds");
 
@@ -313,7 +313,7 @@ mod tests {
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri("/sessions")
+                    .uri("/api/sessions")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -358,7 +358,7 @@ mod tests {
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri("/sessions")
+                    .uri("/api/sessions")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -401,6 +401,7 @@ mod tests {
         let state = crate::server::AppState {
             workdir: Arc::new(workdir.clone()),
             worktrees_root: Arc::new(workdir.join("worktrees")),
+            frontend_root: None,
         };
         let payload = super::CloneSessionRequest {
             repository_url: format!("file://{}", remote.display()),
@@ -478,7 +479,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/sessions/afx-hedge-fund/platform")
+                    .uri("/api/sessions/afx-hedge-fund/platform")
                     .header("content-type", "application/json")
                     .body(Body::from(
                         json!({ "branch": "feat/new-feature" }).to_string(),
@@ -509,7 +510,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/sessions/afx-hedge-fund/platform")
+                    .uri("/api/sessions/afx-hedge-fund/platform")
                     .header("content-type", "application/json")
                     .body(Body::from(r#"{ "branch": "feat/does-not-exist" }"#))
                     .unwrap(),
@@ -532,7 +533,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/sessions/afx-hedge-fund/platform")
+                    .uri("/api/sessions/afx-hedge-fund/platform")
                     .header("content-type", "application/json")
                     .body(Body::from(r#"{ "branch": "   " }"#))
                     .unwrap(),
@@ -558,7 +559,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/sessions/afx-hedge-fund/platform")
+                    .uri("/api/sessions/afx-hedge-fund/platform")
                     .header("content-type", "application/json")
                     .body(Body::from(
                         json!({ "branch": "  feat/spaced  " }).to_string(),
@@ -667,6 +668,7 @@ mod tests {
         crate::server::AppState {
             workdir: Arc::new(workdir.to_path_buf()),
             worktrees_root: Arc::new(workdir.join("worktrees")),
+            frontend_root: None,
         }
     }
 
@@ -674,6 +676,7 @@ mod tests {
         crate::server::AppState {
             workdir: Arc::new(workdir.to_path_buf()),
             worktrees_root: Arc::new(worktrees_root.to_path_buf()),
+            frontend_root: None,
         }
     }
 }

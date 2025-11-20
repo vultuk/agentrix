@@ -61,7 +61,9 @@ async fn run_with_shutdown_serves_requests() {
     let addr = args.addr();
     wait_for_server(addr).await;
 
-    let body = http_get(addr, "/").await.expect("request should succeed");
+    let body = http_get(addr, "/api")
+        .await
+        .expect("request should succeed");
     assert_eq!(body["data"]["message"], "Hello, world!");
 
     shutdown_tx.send(()).expect("able to signal shutdown");
