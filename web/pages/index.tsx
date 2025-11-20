@@ -61,6 +61,8 @@ const contentAreaStyle: React.CSSProperties = {
   background: "linear-gradient(135deg, rgba(15, 23, 42, 0.72), rgba(17, 24, 39, 0.9))",
   boxShadow: "-28px 0 60px rgba(0,0,0,0.3)",
   borderRadius: "28px 0 0 28px",
+  clipPath: "inset(0 round 28px 0 0 28px)",
+  borderLeft: "1px solid rgba(226, 232, 240, 0.06)",
   transform: "translateX(18px)",
   position: "relative",
   zIndex: 1,
